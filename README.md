@@ -81,3 +81,4 @@ Four roles are baked into RLS: `admin`, `manager`, `sales_agent`,
 customers assigned to them; field team only sees field projects/reports they're
 assigned to. Adjust the policies in `schema.sql` as your process solidifies.
 # zafira-fullstack
+# zafira-fullstack
