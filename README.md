@@ -9,8 +9,12 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
 1. Create a project at https://supabase.com
 2. Open the SQL Editor and run the contents of `supabase/schema.sql`
    — this creates all tables, enums, and Row Level Security policies.
-3. Go to Project Settings → API and copy your **Project URL** and **anon public key**.
-4. In this repo, copy `.env.example` to `.env` and fill in those two values:
+3. Run `supabase/storage.sql` next — it creates the Storage buckets
+   (`siteplan-images`, `customer-documents`, `field-report-photos`,
+   `complaint-photos`) and their RLS policies, needed by Siteplan Digital,
+   Konsumen documents, Monitoring Lapangan photos, and Komplain photos.
+4. Go to Project Settings → API and copy your **Project URL** and **anon public key**.
+5. In this repo, copy `.env.example` to `.env` and fill in those two values:
    ```
    VITE_SUPABASE_URL=https://xxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=xxxxx
@@ -47,32 +51,39 @@ matching your `.env`.
 - **Dashboard**: live counts (prospek, konsumen, unit tersedia, komplain aktif)
   pulled from Supabase.
 - **Prospek (Leads)**: full CRUD — add lead, change status inline, list with
-  live data. Use this as the reference pattern for other modules.
+  live data.
 - **Pembayaran (Payments)**: record payments per customer (booking, DP, dana
   talangan, termin, pelunasan), verify payments — this is the billing-history
-  module you flagged as missing from the original quotation.
+  module that covers the gap flagged against the original quotation.
+- **Proyek**: multi-project CRUD plus per-project unit management (kode unit,
+  blok, tipe, harga, status) — unblocks every module below.
+- **Konsumen**: customer CRUD linked to lead/unit/sales agent, process
+  duration tracking (`process_started_at`/`process_completed_at`), and
+  document upload (`customer_documents`) with verification status.
+- **Pembatalan**: cancellation history per customer (reason, detail, who
+  cancelled, when) — auto-marks the customer as `batal`.
+- **Siteplan Digital**: per-project siteplan image upload, click-to-place unit
+  pins (`pos_x`/`pos_y`) color-coded by status, click a pin for a modal with
+  linked customer + construction progress.
+- **Kontraktor**: contractor CRUD plus 1–5 star evaluations per unit, with
+  sort/filter by average score.
+- **Monitoring Lapangan**: `field_projects` progress tracking (%, status,
+  contractor) plus `field_reports` (kendala/solusi, before/after photo
+  upload) per unit.
+- **Komplain**: complaint CRUD with category/priority, PIC assignment,
+  status, and photo upload.
+- **Laporan**: aggregate stat cards and breakdowns across prospek/konsumen/
+  proyek/komplain, with one-click Excel export (`xlsx`).
+- **Digital Ads**: `ads_analytics` CRUD with spend/leads-per-platform bars
+  and a blended cost-per-lead figure.
 
-## What's scaffolded but needs UI (tables + RLS already exist)
+## Not yet built
 
-Each of these has a placeholder page describing its planned fields — copy the
-pattern from `ProspekPage.jsx` or `PembayaranPage.jsx` to build them out:
-
-- **Konsumen** — customer records, linked documents (`customer_documents`)
-  with verification status → covers "progres administrasi/berkas konsumen"
-- **Pembatalan** — `cancellations` table, reason + who cancelled
-- **Proyek** — multi-project support (`projects` table) so you're not locked
-  to Griya Zafira only
-- **Siteplan Digital** — `units` table has `pos_x`/`pos_y` normalized
-  coordinates for pinning units over an uploaded siteplan image; click a pin
-  to show customer + construction progress
-- **Kontraktor** — `contractors` + `contractor_evaluations` (1–5 score per
-  project) for filtering/evaluating contractors
-- **Monitoring Lapangan** — `field_projects` (progress %, status, assigned
-  team) + `field_reports` (photos, kendala/solusi) — this is also the data
-  source for a future mobile PWA for the field team
-- **Komplain** — `complaints` table, category/priority/assignment
-- **Laporan** — aggregate views/exports over the above tables
-- **Digital Ads** — `ads_analytics` table for campaign spend/leads tracking
+- **Mobile PWA for the field team** (separate app, per the original
+  quotation scope) — `field_projects`/`field_reports` already back it.
+- **Signup / user invite flow** — new users are still created manually in the
+  Supabase dashboard and promoted to a role via SQL.
+- **Automated tests**.
 
 ## Roles
 
