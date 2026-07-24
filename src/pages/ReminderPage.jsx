@@ -50,16 +50,16 @@ export default function ReminderPage() {
     <div>
       <PageTitle title="Reminder — Rencana Selanjutnya" subtitle="Daftar prospek dengan rencana follow-up terjadwal" />
 
-      <div style={{ display: "flex", gap: 14, marginBottom: 18 }}>
-        <Card style={{ flex: 1, borderTop: "4px solid #c23b3b" }}>
+      <div className="rg-3" style={{ marginBottom: 18 }}>
+        <Card style={{ borderTop: "4px solid #c23b3b" }}>
           <div style={{ fontSize: 13, color: TEXT_MID }}>Terlewat</div>
           <div style={{ fontSize: 26, fontWeight: 700, color: "#c23b3b" }}>{overdue}</div>
         </Card>
-        <Card style={{ flex: 1, borderTop: "4px solid #e8630a" }}>
+        <Card style={{ borderTop: "4px solid #e8630a" }}>
           <div style={{ fontSize: 13, color: TEXT_MID }}>Hari Ini</div>
           <div style={{ fontSize: 26, fontWeight: 700, color: "#e8630a" }}>{todayCount}</div>
         </Card>
-        <Card style={{ flex: 1, borderTop: "4px solid #28864a" }}>
+        <Card style={{ borderTop: "4px solid #28864a" }}>
           <div style={{ fontSize: 13, color: TEXT_MID }}>Total Terjadwal</div>
           <div style={{ fontSize: 26, fontWeight: 700 }}>{leads.length}</div>
         </Card>

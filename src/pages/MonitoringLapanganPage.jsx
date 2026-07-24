@@ -135,7 +135,7 @@ export default function MonitoringLapanganPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-4" style={{ marginBottom: 12 }}>
             <select value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} style={inputStyle}>
               <option value="">Pilih Unit</option>
               {units.map((u) => (
@@ -222,7 +222,7 @@ export default function MonitoringLapanganPage() {
       {selectedId && (
         <Card style={{ marginTop: 18 }}>
           <PageTitle title="Laporan Lapangan" subtitle="Kendala, solusi, dan foto sebelum/sesudah" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-2" style={{ marginBottom: 12 }}>
             <input
               placeholder="Progres saat ini (%)"
               type="number"

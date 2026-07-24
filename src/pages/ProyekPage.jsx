@@ -100,7 +100,7 @@ export default function ProyekPage() {
 
       {showProjectForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-3" style={{ marginBottom: 12 }}>
             <input placeholder="Nama proyek" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} style={inputStyle} />
             <input placeholder="Lokasi" value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} style={inputStyle} />
             <input placeholder="Deskripsi singkat" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} style={inputStyle} />
@@ -147,7 +147,7 @@ export default function ProyekPage() {
           />
 
           {showUnitForm && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div className="rg-4" style={{ marginBottom: 14 }}>
               <input placeholder="Kode unit (mis. A-01)" value={unitForm.unit_code} onChange={(e) => setUnitForm({ ...unitForm, unit_code: e.target.value })} style={inputStyle} />
               <input placeholder="Blok" value={unitForm.block} onChange={(e) => setUnitForm({ ...unitForm, block: e.target.value })} style={inputStyle} />
               <input placeholder="Tipe (mis. 36/72)" value={unitForm.type} onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })} style={inputStyle} />

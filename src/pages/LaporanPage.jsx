@@ -74,7 +74,7 @@ export default function LaporanPage() {
         action={<PrimaryButton onClick={exportExcel}>Export ke Excel</PrimaryButton>}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18, marginBottom: 22 }}>
+      <div className="rg-4" style={{ marginBottom: 22 }}>
         {statCards.map((c) => (
           <Card key={c.label} style={{ borderTop: `4px solid ${ORANGE}` }}>
             <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 10 }}>{c.label}</div>
@@ -83,7 +83,7 @@ export default function LaporanPage() {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+      <div className="rg-2">
         <Card>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Prospek per Status</div>
           <DataTable loading={loading} columns={[{ key: "label", label: "Status" }, { key: "value", label: "Jumlah" }]} rows={groupCount(leads, "status")} />

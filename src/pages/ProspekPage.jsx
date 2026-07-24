@@ -104,7 +104,7 @@ export default function ProspekPage() {
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#6b5c4c", marginBottom: 8 }}>Data Diri</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div className="rg-3" style={{ marginBottom: 14 }}>
             <input placeholder="Nama *" value={form.name} onChange={(e) => set("name", e.target.value)} style={inputStyle} />
             <input placeholder="Nomor Telepon" value={form.phone} onChange={(e) => set("phone", e.target.value)} style={inputStyle} />
             <input placeholder="Usia" type="number" value={form.usia} onChange={(e) => set("usia", e.target.value)} style={inputStyle} />
@@ -125,7 +125,7 @@ export default function ProspekPage() {
           </div>
 
           <div style={{ fontSize: 12, fontWeight: 600, color: "#6b5c4c", marginBottom: 8 }}>Domisili</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div className="rg-4" style={{ marginBottom: 14 }}>
             <input placeholder="Domisili" value={form.domisili} onChange={(e) => set("domisili", e.target.value)} style={inputStyle} />
             <input placeholder="Kabupaten/Kota" value={form.kabupaten} onChange={(e) => set("kabupaten", e.target.value)} style={inputStyle} />
             <input placeholder="Kecamatan" value={form.kecamatan} onChange={(e) => set("kecamatan", e.target.value)} style={inputStyle} />
@@ -133,7 +133,7 @@ export default function ProspekPage() {
           </div>
 
           <div style={{ fontSize: 12, fontWeight: 600, color: "#6b5c4c", marginBottom: 8 }}>Sumber & Rencana</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-4" style={{ marginBottom: 12 }}>
             <select value={form.source} onChange={(e) => set("source", e.target.value)} style={inputStyle}>
               <option value="">Sumber Informasi Leads</option>
               {sources.map((s) => (

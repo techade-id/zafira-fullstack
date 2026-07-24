@@ -126,7 +126,7 @@ export default function DataAgenPage() {
 
       <Card style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Perpindahan Konsumen Antar Agen</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "center" }}>
+        <div className="transfer-form-grid">
           <select value={transfer.customer_id} onChange={(e) => setTransfer({ ...transfer, customer_id: e.target.value })} style={selectStyle}>
             <option value="">Pilih Konsumen</option>
             {customers.map((c) => (

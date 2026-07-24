@@ -74,7 +74,7 @@ export default function IklanPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-3" style={{ marginBottom: 12 }}>
             <select value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value })} style={inputStyle}>
               {PLATFORMS.map((p) => (
                 <option key={p} value={p}>
@@ -96,7 +96,7 @@ export default function IklanPage() {
         </Card>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
+      <div className="rg-2" style={{ marginBottom: 18 }}>
         <Card>
           <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 6 }}>Total Spend</div>
           <div style={{ fontSize: 26, fontWeight: 700 }}>Rp{totalSpend.toLocaleString("id-ID")}</div>

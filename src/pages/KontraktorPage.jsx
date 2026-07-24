@@ -119,7 +119,7 @@ export default function KontraktorPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-4" style={{ marginBottom: 12 }}>
             <input placeholder="Nama kontraktor" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
             <input placeholder="Telepon" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
             <input placeholder="Spesialisasi" value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} style={inputStyle} />
@@ -132,7 +132,7 @@ export default function KontraktorPage() {
         </Card>
       )}
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: TEXT_MID }}>Urutkan:</span>
         <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={inputStyle}>
           {SORT_OPTIONS.map((o) => (
@@ -181,7 +181,7 @@ export default function KontraktorPage() {
       {selectedId && (
         <Card style={{ marginTop: 18 }}>
           <PageTitle title="Evaluasi Kontraktor" subtitle="Skor 1-5 per unit yang dikerjakan" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr auto", gap: 12, marginBottom: 14, alignItems: "center" }}>
+          <div className="eval-form-grid" style={{ marginBottom: 14 }}>
             <select value={evalForm.unit_id} onChange={(e) => setEvalForm({ ...evalForm, unit_id: e.target.value })} style={inputStyle}>
               <option value="">Unit (opsional)</option>
               {units.map((u) => (

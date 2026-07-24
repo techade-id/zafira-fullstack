@@ -221,7 +221,7 @@ export default function KonsumenPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-3" style={{ marginBottom: 12 }}>
             <input placeholder="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
             <input placeholder="Telepon" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
             <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
@@ -293,7 +293,7 @@ export default function KonsumenPage() {
       {selectedCustomerId && kpr && (
         <Card style={{ marginTop: 18 }}>
           <PageTitle title="Progres KPR" subtitle="Booking → DP → Bank → SP3K → Akad → Serah Terima Kunci → BPHTB → SHM" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 14 }}>
+          <div className="rg-3" style={{ marginBottom: 14 }}>
             {KPR_FIELDS.map((field) => (
               <div key={field.key}>
                 <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>{field.label}</div>

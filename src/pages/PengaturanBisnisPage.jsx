@@ -53,7 +53,7 @@ export default function PengaturanBisnisPage() {
       {loading ? (
         <Card><div style={{ fontSize: 13, color: TEXT_MID }}>Memuat data...</div></Card>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+        <div className="rg-2">
           {CATEGORIES.map((cat) => {
             const items = settings.filter((s) => s.category === cat.key);
             return (

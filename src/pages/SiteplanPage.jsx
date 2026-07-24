@@ -116,9 +116,9 @@ export default function SiteplanPage() {
       )}
 
       {activeProject && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 18, alignItems: "start" }}>
+        <div className="siteplan-layout">
           <Card>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
               <div style={{ fontSize: 13, color: TEXT_MID }}>
                 {placingUnitId ? "Klik pada gambar untuk menempatkan unit terpilih." : "Peta siteplan — klik pin untuk detail unit."}
               </div>
@@ -176,7 +176,7 @@ export default function SiteplanPage() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 14, marginTop: 14, fontSize: 12, color: TEXT_MID }}>
+            <div style={{ display: "flex", gap: 14, marginTop: 14, fontSize: 12, color: TEXT_MID, flexWrap: "wrap" }}>
               {Object.entries(PIN_COLORS).map(([status, color]) => (
                 <div key={status} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />

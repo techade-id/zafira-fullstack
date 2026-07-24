@@ -78,7 +78,7 @@ export default function TargetPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-3" style={{ marginBottom: 12 }}>
             <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)} style={inputStyle}>
               <option value="">Semua Agen / Umum</option>
               {agents.map((a) => (

@@ -92,7 +92,7 @@ export default function KomplainPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div className="rg-3" style={{ marginBottom: 12 }}>
             <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} style={inputStyle}>
               <option value="">Konsumen (opsional)</option>
               {customers.map((c) => (

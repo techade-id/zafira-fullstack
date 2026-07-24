@@ -117,7 +117,7 @@ export default function DashboardPage() {
         <h1 style={{ fontSize: 19, margin: 0 }}>Selamat Datang, {profile?.full_name || "..."}</h1>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18, marginBottom: 22 }}>
+      <div className="rg-4" style={{ marginBottom: 22 }}>
         {cards.map((c) => (
           <Card key={c.label} style={{ borderTop: `4px solid ${ORANGE}` }}>
             <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 10 }}>{c.label}</div>
@@ -128,7 +128,7 @@ export default function DashboardPage() {
 
       <Card style={{ marginBottom: 22 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Rata-rata Durasi per Tahap KPR (hari)</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}>
+        <div className="rg-4">
           {stageDurations.map((s) => (
             <div key={s.label} style={{ padding: "12px 14px", background: ORANGE_LIGHT, borderRadius: 10 }}>
               <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 6 }}>{s.label}</div>
@@ -138,7 +138,7 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+      <div className="rg-2">
         <Card>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Performa per Agen</div>
           <DataTable
