@@ -16,6 +16,10 @@ import MonitoringLapanganPage from "./pages/MonitoringLapanganPage";
 import KomplainPage from "./pages/KomplainPage";
 import LaporanPage from "./pages/LaporanPage";
 import IklanPage from "./pages/IklanPage";
+import ReminderPage from "./pages/ReminderPage";
+import TargetPage from "./pages/TargetPage";
+import DataAgenPage from "./pages/DataAgenPage";
+import PengaturanBisnisPage from "./pages/PengaturanBisnisPage";
 
 export default function App() {
   return (
@@ -44,6 +48,10 @@ export default function App() {
             <Route path="komplain" element={<KomplainPage />} />
             <Route path="laporan" element={<LaporanPage />} />
             <Route path="iklan" element={<IklanPage />} />
+            <Route path="reminder" element={<ReminderPage />} />
+            <Route path="target" element={<TargetPage />} />
+            <Route path="data-agen" element={<DataAgenPage />} />
+            <Route path="pengaturan-bisnis" element={<PengaturanBisnisPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

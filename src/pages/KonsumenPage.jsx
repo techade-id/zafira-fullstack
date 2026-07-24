@@ -1,19 +1,43 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getSignedUrl } from "../lib/storage";
+import { useBusinessSettings } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID } from "../components/ui";
 
 const CUSTOMER_STATUS_OPTIONS = ["proses", "aktif", "selesai", "batal"];
 const DOC_TYPES = ["KTP", "KK", "NPWP", "Slip Gaji", "Akad"];
 const DOC_STATUS_OPTIONS = ["menunggu", "terverifikasi", "ditolak"];
 
+function daysBetween(a, b) {
+  if (!a || !b) return null;
+  return Math.round((new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24));
+}
+
 function durationLabel(startedAt, completedAt) {
-  const start = new Date(startedAt);
-  const end = completedAt ? new Date(completedAt) : new Date();
-  const days = Math.max(0, Math.round((end - start) / (1000 * 60 * 60 * 24)));
+  const days = daysBetween(startedAt, completedAt || new Date());
   return completedAt ? `${days} hari (selesai)` : `${days} hari (berjalan)`;
 }
+
+const KPR_FIELDS = [
+  { key: "tanggal_booking", label: "Tanggal Booking", type: "date" },
+  { key: "nominal_booking", label: "Nominal Booking", type: "number" },
+  { key: "tanggal_dp", label: "Tanggal Pembayaran DP", type: "date" },
+  { key: "nominal_dp", label: "Nominal DP", type: "number" },
+  { key: "biaya_tambahan_tanah", label: "Biaya Tambahan Tanah", type: "number" },
+  { key: "nominal_total_dp", label: "Total DP (Promo + Tanah)", type: "number" },
+  { key: "dp_terbayar", label: "DP Terbayar", type: "number" },
+  { key: "nama_bank", label: "Nama Bank", type: "bank" },
+  { key: "tanggal_masuk_bank", label: "Tanggal Masuk Bank", type: "date" },
+  { key: "progres_berkas", label: "Progres Berkas", type: "progres" },
+  { key: "tanggal_sp3k_terbit", label: "Tanggal SP3K Terbit", type: "date" },
+  { key: "tanggal_sp3k_expired", label: "Tanggal SP3K Expired", type: "date" },
+  { key: "tanggal_sp3k_perpanjangan", label: "Tanggal SP3K Perpanjangan", type: "date" },
+  { key: "tanggal_akad", label: "Tanggal Akad", type: "date" },
+  { key: "tanggal_serah_terima_kunci", label: "Tanggal Serah Terima Kunci", type: "date" },
+  { key: "bphtb", label: "BPHTB", type: "number" },
+  { key: "shm", label: "SHM", type: "text" },
+];
 
 export default function KonsumenPage() {
   const { profile } = useAuth();
@@ -27,10 +51,15 @@ export default function KonsumenPage() {
   const [error, setError] = useState("");
 
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [kpr, setKpr] = useState(null);
+  const [kprSaving, setKprSaving] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [docType, setDocType] = useState(DOC_TYPES[0]);
   const [docFile, setDocFile] = useState(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  const banks = useBusinessSettings("bank");
+  const progresBerkasOptions = useBusinessSettings("progres_berkas");
 
   async function fetchAll() {
     setLoading(true);
@@ -49,19 +78,20 @@ export default function KonsumenPage() {
     fetchAll();
   }, []);
 
-  async function fetchDocuments(customerId) {
-    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false });
-    setDocuments(data || []);
-  }
-
-  function toggleCustomer(id) {
-    if (selectedCustomerId === id) {
+  async function openCustomer(customerId) {
+    if (selectedCustomerId === customerId) {
       setSelectedCustomerId(null);
+      setKpr(null);
       setDocuments([]);
-    } else {
-      setSelectedCustomerId(id);
-      fetchDocuments(id);
+      return;
     }
+    setSelectedCustomerId(customerId);
+    const [{ data: kprRow }, { data: docs }] = await Promise.all([
+      supabase.from("customer_kpr").select("*").eq("customer_id", customerId).maybeSingle(),
+      supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false }),
+    ]);
+    setKpr(kprRow || { customer_id: customerId });
+    setDocuments(docs || []);
   }
 
   async function handleAddCustomer() {
@@ -94,10 +124,30 @@ export default function KonsumenPage() {
 
   async function updateStatus(customerId, status) {
     const patch = { status };
-    if (status === "selesai") patch.process_completed_at = new Date().toISOString();
-    if (status !== "selesai") patch.process_completed_at = null;
+    patch.process_completed_at = status === "selesai" ? new Date().toISOString() : null;
     await supabase.from("customers").update(patch).eq("id", customerId);
     fetchAll();
+  }
+
+  function setKprField(key, value) {
+    setKpr((k) => ({ ...k, [key]: value }));
+  }
+
+  async function saveKpr() {
+    setKprSaving(true);
+    const payload = { ...kpr, customer_id: selectedCustomerId, updated_at: new Date().toISOString() };
+    // normalize empty strings to null
+    for (const k of Object.keys(payload)) {
+      if (payload[k] === "") payload[k] = null;
+    }
+    const { error } = await supabase.from("customer_kpr").upsert(payload, { onConflict: "customer_id" });
+    setKprSaving(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    const { data } = await supabase.from("customer_kpr").select("*").eq("customer_id", selectedCustomerId).maybeSingle();
+    setKpr(data || { customer_id: selectedCustomerId });
   }
 
   async function handleUploadDoc() {
@@ -109,26 +159,57 @@ export default function KonsumenPage() {
       setUploadingDoc(false);
       return;
     }
-    await supabase.from("customer_documents").insert({
-      customer_id: selectedCustomerId,
-      doc_type: docType,
-      file_url: path,
-      status: "menunggu",
-    });
+    await supabase.from("customer_documents").insert({ customer_id: selectedCustomerId, doc_type: docType, file_url: path, status: "menunggu" });
     setDocFile(null);
     setUploadingDoc(false);
-    fetchDocuments(selectedCustomerId);
+    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", selectedCustomerId).order("uploaded_at", { ascending: false });
+    setDocuments(data || []);
   }
 
   async function updateDocStatus(docId, status) {
     await supabase.from("customer_documents").update({ status }).eq("id", docId);
-    fetchDocuments(selectedCustomerId);
+    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", selectedCustomerId).order("uploaded_at", { ascending: false });
+    setDocuments(data || []);
   }
 
   async function viewDoc(path) {
     const url = await getSignedUrl("customer-documents", path);
     if (url) window.open(url, "_blank");
   }
+
+  function renderKprInput(field) {
+    const value = kpr?.[field.key] ?? "";
+    if (field.type === "bank") {
+      return (
+        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle}>
+          <option value="">Pilih Bank</option>
+          {banks.map((b) => (
+            <option key={b} value={b}>{b}</option>
+          ))}
+        </select>
+      );
+    }
+    if (field.type === "progres") {
+      return (
+        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle}>
+          <option value="">Pilih Progres</option>
+          {progresBerkasOptions.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+      );
+    }
+    return <input type={field.type} value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle} />;
+  }
+
+  const durations = kpr
+    ? {
+        berkas: daysBetween(kpr.tanggal_masuk_bank, kpr.tanggal_sp3k_terbit),
+        sp3k: daysBetween(kpr.tanggal_sp3k_terbit, kpr.tanggal_akad),
+        akad: daysBetween(kpr.tanggal_dp, kpr.tanggal_akad),
+        serah: daysBetween(kpr.tanggal_akad, kpr.tanggal_serah_terima_kunci),
+      }
+    : {};
 
   return (
     <div>
@@ -196,11 +277,11 @@ export default function KonsumenPage() {
               ),
             },
             {
-              key: "docs",
-              label: "Dokumen",
+              key: "kpr",
+              label: "Progres KPR",
               render: (row) => (
-                <button onClick={() => toggleCustomer(row.id)} style={linkButtonStyle}>
-                  {selectedCustomerId === row.id ? "Tutup" : "Lihat Dokumen"}
+                <button onClick={() => openCustomer(row.id)} style={linkButtonStyle}>
+                  {selectedCustomerId === row.id ? "Tutup" : "Kelola"}
                 </button>
               ),
             },
@@ -209,49 +290,71 @@ export default function KonsumenPage() {
         />
       </Card>
 
-      {selectedCustomerId && (
+      {selectedCustomerId && kpr && (
         <Card style={{ marginTop: 18 }}>
-          <PageTitle title="Dokumen Administrasi" subtitle="KTP, KK, NPWP, Akad, dll dengan status verifikasi" />
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-            <select value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle}>
-              {DOC_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <input type="file" onChange={(e) => setDocFile(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
-            <PrimaryButton onClick={handleUploadDoc} disabled={uploadingDoc || !docFile}>
-              {uploadingDoc ? "Mengunggah..." : "Unggah"}
-            </PrimaryButton>
+          <PageTitle title="Progres KPR" subtitle="Booking → DP → Bank → SP3K → Akad → Serah Terima Kunci → BPHTB → SHM" />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 14 }}>
+            {KPR_FIELDS.map((field) => (
+              <div key={field.key}>
+                <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>{field.label}</div>
+                {renderKprInput(field)}
+              </div>
+            ))}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Kendala atau Catatan</div>
+              <textarea value={kpr.kendala ?? ""} onChange={(e) => setKprField("kendala", e.target.value)} style={{ ...inputStyle, width: "100%", minHeight: 56, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Alamat KTP</div>
+              <input value={kpr.alamat_ktp ?? ""} onChange={(e) => setKprField("alamat_ktp", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+            </div>
           </div>
 
-          <DataTable
-            emptyLabel="Belum ada dokumen diunggah."
-            columns={[
-              { key: "doc_type", label: "Jenis" },
-              { key: "file_url", label: "File", render: (row) => (row.file_url ? <button onClick={() => viewDoc(row.file_url)} style={linkButtonStyle}>Lihat</button> : "-") },
-              { key: "uploaded_at", label: "Diunggah", render: (row) => new Date(row.uploaded_at).toLocaleDateString("id-ID") },
-              {
-                key: "status",
-                label: "Status",
-                render: (row) => (
-                  <select
-                    value={row.status}
-                    onChange={(e) => updateDocStatus(row.id, e.target.value)}
-                    style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}
-                  >
-                    {DOC_STATUS_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                ),
-              },
-            ]}
-            rows={documents}
-          />
+          <div style={{ display: "flex", gap: 16, fontSize: 12, color: TEXT_MID, marginBottom: 14, flexWrap: "wrap" }}>
+            {durations.berkas != null && <span>Pengumpulan berkas: <b>{durations.berkas} hari</b></span>}
+            {durations.sp3k != null && <span>SP3K → Akad: <b>{durations.sp3k} hari</b></span>}
+            {durations.akad != null && <span>Persiapan akad: <b>{durations.akad} hari</b></span>}
+            {durations.serah != null && <span>Persiapan serah terima: <b>{durations.serah} hari</b></span>}
+          </div>
+
+          <PrimaryButton onClick={saveKpr} disabled={kprSaving}>
+            {kprSaving ? "Menyimpan..." : "Simpan Progres KPR"}
+          </PrimaryButton>
+
+          <div style={{ marginTop: 22, borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Dokumen Administrasi</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+              <select value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle}>
+                {DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <input type="file" onChange={(e) => setDocFile(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
+              <PrimaryButton onClick={handleUploadDoc} disabled={uploadingDoc || !docFile}>
+                {uploadingDoc ? "Mengunggah..." : "Unggah"}
+              </PrimaryButton>
+            </div>
+            <DataTable
+              emptyLabel="Belum ada dokumen diunggah."
+              columns={[
+                { key: "doc_type", label: "Jenis" },
+                { key: "file_url", label: "File", render: (row) => (row.file_url ? <button onClick={() => viewDoc(row.file_url)} style={linkButtonStyle}>Lihat</button> : "-") },
+                { key: "uploaded_at", label: "Diunggah", render: (row) => new Date(row.uploaded_at).toLocaleDateString("id-ID") },
+                {
+                  key: "status",
+                  label: "Status",
+                  render: (row) => (
+                    <select value={row.status} onChange={(e) => updateDocStatus(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}>
+                      {DOC_STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  ),
+                },
+              ]}
+              rows={documents}
+            />
+          </div>
         </Card>
       )}
     </div>
@@ -264,6 +367,8 @@ const inputStyle = {
   borderRadius: 8,
   fontSize: 13,
   outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const linkButtonStyle = {

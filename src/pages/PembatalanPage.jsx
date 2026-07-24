@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
+import { useBusinessSettings } from "../lib/useBusinessSettings";
 import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
 
 export default function PembatalanPage() {
@@ -12,6 +13,7 @@ export default function PembatalanPage() {
   const [form, setForm] = useState({ customer_id: "", reason: "", detail: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const cancelReasons = useBusinessSettings("cancel_reason");
 
   async function fetchData() {
     setLoading(true);
@@ -73,7 +75,12 @@ export default function PembatalanPage() {
                 </option>
               ))}
             </select>
-            <input placeholder="Alasan pembatalan" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} style={inputStyle} />
+            <select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} style={inputStyle}>
+              <option value="">Alasan Pembatalan</option>
+              {cancelReasons.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
             <textarea
               placeholder="Detail tambahan (opsional)"
               value={form.detail}

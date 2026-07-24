@@ -9,6 +9,11 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
 1. Create a project at https://supabase.com
 2. Open the SQL Editor and run the contents of `supabase/schema.sql`
    — this creates all tables, enums, and Row Level Security policies.
+   **On a project that was already provisioned before the KPR/CRM
+   expansion, run `supabase/migration_002_kpr_pipeline.sql` instead of
+   re-running schema.sql** — it adds the new funnel stages, lead intake
+   fields, KPR pipeline (`customer_kpr`), sales targets, business
+   settings, agent fields, and transfer log without dropping data.
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
    `complaint-photos`) and their RLS policies, needed by Siteplan Digital,
@@ -76,6 +81,20 @@ matching your `.env`.
   proyek/komplain, with one-click Excel export (`xlsx`).
 - **Digital Ads**: `ads_analytics` CRUD with spend/leads-per-platform bars
   and a blended cost-per-lead figure.
+- **Reminder**: prospects with a scheduled follow-up date, sorted by days
+  remaining (overdue / today / upcoming).
+- **Penetapan Target**: per-agent, per-period sales targets (total prospek,
+  closing, per-day rates, deal value).
+- **Data Agen**: edit agent role/divisi/daerah/active status, and transfer a
+  customer to another agent (logged in `customer_transfers`).
+- **Pengaturan Bisnis**: admin-editable dropdown lists (lead sources, banks,
+  cancel reasons, follow-up categories, progres berkas) used across the app.
+
+The modules above mirror the team's live sales spreadsheet: the 9-stage
+funnel, full lead intake (usia, marital status, pekerjaan, gaji, domisili),
+and the KPR customer pipeline (Booking → DP → Bank → SP3K → Akad → Serah
+Terima Kunci → BPHTB → SHM) with per-stage duration tracking on the Konsumen
+page and the dashboard.
 
 ## Not yet built
 

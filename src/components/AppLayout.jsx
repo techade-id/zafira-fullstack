@@ -15,6 +15,10 @@ import {
   Megaphone,
   LogOut,
   Search,
+  Bell,
+  Flag,
+  UserCog,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -38,6 +42,8 @@ const navSections = [
       { to: "/konsumen", icon: Users, label: "Konsumen" },
       { to: "/pembayaran", icon: Wallet, label: "Pembayaran" },
       { to: "/pembatalan", icon: XCircle, label: "Pembatalan" },
+      { to: "/reminder", icon: Bell, label: "Reminder" },
+      { to: "/target", icon: Flag, label: "Penetapan Target" },
     ],
   },
   {
@@ -55,6 +61,13 @@ const navSections = [
     items: [
       { to: "/laporan", icon: BarChart2, label: "Laporan" },
       { to: "/iklan", icon: Megaphone, label: "Digital Ads" },
+    ],
+  },
+  {
+    title: "Pengaturan",
+    items: [
+      { to: "/data-agen", icon: UserCog, label: "Data Agen" },
+      { to: "/pengaturan-bisnis", icon: Settings, label: "Pengaturan Bisnis" },
     ],
   },
 ];

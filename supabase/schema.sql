@@ -5,7 +5,9 @@
 
 -- ---------- ENUMS ----------
 create type user_role as enum ('admin', 'manager', 'sales_agent', 'tim_lapangan');
-create type lead_status as enum ('baru', 'dihubungi', 'appointment', 'closing', 'cancel');
+-- Sales funnel, matching the team's live spreadsheet. Legacy values
+-- (dihubungi, closing) are kept for backward compatibility.
+create type lead_status as enum ('baru', 'leads', 'cold', 'warm', 'dihubungi', 'appointment', 'deal', 'closing', 'cancel');
 create type unit_status as enum ('tersedia', 'booking', 'terjual', 'batal');
 create type customer_status as enum ('proses', 'aktif', 'selesai', 'batal');
 create type doc_status as enum ('menunggu', 'terverifikasi', 'ditolak');
@@ -22,6 +24,9 @@ create table profiles (
   role user_role not null default 'sales_agent',
   phone text,
   avatar_url text,
+  divisi text,
+  daerah text,
+  is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -59,7 +64,19 @@ create table leads (
   phone text,
   email text,
   source text,
-  status lead_status not null default 'baru',
+  status lead_status not null default 'leads',
+  usia int,
+  marital_status text,               -- Nikah / Janda-Duda / Single
+  pekerjaan text,                    -- Karyawan Swasta / PNS-ASN / Wirausaha
+  perusahaan_tempat_kerja text,
+  gaji numeric(14,2),
+  domisili text,
+  kabupaten text,
+  kecamatan text,
+  kelurahan text,
+  rencana_selanjutnya text,          -- next planned action
+  kategori_rencana text,             -- Follow Up / Negosiasi / ...
+  tanggal_rencana date,              -- due date for follow-up reminders
   assigned_to uuid references profiles(id),
   project_id uuid references projects(id),
   notes text,
@@ -116,6 +133,69 @@ create table payments (
   verified_by uuid references profiles(id),
   notes text,
   created_at timestamptz not null default now()
+);
+
+-- ---------- CUSTOMER KPR PROGRESS (booking -> SHM pipeline) ----------
+create table customer_kpr (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references customers(id) on delete cascade,
+  tanggal_booking date,
+  nominal_booking numeric(14,2),
+  tanggal_dp date,
+  nominal_dp numeric(14,2),
+  biaya_tambahan_tanah numeric(14,2),
+  nominal_total_dp numeric(14,2),
+  dp_terbayar numeric(14,2),
+  nama_bank text,
+  tanggal_masuk_bank date,
+  progres_berkas text,
+  tanggal_sp3k_terbit date,
+  tanggal_sp3k_expired date,
+  tanggal_sp3k_perpanjangan date,
+  tanggal_akad date,
+  tanggal_serah_terima_kunci date,
+  bphtb numeric(14,2),
+  shm text,
+  kendala text,
+  alamat_ktp text,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (customer_id)
+);
+
+-- ---------- SALES TARGETS (Penetapan Target) ----------
+create table sales_targets (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid references profiles(id),
+  periode_start date not null,
+  periode_end date not null,
+  target_total_prospek int default 0,
+  target_total_closing int default 0,
+  target_prospek_per_hari numeric(6,2) default 0,
+  target_closing_per_hari numeric(6,2) default 0,
+  target_deal_value numeric(16,2) default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- BUSINESS SETTINGS (admin-editable reference lists) ----------
+create table business_settings (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,
+  value text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  unique (category, value)
+);
+
+-- ---------- CUSTOMER TRANSFERS (Perpindahan Konsumen Antar Agen) ----------
+create table customer_transfers (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references customers(id) on delete cascade,
+  from_agent_id uuid references profiles(id),
+  to_agent_id uuid references profiles(id),
+  reason text,
+  transferred_by uuid references profiles(id),
+  transferred_at timestamptz not null default now()
 );
 
 -- ---------- CANCELLATIONS ----------
@@ -228,7 +308,11 @@ alter table leads enable row level security;
 alter table lead_activities enable row level security;
 alter table customers enable row level security;
 alter table customer_documents enable row level security;
+alter table customer_kpr enable row level security;
 alter table payments enable row level security;
+alter table sales_targets enable row level security;
+alter table business_settings enable row level security;
+alter table customer_transfers enable row level security;
 alter table cancellations enable row level security;
 alter table contractors enable row level security;
 alter table contractor_evaluations enable row level security;
@@ -251,6 +335,7 @@ $$;
 -- profiles: everyone can read all profiles (needed for assignment dropdowns); only self can update own row
 create policy "profiles_select_all" on profiles for select using (true);
 create policy "profiles_update_self" on profiles for update using (id = auth.uid());
+create policy "profiles_update_admin_manager" on profiles for update using (current_role_name() in ('admin','manager'));
 
 -- admin/manager: full access everywhere. sales_agent: own leads/customers/payments.
 -- tim_lapangan: own field_projects/field_reports.
@@ -290,6 +375,20 @@ create policy "payments_rw" on payments for all using (
   current_role_name() in ('admin','manager') or
   exists (select 1 from customers c where c.id = customer_id and c.sales_agent_id = auth.uid())
 );
+
+create policy "customer_kpr_rw" on customer_kpr for all using (
+  current_role_name() in ('admin','manager') or
+  exists (select 1 from customers c where c.id = customer_id and c.sales_agent_id = auth.uid())
+);
+
+create policy "sales_targets_read_all" on sales_targets for select using (true);
+create policy "sales_targets_write_admin_manager" on sales_targets for all using (current_role_name() in ('admin','manager'));
+
+create policy "business_settings_read_all" on business_settings for select using (true);
+create policy "business_settings_write_admin_manager" on business_settings for all using (current_role_name() in ('admin','manager'));
+
+create policy "customer_transfers_read_all" on customer_transfers for select using (true);
+create policy "customer_transfers_write_admin_manager" on customer_transfers for all using (current_role_name() in ('admin','manager'));
 
 create policy "cancellations_rw" on cancellations for all using (
   current_role_name() in ('admin','manager') or

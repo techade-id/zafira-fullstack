@@ -1,0 +1,91 @@
+import React, { useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { Card, PageTitle, DataTable, Badge, TEXT_MID } from "../components/ui";
+
+function sisaHari(dateStr) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function sisaLabel(n) {
+  if (n < 0) return `Terlewat ${Math.abs(n)} hari`;
+  if (n === 0) return "Hari ini";
+  return `${n} hari lagi`;
+}
+
+function sisaColor(n) {
+  if (n < 0) return "#c23b3b";
+  if (n <= 2) return "#e8630a";
+  return "#28864a";
+}
+
+export default function ReminderPage() {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function fetchData() {
+    setLoading(true);
+    const { data } = await supabase
+      .from("leads")
+      .select("*, profiles(full_name)")
+      .not("tanggal_rencana", "is", null)
+      .neq("status", "cancel")
+      .order("tanggal_rencana");
+    setLeads(data || []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const withSisa = leads.map((l) => ({ ...l, _sisa: sisaHari(l.tanggal_rencana) }));
+  const overdue = withSisa.filter((l) => l._sisa < 0).length;
+  const todayCount = withSisa.filter((l) => l._sisa === 0).length;
+
+  return (
+    <div>
+      <PageTitle title="Reminder — Rencana Selanjutnya" subtitle="Daftar prospek dengan rencana follow-up terjadwal" />
+
+      <div style={{ display: "flex", gap: 14, marginBottom: 18 }}>
+        <Card style={{ flex: 1, borderTop: "4px solid #c23b3b" }}>
+          <div style={{ fontSize: 13, color: TEXT_MID }}>Terlewat</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: "#c23b3b" }}>{overdue}</div>
+        </Card>
+        <Card style={{ flex: 1, borderTop: "4px solid #e8630a" }}>
+          <div style={{ fontSize: 13, color: TEXT_MID }}>Hari Ini</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: "#e8630a" }}>{todayCount}</div>
+        </Card>
+        <Card style={{ flex: 1, borderTop: "4px solid #28864a" }}>
+          <div style={{ fontSize: 13, color: TEXT_MID }}>Total Terjadwal</div>
+          <div style={{ fontSize: 26, fontWeight: 700 }}>{leads.length}</div>
+        </Card>
+      </div>
+
+      <Card>
+        <DataTable
+          loading={loading}
+          emptyLabel="Belum ada rencana follow-up terjadwal."
+          columns={[
+            { key: "name", label: "Nama Prospek" },
+            { key: "phone", label: "Telepon", render: (row) => row.phone || "-" },
+            { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
+            { key: "kategori_rencana", label: "Kategori", render: (row) => row.kategori_rencana || "-" },
+            { key: "rencana_selanjutnya", label: "Rencana", render: (row) => row.rencana_selanjutnya || "-" },
+            { key: "tanggal_rencana", label: "Tanggal", render: (row) => new Date(row.tanggal_rencana).toLocaleDateString("id-ID") },
+            { key: "agent", label: "Agen", render: (row) => row.profiles?.full_name || "-" },
+            {
+              key: "sisa",
+              label: "Sisa Hari",
+              render: (row) => <span style={{ color: sisaColor(row._sisa), fontWeight: 600 }}>{sisaLabel(row._sisa)}</span>,
+            },
+          ]}
+          rows={withSisa}
+        />
+      </Card>
+    </div>
+  );
+}
