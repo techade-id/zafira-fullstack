@@ -5,7 +5,6 @@ import { useAuth } from "../context/AuthContext";
 
 const ORANGE = "#ff7a1a";
 const ORANGE_DARK = "#e8630a";
-const ORANGE_LIGHT = "#fff1e6";
 const BORDER = "#f0dfc8";
 const TEXT_DARK = "#2c2013";
 const TEXT_MID = "#6b5c4c";
@@ -142,10 +141,6 @@ export default function LoginPage() {
             {loading ? "Memproses..." : "Masuk"}
           </button>
           <div style={{ color: "#d94141", fontSize: 12, marginTop: 10, minHeight: 14 }}>{error}</div>
-        </div>
-
-        <div style={{ marginTop: 18, fontSize: 11, color: TEXT_MID, background: ORANGE_LIGHT, padding: 8, borderRadius: 8 }}>
-          Akun dibuat oleh admin melalui Supabase, atau daftar melalui halaman pendaftaran jika diaktifkan.
         </div>
       </div>
     </div>
