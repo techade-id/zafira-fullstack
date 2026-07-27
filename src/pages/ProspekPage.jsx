@@ -103,7 +103,7 @@ export default function ProspekPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#6b5c4c", marginBottom: 8 }}>Data Diri</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#79837a", marginBottom: 8 }}>Data Diri</div>
           <div className="rg-3" style={{ marginBottom: 14 }}>
             <input placeholder="Nama *" value={form.name} onChange={(e) => set("name", e.target.value)} style={inputStyle} />
             <input placeholder="Nomor Telepon" value={form.phone} onChange={(e) => set("phone", e.target.value)} style={inputStyle} />
@@ -124,7 +124,7 @@ export default function ProspekPage() {
             <input placeholder="Gaji (Rp)" type="number" value={form.gaji} onChange={(e) => set("gaji", e.target.value)} style={inputStyle} />
           </div>
 
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#6b5c4c", marginBottom: 8 }}>Domisili</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#79837a", marginBottom: 8 }}>Domisili</div>
           <div className="rg-4" style={{ marginBottom: 14 }}>
             <input placeholder="Domisili" value={form.domisili} onChange={(e) => set("domisili", e.target.value)} style={inputStyle} />
             <input placeholder="Kabupaten/Kota" value={form.kabupaten} onChange={(e) => set("kabupaten", e.target.value)} style={inputStyle} />
@@ -132,7 +132,7 @@ export default function ProspekPage() {
             <input placeholder="Kelurahan/Desa" value={form.kelurahan} onChange={(e) => set("kelurahan", e.target.value)} style={inputStyle} />
           </div>
 
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#6b5c4c", marginBottom: 8 }}>Sumber & Rencana</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#79837a", marginBottom: 8 }}>Sumber & Rencana</div>
           <div className="rg-4" style={{ marginBottom: 12 }}>
             <select value={form.source} onChange={(e) => set("source", e.target.value)} style={inputStyle}>
               <option value="">Sumber Informasi Leads</option>
@@ -150,7 +150,7 @@ export default function ProspekPage() {
             <input type="date" value={form.tanggal_rencana} onChange={(e) => set("tanggal_rencana", e.target.value)} style={inputStyle} title="Tanggal rencana selanjutnya" />
             <input placeholder="Catatan" value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...inputStyle, gridColumn: "1 / -1" }} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddLead} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan Prospek"}
           </PrimaryButton>
@@ -174,7 +174,7 @@ export default function ProspekPage() {
                 <select
                   value={STATUS_OPTIONS.includes(row.status) ? row.status : "leads"}
                   onChange={(e) => updateStatus(row.id, e.target.value)}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, textTransform: "capitalize" }}
+                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12, textTransform: "capitalize" }}
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
@@ -196,7 +196,7 @@ export default function ProspekPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

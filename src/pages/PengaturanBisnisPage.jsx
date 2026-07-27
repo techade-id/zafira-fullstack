@@ -49,7 +49,7 @@ export default function PengaturanBisnisPage() {
   return (
     <div>
       <PageTitle title="Pengaturan Bisnis" subtitle="Kelola daftar pilihan (dropdown) yang dipakai di seluruh sistem" />
-      {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+      {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
       {loading ? (
         <Card><div style={{ fontSize: 13, color: TEXT_MID }}>Memuat data...</div></Card>
       ) : (

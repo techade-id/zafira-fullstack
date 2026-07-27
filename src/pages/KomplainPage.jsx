@@ -125,7 +125,7 @@ export default function KomplainPage() {
               style={{ ...inputStyle, gridColumn: "1 / -1", minHeight: 70, resize: "vertical", fontFamily: "inherit" }}
             />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddComplaint} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan Komplain"}
           </PrimaryButton>
@@ -150,7 +150,7 @@ export default function KomplainPage() {
               key: "assigned_to",
               label: "PIC",
               render: (row) => (
-                <select value={row.assigned_to || ""} onChange={(e) => assignTo(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}>
+                <select value={row.assigned_to || ""} onChange={(e) => assignTo(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}>
                   <option value="">Belum ditugaskan</option>
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -167,7 +167,7 @@ export default function KomplainPage() {
                 <select
                   value={row.status}
                   onChange={(e) => updateStatus(row.id, e.target.value)}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}
+                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
@@ -188,7 +188,7 @@ export default function KomplainPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

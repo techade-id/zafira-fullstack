@@ -89,7 +89,7 @@ export default function IklanPage() {
             <input placeholder="Klik" type="number" value={form.clicks} onChange={(e) => setForm({ ...form, clicks: e.target.value })} style={inputStyle} />
             <input placeholder="Leads dihasilkan" type="number" value={form.leads_generated} onChange={(e) => setForm({ ...form, leads_generated: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddAd} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan"}
           </PrimaryButton>
@@ -150,7 +150,7 @@ export default function IklanPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

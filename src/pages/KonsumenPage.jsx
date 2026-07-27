@@ -244,7 +244,7 @@ export default function KonsumenPage() {
               ))}
             </select>
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddCustomer} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan Konsumen"}
           </PrimaryButton>
@@ -266,7 +266,7 @@ export default function KonsumenPage() {
                 <select
                   value={row.status}
                   onChange={(e) => updateStatus(row.id, e.target.value)}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}
+                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
                 >
                   {CUSTOMER_STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
@@ -344,7 +344,7 @@ export default function KonsumenPage() {
                   key: "status",
                   label: "Status",
                   render: (row) => (
-                    <select value={row.status} onChange={(e) => updateDocStatus(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}>
+                    <select value={row.status} onChange={(e) => updateDocStatus(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}>
                       {DOC_STATUS_OPTIONS.map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
@@ -364,7 +364,7 @@ export default function KonsumenPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
   width: "100%",

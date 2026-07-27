@@ -155,7 +155,7 @@ export default function MonitoringLapanganPage() {
             <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} style={inputStyle} />
             <input type="date" value={form.target_end_date} onChange={(e) => setForm({ ...form, target_end_date: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddFieldProject} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan"}
           </PrimaryButton>
@@ -195,7 +195,7 @@ export default function MonitoringLapanganPage() {
                 <select
                   value={row.status}
                   onChange={(e) => updateFieldStatus(row.id, e.target.value)}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}
+                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
                 >
                   {FIELD_STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
@@ -298,7 +298,7 @@ export default function MonitoringLapanganPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

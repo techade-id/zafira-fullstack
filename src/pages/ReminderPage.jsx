@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, DataTable, Badge, TEXT_MID } from "../components/ui";
+import { Card, PageTitle, DataTable, Badge, TEXT_MID, PRIMARY, NEGATIVE } from "../components/ui";
+
+const WARNING = "#b07d2b";
 
 function sisaHari(dateStr) {
   const today = new Date();
@@ -17,9 +19,9 @@ function sisaLabel(n) {
 }
 
 function sisaColor(n) {
-  if (n < 0) return "#c23b3b";
-  if (n <= 2) return "#e8630a";
-  return "#28864a";
+  if (n < 0) return NEGATIVE;
+  if (n <= 2) return WARNING;
+  return PRIMARY;
 }
 
 export default function ReminderPage() {
@@ -51,17 +53,17 @@ export default function ReminderPage() {
       <PageTitle title="Reminder — Rencana Selanjutnya" subtitle="Daftar prospek dengan rencana follow-up terjadwal" />
 
       <div className="rg-3" style={{ marginBottom: 18 }}>
-        <Card style={{ borderTop: "4px solid #c23b3b" }}>
-          <div style={{ fontSize: 13, color: TEXT_MID }}>Terlewat</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: "#c23b3b" }}>{overdue}</div>
+        <Card>
+          <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 8 }}>Terlewat</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: NEGATIVE }}>{overdue}</div>
         </Card>
-        <Card style={{ borderTop: "4px solid #e8630a" }}>
-          <div style={{ fontSize: 13, color: TEXT_MID }}>Hari Ini</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: "#e8630a" }}>{todayCount}</div>
+        <Card>
+          <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 8 }}>Hari Ini</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: WARNING }}>{todayCount}</div>
         </Card>
-        <Card style={{ borderTop: "4px solid #28864a" }}>
-          <div style={{ fontSize: 13, color: TEXT_MID }}>Total Terjadwal</div>
-          <div style={{ fontSize: 26, fontWeight: 700 }}>{leads.length}</div>
+        <Card>
+          <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 8 }}>Total Terjadwal</div>
+          <div style={{ fontSize: 28, fontWeight: 700 }}>{leads.length}</div>
         </Card>
       </div>
 

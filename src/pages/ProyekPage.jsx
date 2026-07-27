@@ -105,7 +105,7 @@ export default function ProyekPage() {
             <input placeholder="Lokasi" value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} style={inputStyle} />
             <input placeholder="Deskripsi singkat" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddProject} disabled={savingProject}>
             {savingProject ? "Menyimpan..." : "Simpan Proyek"}
           </PrimaryButton>
@@ -153,7 +153,7 @@ export default function ProyekPage() {
               <input placeholder="Tipe (mis. 36/72)" value={unitForm.type} onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })} style={inputStyle} />
               <input placeholder="Harga (Rp)" type="number" value={unitForm.price} onChange={(e) => setUnitForm({ ...unitForm, price: e.target.value })} style={inputStyle} />
               <div style={{ gridColumn: "1 / -1" }}>
-                {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 8 }}>{error}</div>}
+                {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
                 <PrimaryButton onClick={handleAddUnit} disabled={savingUnit}>
                   {savingUnit ? "Menyimpan..." : "Simpan Unit"}
                 </PrimaryButton>
@@ -176,7 +176,7 @@ export default function ProyekPage() {
                   <select
                     value={row.status}
                     onChange={(e) => updateUnitStatus(row.id, e.target.value)}
-                    style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 12 }}
+                    style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
                   >
                     {UNIT_STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>
@@ -198,7 +198,7 @@ export default function ProyekPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

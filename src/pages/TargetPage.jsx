@@ -93,7 +93,7 @@ export default function TargetPage() {
             <input placeholder="Target Prospek / Hari" type="number" value={form.target_prospek_per_hari} onChange={(e) => set("target_prospek_per_hari", e.target.value)} style={inputStyle} />
             <input placeholder="Target Closing / Hari" type="number" value={form.target_closing_per_hari} onChange={(e) => set("target_closing_per_hari", e.target.value)} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAdd} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan Target"}
           </PrimaryButton>
@@ -127,7 +127,7 @@ export default function TargetPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

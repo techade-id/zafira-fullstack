@@ -125,7 +125,7 @@ export default function KontraktorPage() {
             <input placeholder="Spesialisasi" value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} style={inputStyle} />
             <input placeholder="Catatan" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddContractor} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan Kontraktor"}
           </PrimaryButton>
@@ -221,7 +221,7 @@ export default function KontraktorPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

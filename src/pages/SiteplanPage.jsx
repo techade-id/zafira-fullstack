@@ -4,10 +4,10 @@ import { uploadFile, getPublicUrl } from "../lib/storage";
 import { Card, PageTitle, PrimaryButton, Badge, TEXT_MID, BORDER, ORANGE, ORANGE_LIGHT } from "../components/ui";
 
 const PIN_COLORS = {
-  tersedia: "#28864a",
-  booking: "#e8630a",
-  terjual: "#185fa5",
-  batal: "#c23b3b",
+  tersedia: "#4b6b4f",
+  booking: "#b07d2b",
+  terjual: "#3c6084",
+  batal: "#c25b5b",
 };
 
 export default function SiteplanPage() {

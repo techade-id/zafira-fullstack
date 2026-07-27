@@ -86,7 +86,7 @@ export default function PembayaranPage() {
             <input placeholder="Nominal (Rp)" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
             <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <PrimaryButton onClick={handleAddPayment} disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan Pembayaran"}
           </PrimaryButton>
@@ -111,7 +111,7 @@ export default function PembayaranPage() {
                 ) : (
                   <button
                     onClick={() => verifyPayment(row.id)}
-                    style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}
+                    style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 9, padding: "5px 11px", fontSize: 11, cursor: "pointer" }}
                   >
                     Verifikasi
                   </button>
@@ -128,7 +128,7 @@ export default function PembayaranPage() {
 const inputStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };

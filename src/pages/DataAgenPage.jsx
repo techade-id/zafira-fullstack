@@ -75,7 +75,7 @@ export default function DataAgenPage() {
   return (
     <div>
       <PageTitle title="Data Agen" subtitle="Kelola detail agen dan pemindahan konsumen antar agen" />
-      {error && <div style={{ color: "#d94141", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+      {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
 
       <Card style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Daftar Agen</div>
@@ -167,7 +167,7 @@ export default function DataAgenPage() {
 const selectStyle = {
   padding: "10px 12px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 8,
+  borderRadius: 12,
   fontSize: 13,
   outline: "none",
 };
@@ -175,7 +175,7 @@ const selectStyle = {
 const cellInputStyle = {
   padding: "4px 8px",
   border: `1px solid ${BORDER}`,
-  borderRadius: 6,
+  borderRadius: 9,
   fontSize: 12,
   outline: "none",
   width: 100,
