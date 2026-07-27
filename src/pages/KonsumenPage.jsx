@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { fetchAllRows } from "../lib/fetchAllRows";
 import { uploadFile, getSignedUrl } from "../lib/storage";
-import { useBusinessSettings } from "../lib/useBusinessSettings";
+import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
 import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID } from "../components/ui";
 
@@ -64,7 +65,7 @@ export default function KonsumenPage() {
   async function fetchAll() {
     setLoading(true);
     const [{ data: cust }, { data: unt }, { data: ld }] = await Promise.all([
-      supabase.from("customers").select("*, units(unit_code)").order("created_at", { ascending: false }),
+      fetchAllRows(() => supabase.from("customers").select("*, units(unit_code)").order("created_at", { ascending: false })),
       supabase.from("units").select("id, unit_code, status").order("unit_code"),
       supabase.from("leads").select("id, name").order("name"),
     ]);
@@ -123,8 +124,14 @@ export default function KonsumenPage() {
   }
 
   async function updateStatus(customerId, status) {
+    const current = customers.find((c) => c.id === customerId);
     const patch = { status };
-    patch.process_completed_at = status === "selesai" ? new Date().toISOString() : null;
+    // Stamp the completion date the first time a customer reaches "selesai",
+    // and never clear it afterwards — it's the basis of the duration reports,
+    // so an accidental status toggle must not destroy it.
+    if (status === "selesai" && !current?.process_completed_at) {
+      patch.process_completed_at = new Date().toISOString();
+    }
     await supabase.from("customers").update(patch).eq("id", customerId);
     fetchAll();
   }
@@ -183,7 +190,7 @@ export default function KonsumenPage() {
       return (
         <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle}>
           <option value="">Pilih Bank</option>
-          {banks.map((b) => (
+          {withCurrentValue(banks, value).map((b) => (
             <option key={b} value={b}>{b}</option>
           ))}
         </select>
@@ -193,7 +200,7 @@ export default function KonsumenPage() {
       return (
         <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle}>
           <option value="">Pilih Progres</option>
-          {progresBerkasOptions.map((p) => (
+          {withCurrentValue(progresBerkasOptions, value).map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </select>

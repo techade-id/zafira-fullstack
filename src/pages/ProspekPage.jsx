@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { useBusinessSettings } from "../lib/useBusinessSettings";
+import { fetchAllRows } from "../lib/fetchAllRows";
+import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
 
 const STATUS_OPTIONS = ["leads", "cold", "warm", "appointment", "deal", "cancel"];
@@ -39,7 +40,7 @@ export default function ProspekPage() {
 
   async function fetchLeads() {
     setLoading(true);
-    const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+    const { data, error } = await fetchAllRows(() => supabase.from("leads").select("*").order("created_at", { ascending: false }));
     if (!error) setLeads(data);
     setLoading(false);
   }
@@ -136,13 +137,13 @@ export default function ProspekPage() {
           <div className="rg-4" style={{ marginBottom: 12 }}>
             <select value={form.source} onChange={(e) => set("source", e.target.value)} style={inputStyle}>
               <option value="">Sumber Informasi Leads</option>
-              {sources.map((s) => (
+              {withCurrentValue(sources, form.source).map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
             <select value={form.kategori_rencana} onChange={(e) => set("kategori_rencana", e.target.value)} style={inputStyle}>
               <option value="">Kategori Rencana</option>
-              {followupCategories.map((s) => (
+              {withCurrentValue(followupCategories, form.kategori_rencana).map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>

@@ -337,6 +337,42 @@ create policy "profiles_select_all" on profiles for select using (true);
 create policy "profiles_update_self" on profiles for update using (id = auth.uid());
 create policy "profiles_update_admin_manager" on profiles for update using (current_role_name() in ('admin','manager'));
 
+-- RLS cannot restrict individual columns, so "update your own row" would
+-- otherwise let any user set their own role to 'admin'. This trigger guards
+-- the privileged columns; see migration_003 for the same fix applied to an
+-- already-provisioned project.
+create or replace function guard_profile_privileged_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_role user_role;
+begin
+  -- No JWT = service_role / SQL Editor, needed for the first-admin bootstrap.
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  select role into actor_role from profiles where id = auth.uid();
+
+  if new.role is distinct from old.role and coalesce(actor_role::text, '') <> 'admin' then
+    raise exception 'Hanya admin yang dapat mengubah role pengguna.' using errcode = '42501';
+  end if;
+
+  if new.is_active is distinct from old.is_active
+     and coalesce(actor_role::text, '') not in ('admin', 'manager') then
+    raise exception 'Hanya admin atau manager yang dapat mengubah status aktif pengguna.' using errcode = '42501';
+  end if;
+
+  return new;
+end $$;
+
+create trigger profiles_guard_privileged
+  before update on profiles
+  for each row execute function guard_profile_privileged_columns();
+
 -- admin/manager: full access everywhere. sales_agent: own leads/customers/payments.
 -- tim_lapangan: own field_projects/field_reports.
 -- Pattern repeated per table below (simplified — tighten further per your needs).

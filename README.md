@@ -14,6 +14,12 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
    re-running schema.sql** — it adds the new funnel stages, lead intake
    fields, KPR pipeline (`customer_kpr`), sales targets, business
    settings, agent fields, and transfer log without dropping data.
+   Then run **`supabase/migration_003_security_and_integrity.sql`** — this one
+   is required on every existing project. It closes a privilege-escalation
+   hole (any user could set their own role to `admin`), stops the anon key
+   from reading complaint photos, makes cancellation and agent-transfer
+   atomic, and adds the `dashboard_stats()` function the dashboard needs.
+   Until it's run, the dashboard will show a "Gagal memuat ringkasan" banner.
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
    `complaint-photos`) and their RLS policies, needed by Siteplan Digital,

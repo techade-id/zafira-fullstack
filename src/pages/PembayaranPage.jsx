@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { fetchAllRows } from "../lib/fetchAllRows";
 import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER } from "../components/ui";
 
 const PAYMENT_TYPES = ["booking", "dp", "dana_talangan", "termin", "pelunasan", "lainnya"];
@@ -16,7 +17,7 @@ export default function PembayaranPage() {
   async function fetchData() {
     setLoading(true);
     const [{ data: pay }, { data: cust }] = await Promise.all([
-      supabase.from("payments").select("*, customers(name)").order("payment_date", { ascending: false }),
+      fetchAllRows(() => supabase.from("payments").select("*, customers(name)").order("payment_date", { ascending: false })),
       supabase.from("customers").select("id, name").order("name"),
     ]);
     setPayments(pay || []);

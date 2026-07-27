@@ -70,11 +70,14 @@ create policy "field_report_photos_delete" on storage.objects for delete
   using (bucket_id = 'field-report-photos' and current_role_name() in ('admin', 'manager'));
 
 -- ---------- COMPLAINT PHOTOS (readable/writable by everyone signed in, delete admin/manager) ----------
+-- The `auth.uid() is not null` check matters: without it the anon role
+-- satisfies the policy, and the anon key ships in the frontend bundle — so
+-- the bucket would be world-readable despite being marked private.
 create policy "complaint_photos_read" on storage.objects for select
-  using (bucket_id = 'complaint-photos');
+  using (bucket_id = 'complaint-photos' and auth.uid() is not null);
 
 create policy "complaint_photos_write" on storage.objects for insert
-  with check (bucket_id = 'complaint-photos');
+  with check (bucket_id = 'complaint-photos' and auth.uid() is not null);
 
 create policy "complaint_photos_delete" on storage.objects for delete
   using (bucket_id = 'complaint-photos' and current_role_name() in ('admin', 'manager'));

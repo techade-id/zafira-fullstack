@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { useAuth } from "../context/AuthContext";
-import { useBusinessSettings } from "../lib/useBusinessSettings";
+import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
 
 export default function PembatalanPage() {
-  const { profile } = useAuth();
   const [cancellations, setCancellations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,15 +35,13 @@ export default function PembatalanPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("cancellations").insert({
-      customer_id: form.customer_id,
-      reason: form.reason.trim(),
-      detail: form.detail.trim() || null,
-      cancelled_by: profile?.id || null,
+    // One RPC = one transaction. Doing the insert and the customer status
+    // update as two calls could leave a cancellation against a live customer.
+    const { error } = await supabase.rpc("cancel_customer", {
+      p_customer_id: form.customer_id,
+      p_reason: form.reason.trim(),
+      p_detail: form.detail.trim() || null,
     });
-    if (!error) {
-      await supabase.from("customers").update({ status: "batal" }).eq("id", form.customer_id);
-    }
     setSaving(false);
     if (error) {
       setError(error.message);
@@ -77,7 +73,7 @@ export default function PembatalanPage() {
             </select>
             <select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} style={inputStyle}>
               <option value="">Alasan Pembatalan</option>
-              {cancelReasons.map((r) => (
+              {withCurrentValue(cancelReasons, form.reason).map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
+import { fetchAllRows } from "../lib/fetchAllRows";
 import { Card, PageTitle, PrimaryButton, DataTable, TEXT_MID, ORANGE, ORANGE_DARK } from "../components/ui";
 
 function groupCount(rows, key) {
@@ -22,12 +23,14 @@ export default function LaporanPage() {
 
   async function fetchAll() {
     setLoading(true);
+    // Paged, not a plain select: a report/export that silently stops at the
+    // API's 1000-row ceiling is worse than one that errors.
     const [{ data: ld }, { data: cs }, { data: pm }, { data: fp }, { data: cp }] = await Promise.all([
-      supabase.from("leads").select("name, phone, source, status, created_at"),
-      supabase.from("customers").select("name, phone, status, process_started_at, process_completed_at"),
-      supabase.from("payments").select("payment_type, amount, status, payment_date"),
-      supabase.from("field_projects").select("status, progress_percent, start_date, target_end_date, units(unit_code)"),
-      supabase.from("complaints").select("category, priority, status, created_at"),
+      fetchAllRows(() => supabase.from("leads").select("name, phone, source, status, created_at")),
+      fetchAllRows(() => supabase.from("customers").select("name, phone, status, process_started_at, process_completed_at")),
+      fetchAllRows(() => supabase.from("payments").select("payment_type, amount, status, payment_date")),
+      fetchAllRows(() => supabase.from("field_projects").select("status, progress_percent, start_date, target_end_date, units(unit_code)")),
+      fetchAllRows(() => supabase.from("complaints").select("category, priority, status, created_at")),
     ]);
     setLeads(ld || []);
     setCustomers(cs || []);
@@ -43,7 +46,8 @@ export default function LaporanPage() {
 
   const totalRevenue = payments.filter((p) => p.status === "terverifikasi").reduce((sum, p) => sum + Number(p.amount), 0);
   const avgProgress = fieldProjects.length ? fieldProjects.reduce((s, f) => s + f.progress_percent, 0) / fieldProjects.length : 0;
-  const closingCount = leads.filter((l) => l.status === "closing").length;
+  // "deal" is the current funnel stage; "closing" is the pre-migration name.
+  const closingCount = leads.filter((l) => l.status === "deal" || l.status === "closing").length;
 
   const statCards = [
     { label: "Total Prospek", value: leads.length },

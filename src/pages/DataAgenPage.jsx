@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { useAuth } from "../context/AuthContext";
 import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID } from "../components/ui";
 
 const ROLE_OPTIONS = ["admin", "manager", "sales_agent", "tim_lapangan"];
 
 export default function DataAgenPage() {
-  const { profile } = useAuth();
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,21 +49,16 @@ export default function DataAgenPage() {
     }
     setTransferring(true);
     setError("");
-    const cust = customers.find((c) => c.id === transfer.customer_id);
-    const fromAgent = cust?.sales_agent_id || null;
-    const { error: e1 } = await supabase.from("customers").update({ sales_agent_id: transfer.to_agent_id }).eq("id", transfer.customer_id);
-    if (!e1) {
-      await supabase.from("customer_transfers").insert({
-        customer_id: transfer.customer_id,
-        from_agent_id: fromAgent,
-        to_agent_id: transfer.to_agent_id,
-        reason: transfer.reason.trim() || null,
-        transferred_by: profile?.id || null,
-      });
-    }
+    // One RPC = one transaction, so a customer can never be reassigned
+    // without the matching audit row being written.
+    const { error: transferError } = await supabase.rpc("transfer_customer", {
+      p_customer_id: transfer.customer_id,
+      p_to_agent_id: transfer.to_agent_id,
+      p_reason: transfer.reason.trim() || null,
+    });
     setTransferring(false);
-    if (e1) {
-      setError(e1.message);
+    if (transferError) {
+      setError(transferError.message);
       return;
     }
     setTransfer({ customer_id: "", to_agent_id: "", reason: "" });

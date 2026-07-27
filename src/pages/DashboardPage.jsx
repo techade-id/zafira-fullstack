@@ -15,25 +15,7 @@ import {
 } from "../components/ui";
 import { Users, Handshake, TrendingUp, Home, Wallet, MessageSquareWarning } from "lucide-react";
 
-const DEAL_STATUSES = ["deal", "closing"];
 const DAY_LABELS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-
-function avg(nums) {
-  const valid = nums.filter((n) => n != null && !isNaN(n));
-  if (!valid.length) return null;
-  return valid.reduce((a, b) => a + b, 0) / valid.length;
-}
-
-function days(a, b) {
-  if (!a || !b) return null;
-  return (new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24);
-}
-
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
 
 /** Percent change of `current` vs `previous`, or null when there's no baseline. */
 function trendOf(current, previous) {
@@ -42,135 +24,96 @@ function trendOf(current, previous) {
   return { up: pct >= 0, label: `${Math.abs(pct).toFixed(0)}%` };
 }
 
+/** "2026-07-27" -> "Sen". Parsed as local time so the label can't slip a day. */
+function dayLabel(isoDate) {
+  return DAY_LABELS[new Date(`${isoDate}T00:00:00`).getDay()];
+}
+
+function roundDays(v) {
+  return v == null ? null : Math.round(Number(v));
+}
+
 export default function DashboardPage() {
-  const [leads, setLeads] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [kpr, setKpr] = useState([]);
-  const [agents, setAgents] = useState([]);
+  // Aggregates come from the dashboard_stats() RPC so they're computed in
+  // Postgres — counting rows in the browser silently capped at 1000.
+  const [stats, setStats] = useState(null);
   const [payments, setPayments] = useState([]);
   const [complaints, setComplaints] = useState([]);
-  const [unitsAvailable, setUnitsAvailable] = useState(0);
-  const [unitsTotal, setUnitsTotal] = useState(0);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
-      const [{ data: ld }, { data: cs }, { data: kp }, { data: ag }, { data: pm }, { data: cp }, unitsAvail, unitsAll] =
-        await Promise.all([
-          supabase.from("leads").select("id, status, source, assigned_to, created_at"),
-          supabase.from("customers").select("id, status"),
-          supabase.from("customer_kpr").select("*"),
-          supabase.from("profiles").select("id, full_name"),
-          supabase.from("payments").select("id, amount, payment_type, payment_date, status, customers(name)").order("payment_date", { ascending: false }).limit(4),
-          supabase.from("complaints").select("id, category, description, priority, status, created_at, customers(name), units(unit_code)").order("created_at", { ascending: false }).limit(4),
-          supabase.from("units").select("id", { count: "exact", head: true }).eq("status", "tersedia"),
-          supabase.from("units").select("id", { count: "exact", head: true }),
-        ]);
-      setLeads(ld || []);
-      setCustomers(cs || []);
-      setKpr(kp || []);
-      setAgents(ag || []);
+      const [{ data: s, error: statsError }, { data: pm }, { data: cp }] = await Promise.all([
+        supabase.rpc("dashboard_stats"),
+        supabase.from("payments").select("id, amount, payment_type, payment_date, status, customers(name)").order("payment_date", { ascending: false }).limit(4),
+        supabase.from("complaints").select("id, category, description, priority, status, created_at, customers(name), units(unit_code)").order("created_at", { ascending: false }).limit(4),
+      ]);
+      if (statsError) setError(statsError.message);
+      setStats(s || null);
       setPayments(pm || []);
       setComplaints(cp || []);
-      setUnitsAvailable(unitsAvail.count || 0);
-      setUnitsTotal(unitsAll.count || 0);
     }
     load();
   }, []);
 
-  const totalLeads = leads.length;
-  const dealLeads = leads.filter((l) => DEAL_STATUSES.includes(l.status));
-  const dealCount = dealLeads.length;
-  const appointmentCount = leads.filter((l) => l.status === "appointment").length;
+  const s = stats || {};
+  const totalLeads = s.total_leads || 0;
+  const dealCount = s.deal_count || 0;
+  const appointmentCount = s.appointment_count || 0;
   const closingRate = totalLeads ? (dealCount / totalLeads) * 100 : 0;
   const apptToDeal = appointmentCount + dealCount ? (dealCount / (appointmentCount + dealCount)) * 100 : 0;
 
-  // month-over-month, computed from real created_at values
-  const now = new Date();
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const inRange = (d, from, to) => {
-    const t = new Date(d);
-    return t >= from && (!to || t < to);
-  };
-  const leadsThisMonth = leads.filter((l) => inRange(l.created_at, thisMonthStart)).length;
-  const leadsLastMonth = leads.filter((l) => inRange(l.created_at, lastMonthStart, thisMonthStart)).length;
-  const dealsThisMonth = dealLeads.filter((l) => inRange(l.created_at, thisMonthStart)).length;
-  const dealsLastMonth = dealLeads.filter((l) => inRange(l.created_at, lastMonthStart, thisMonthStart)).length;
+  const weekData = (s.by_day || []).map((d) => ({ label: dayLabel(d.day), value: Number(d.value) }));
+  const donutData = (s.by_status || []).map((d) => ({ label: d.label, value: Number(d.value) }));
 
-  // last 7 days of incoming leads
-  const today = startOfDay(new Date());
-  const weekData = Array.from({ length: 7 }).map((_, i) => {
-    const day = new Date(today);
-    day.setDate(today.getDate() - (6 - i));
-    const next = new Date(day);
-    next.setDate(day.getDate() + 1);
-    return {
-      label: DAY_LABELS[day.getDay()],
-      value: leads.filter((l) => {
-        const t = new Date(l.created_at);
-        return t >= day && t < next;
-      }).length,
-    };
-  });
-
-  // status distribution for the donut
-  const statusCounts = {};
-  for (const l of leads) {
-    const s = l.status || "leads";
-    statusCounts[s] = (statusCounts[s] || 0) + 1;
-  }
-  const donutData = Object.entries(statusCounts)
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value);
-
+  const d = s.kpr_durations || {};
   const stageDurations = [
-    { label: "Pengumpulan Berkas", value: avg(kpr.map((k) => days(k.tanggal_masuk_bank, k.tanggal_sp3k_terbit))) },
-    { label: "SP3K → Akad", value: avg(kpr.map((k) => days(k.tanggal_sp3k_terbit, k.tanggal_akad))) },
-    { label: "Persiapan Akad", value: avg(kpr.map((k) => days(k.tanggal_dp, k.tanggal_akad))) },
-    { label: "Persiapan Serah Terima", value: avg(kpr.map((k) => days(k.tanggal_akad, k.tanggal_serah_terima_kunci))) },
+    { label: "Pengumpulan Berkas", value: roundDays(d.berkas) },
+    { label: "SP3K → Akad", value: roundDays(d.sp3k_akad) },
+    { label: "Persiapan Akad", value: roundDays(d.akad) },
+    { label: "Persiapan Serah Terima", value: roundDays(d.serah) },
   ];
 
-  const perAgent = agents
-    .map((a) => {
-      const agentLeads = leads.filter((l) => l.assigned_to === a.id);
-      return {
-        name: a.full_name,
-        leads: agentLeads.length,
-        deals: agentLeads.filter((l) => DEAL_STATUSES.includes(l.status)).length,
-      };
-    })
-    .filter((a) => a.leads > 0)
-    .sort((a, b) => b.deals - a.deals);
+  const perAgent = (s.by_agent || []).map((a) => ({ name: a.name, leads: Number(a.leads), deals: Number(a.deals) }));
 
-  const sources = {};
-  for (const l of leads) {
-    const s = l.source || "Tidak diketahui";
-    if (!sources[s]) sources[s] = { source: s, leads: 0, deals: 0 };
-    sources[s].leads += 1;
-    if (DEAL_STATUSES.includes(l.status)) sources[s].deals += 1;
-  }
-  const sourceRows = Object.values(sources)
-    .map((s) => ({ ...s, rate: s.leads ? ((s.deals / s.leads) * 100).toFixed(1) + "%" : "-" }))
-    .sort((a, b) => b.leads - a.leads);
+  const sourceRows = (s.by_source || []).map((x) => ({
+    source: x.source,
+    leads: Number(x.leads),
+    deals: Number(x.deals),
+    rate: Number(x.leads) ? ((Number(x.deals) / Number(x.leads)) * 100).toFixed(1) + "%" : "-",
+  }));
 
-  const maxWeek = Math.max(...weekData.map((d) => d.value));
+  const maxWeek = weekData.length ? Math.max(...weekData.map((d) => d.value)) : 0;
   const highlightIndex = maxWeek > 0 ? weekData.findIndex((d) => d.value === maxWeek) : -1;
+
+  const leadsThisMonth = s.leads_this_month || 0;
+  const dealsThisMonth = s.deals_this_month || 0;
+  const unitsAvailable = s.units_available || 0;
+  const unitsTotal = s.units_total || 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {error && (
+        <Card style={{ borderColor: "#e6c9c9" }}>
+          <div style={{ fontSize: 13, color: "#c25b5b" }}>
+            Gagal memuat ringkasan: {error}. Pastikan <code>migration_003_security_and_integrity.sql</code> sudah dijalankan di Supabase.
+          </div>
+        </Card>
+      )}
+
       <div className="rg-4">
         <StatCard
           icon={Users}
           label="Total Prospek"
           value={totalLeads}
-          trend={trendOf(leadsThisMonth, leadsLastMonth)}
+          trend={trendOf(leadsThisMonth, s.leads_prev_month || 0)}
           sub={`${leadsThisMonth} bulan ini`}
         />
         <StatCard
           icon={Handshake}
           label="Total Deal"
           value={dealCount}
-          trend={trendOf(dealsThisMonth, dealsLastMonth)}
+          trend={trendOf(dealsThisMonth, s.deals_prev_month || 0)}
           sub={`${dealsThisMonth} bulan ini`}
         />
         <StatCard icon={TrendingUp} label="Closing Rate" value={`${closingRate.toFixed(1)}%`} sub={`${apptToDeal.toFixed(0)}% dari appointment`} />
