@@ -20,6 +20,11 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
    from reading complaint photos, makes cancellation and agent-transfer
    atomic, and adds the `dashboard_stats()` function the dashboard needs.
    Until it's run, the dashboard will show a "Gagal memuat ringkasan" banner.
+   Finally run **`supabase/migration_004_project_management.sql`** — it adds
+   the construction side from the Project Management spreadsheet: Rencana
+   Proyek tasks (4 stages, working-day deadlines, warranty), per-stage
+   contractor evaluation, complaint warranty/severity, and the working
+   calendar (weekend config + holidays).
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
    `complaint-photos`) and their RLS policies, needed by Siteplan Digital,

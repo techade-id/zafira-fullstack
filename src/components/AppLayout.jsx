@@ -48,7 +48,7 @@ const navSections = [
       { to: "/proyek", icon: Building2, label: "Proyek" },
       { to: "/siteplan", icon: Map, label: "Siteplan Digital" },
       { to: "/kontraktor", icon: HardHat, label: "Kontraktor" },
-      { to: "/monitoring-lapangan", icon: ClipboardList, label: "Monitoring Lapangan" },
+      { to: "/rencana-proyek", icon: ClipboardList, label: "Rencana Proyek" },
       { to: "/komplain", icon: MessageSquareWarning, label: "Komplain" },
     ],
   },

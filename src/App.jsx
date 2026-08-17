@@ -12,7 +12,7 @@ import PembatalanPage from "./pages/PembatalanPage";
 import ProyekPage from "./pages/ProyekPage";
 import SiteplanPage from "./pages/SiteplanPage";
 import KontraktorPage from "./pages/KontraktorPage";
-import MonitoringLapanganPage from "./pages/MonitoringLapanganPage";
+import RencanaProyekPage from "./pages/RencanaProyekPage";
 import KomplainPage from "./pages/KomplainPage";
 import LaporanPage from "./pages/LaporanPage";
 import IklanPage from "./pages/IklanPage";
@@ -44,7 +44,7 @@ export default function App() {
             <Route path="proyek" element={<ProyekPage />} />
             <Route path="siteplan" element={<SiteplanPage />} />
             <Route path="kontraktor" element={<KontraktorPage />} />
-            <Route path="monitoring-lapangan" element={<MonitoringLapanganPage />} />
+            <Route path="rencana-proyek" element={<RencanaProyekPage />} />
             <Route path="komplain" element={<KomplainPage />} />
             <Route path="laporan" element={<LaporanPage />} />
             <Route path="iklan" element={<IklanPage />} />

@@ -1,75 +1,75 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { useAuth } from "../context/AuthContext";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE } from "../components/ui";
-
-const SORT_OPTIONS = [
-  { value: "score_desc", label: "Skor Tertinggi" },
-  { value: "score_asc", label: "Skor Terendah" },
-  { value: "name", label: "Nama A-Z" },
-];
+import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT } from "../components/ui";
 
 function Stars({ value }) {
+  if (value == null) return <span style={{ color: TEXT_MID }}>-</span>;
+  const v = Number(value);
   return (
-    <span style={{ color: ORANGE, letterSpacing: 1 }}>
-      {"★".repeat(Math.round(value))}
-      <span style={{ color: BORDER }}>{"★".repeat(5 - Math.round(value))}</span>
+    <span style={{ whiteSpace: "nowrap" }}>
+      <span style={{ color: PRIMARY, letterSpacing: 1 }}>{"★".repeat(Math.round(v))}</span>
+      <span style={{ color: BORDER, letterSpacing: 1 }}>{"★".repeat(Math.max(0, 5 - Math.round(v)))}</span>
+      <span style={{ marginLeft: 6, fontSize: 12 }}>{v.toFixed(2)}</span>
     </span>
   );
 }
 
 export default function KontraktorPage() {
-  const { profile } = useAuth();
+  const [scores, setScores] = useState([]);
   const [contractors, setContractors] = useState([]);
-  const [evaluations, setEvaluations] = useState([]);
-  const [units, setUnits] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState("score_desc");
-  const [minScore, setMinScore] = useState(0);
+  const [error, setError] = useState("");
+  const [penalti, setPenalti] = useState("0.5");
+
+  const [filter, setFilter] = useState({ project_id: "", from: "", to: "" });
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", specialization: "", notes: "" });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
 
-  const [selectedId, setSelectedId] = useState(null);
-  const [evalForm, setEvalForm] = useState({ unit_id: "", score: "5", notes: "" });
-  const [savingEval, setSavingEval] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [taskRows, setTaskRows] = useState([]);
 
-  async function fetchAll() {
+  async function fetchScores() {
     setLoading(true);
-    const [{ data: con }, { data: ev }, { data: unt }] = await Promise.all([
+    const [{ data: sc, error: scErr }, { data: c }, { data: p }, { data: st }] = await Promise.all([
+      supabase.rpc("contractor_scorecard", {
+        p_project_id: filter.project_id || null,
+        p_from: filter.from || null,
+        p_to: filter.to || null,
+      }),
       supabase.from("contractors").select("*").order("name"),
-      supabase.from("contractor_evaluations").select("*"),
-      supabase.from("units").select("id, unit_code").order("unit_code"),
+      supabase.from("projects").select("id, name").order("name"),
+      supabase.from("app_settings").select("value").eq("key", "penalti_per_bobot").maybeSingle(),
     ]);
-    setContractors(con || []);
-    setEvaluations(ev || []);
-    setUnits(unt || []);
+    if (scErr) setError(scErr.message);
+    setScores(sc || []);
+    setContractors(c || []);
+    setProjects(p || []);
+    if (st?.value) setPenalti(st.value);
     setLoading(false);
   }
 
   useEffect(() => {
-    fetchAll();
-  }, []);
+    fetchScores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.project_id, filter.from, filter.to]);
 
-  const contractorsWithScore = useMemo(() => {
-    return contractors.map((c) => {
-      const evals = evaluations.filter((e) => e.contractor_id === c.id);
-      const avg = evals.length ? evals.reduce((sum, e) => sum + e.score, 0) / evals.length : 0;
-      return { ...c, avgScore: avg, evalCount: evals.length };
-    });
-  }, [contractors, evaluations]);
-
-  const filteredSorted = useMemo(() => {
-    let list = contractorsWithScore.filter((c) => c.avgScore >= minScore);
-    if (sortBy === "score_desc") list = [...list].sort((a, b) => b.avgScore - a.avgScore);
-    if (sortBy === "score_asc") list = [...list].sort((a, b) => a.avgScore - b.avgScore);
-    if (sortBy === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name));
-    return list;
-  }, [contractorsWithScore, sortBy, minScore]);
-
-  const selectedEvaluations = evaluations.filter((e) => e.contractor_id === selectedId);
+  async function openContractor(row) {
+    if (selected?.contractor_id === row.contractor_id) {
+      setSelected(null);
+      setTaskRows([]);
+      return;
+    }
+    setSelected(row);
+    const { data } = await supabase
+      .from("project_tasks")
+      .select("id, task_name, rencana_deadline, tanggal_realisasi_selesai, overtime, task_evaluations(tahap, kerapian, spesifikasi, ketepatan_waktu)")
+      .eq("contractor_id", row.contractor_id)
+      .order("tanggal_mulai", { ascending: false });
+    setTaskRows(data || []);
+  }
 
   async function handleAddContractor() {
     if (!form.name.trim()) {
@@ -91,30 +91,15 @@ export default function KontraktorPage() {
     }
     setForm({ name: "", phone: "", specialization: "", notes: "" });
     setShowForm(false);
-    fetchAll();
-  }
-
-  async function handleAddEvaluation() {
-    if (!selectedId) return;
-    setSavingEval(true);
-    await supabase.from("contractor_evaluations").insert({
-      contractor_id: selectedId,
-      unit_id: evalForm.unit_id || null,
-      score: Number(evalForm.score),
-      notes: evalForm.notes.trim() || null,
-      evaluated_by: profile?.id || null,
-    });
-    setEvalForm({ unit_id: "", score: "5", notes: "" });
-    setSavingEval(false);
-    fetchAll();
+    fetchScores();
   }
 
   return (
     <div>
       <PageTitle
-        title="Kontraktor"
-        subtitle={`${contractors.length} kontraktor terdaftar`}
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Kontraktor Baru</PrimaryButton>}
+        title="Evaluasi Kontraktor"
+        subtitle="Nilai per tahap: kerapian, spesifikasi, ketepatan waktu — dikurangi bobot komplain"
+        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Kontraktor</PrimaryButton>}
       />
 
       {showForm && (
@@ -132,85 +117,74 @@ export default function KontraktorPage() {
         </Card>
       )}
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: TEXT_MID }}>Urutkan:</span>
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={inputStyle}>
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <span style={{ fontSize: 12, color: TEXT_MID }}>Skor minimum:</span>
-        <select value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} style={inputStyle}>
-          {[0, 1, 2, 3, 4, 5].map((s) => (
-            <option key={s} value={s}>
-              {s === 0 ? "Semua" : `≥ ${s}`}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: TEXT_MID }}>Proyek</span>
+          <select value={filter.project_id} onChange={(e) => setFilter({ ...filter, project_id: e.target.value })} style={inputStyle}>
+            <option value="">Semua proyek</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 12, color: TEXT_MID }}>Mulai</span>
+          <input type="date" value={filter.from} onChange={(e) => setFilter({ ...filter, from: e.target.value })} style={inputStyle} />
+          <span style={{ fontSize: 12, color: TEXT_MID }}>s/d</span>
+          <input type="date" value={filter.to} onChange={(e) => setFilter({ ...filter, to: e.target.value })} style={inputStyle} />
+        </div>
+      </Card>
 
       <Card>
         <DataTable
           loading={loading}
-          emptyLabel="Belum ada kontraktor."
+          emptyLabel="Belum ada task yang dievaluasi."
           columns={[
-            { key: "name", label: "Nama" },
-            { key: "phone", label: "Telepon", render: (row) => row.phone || "-" },
-            { key: "specialization", label: "Spesialisasi", render: (row) => row.specialization || "-" },
+            { key: "contractor_name", label: "Kontraktor" },
+            { key: "jumlah_task", label: "Task", render: (r) => `${r.jumlah_selesai}/${r.jumlah_task}` },
+            { key: "rata_kerapian", label: "Kerapian", render: (r) => <Stars value={r.rata_kerapian} /> },
+            { key: "rata_spesifikasi", label: "Spesifikasi", render: (r) => <Stars value={r.rata_spesifikasi} /> },
+            { key: "rata_ketepatan", label: "Ketepatan Waktu", render: (r) => <Stars value={r.rata_ketepatan} /> },
+            { key: "jumlah_komplain", label: "Komplain", render: (r) => `${r.jumlah_komplain} (bobot ${Number(r.total_bobot || 0)})` },
             {
-              key: "score",
-              label: "Skor",
-              render: (row) => (row.evalCount ? <span><Stars value={row.avgScore} /> ({row.avgScore.toFixed(1)}, {row.evalCount} evaluasi)</span> : "Belum ada evaluasi"),
+              key: "nilai_akhir",
+              label: "Nilai Akhir",
+              render: (r) => <span style={{ fontWeight: 700 }}>{r.nilai_akhir == null ? "-" : Number(r.nilai_akhir).toFixed(2)}</span>,
             },
             {
-              key: "eval",
-              label: "Evaluasi",
-              render: (row) => (
-                <button onClick={() => setSelectedId(selectedId === row.id ? null : row.id)} style={linkButtonStyle}>
-                  {selectedId === row.id ? "Tutup" : "Kelola"}
+              key: "aksi",
+              label: "",
+              render: (r) => (
+                <button onClick={() => openContractor(r)} style={linkBtn}>
+                  {selected?.contractor_id === r.contractor_id ? "Tutup" : "Detail"}
                 </button>
               ),
             },
           ]}
-          rows={filteredSorted}
+          rows={scores}
         />
+        <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 12, background: PRIMARY_SOFT, padding: "10px 12px", borderRadius: 10 }}>
+          Rata-rata tiap kriteria = total nilai ÷ (4 tahap × jumlah task), sesuai rumus di spreadsheet — task yang belum dievaluasi penuh
+          otomatis bernilai lebih rendah. <b>Nilai Akhir</b> = rata-rata 3 kriteria − ({penalti} × total bobot komplain ÷ jumlah task).
+          Faktor pengurang dapat diubah di Pengaturan Bisnis.
+        </div>
       </Card>
 
-      {selectedId && (
+      {selected && (
         <Card style={{ marginTop: 18 }}>
-          <PageTitle title="Evaluasi Kontraktor" subtitle="Skor 1-5 per unit yang dikerjakan" />
-          <div className="eval-form-grid" style={{ marginBottom: 14 }}>
-            <select value={evalForm.unit_id} onChange={(e) => setEvalForm({ ...evalForm, unit_id: e.target.value })} style={inputStyle}>
-              <option value="">Unit (opsional)</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.unit_code}
-                </option>
-              ))}
-            </select>
-            <select value={evalForm.score} onChange={(e) => setEvalForm({ ...evalForm, score: e.target.value })} style={inputStyle}>
-              {[5, 4, 3, 2, 1].map((s) => (
-                <option key={s} value={s}>
-                  {s} bintang
-                </option>
-              ))}
-            </select>
-            <input placeholder="Catatan evaluasi" value={evalForm.notes} onChange={(e) => setEvalForm({ ...evalForm, notes: e.target.value })} style={inputStyle} />
-            <PrimaryButton onClick={handleAddEvaluation} disabled={savingEval}>
-              {savingEval ? "..." : "Tambah"}
-            </PrimaryButton>
-          </div>
-
+          <SectionTitle title={`Task — ${selected.contractor_name}`} />
           <DataTable
-            emptyLabel="Belum ada evaluasi."
+            emptyLabel="Belum ada task."
             columns={[
-              { key: "evaluated_at", label: "Tanggal", render: (row) => new Date(row.evaluated_at).toLocaleDateString("id-ID") },
-              { key: "score", label: "Skor", render: (row) => <Stars value={row.score} /> },
-              { key: "notes", label: "Catatan", render: (row) => row.notes || "-" },
+              { key: "task_name", label: "Task" },
+              { key: "deadline", label: "Deadline", render: (r) => (r.rencana_deadline ? new Date(`${r.rencana_deadline}T00:00:00`).toLocaleDateString("id-ID") : "-") },
+              {
+                key: "realisasi",
+                label: "Realisasi",
+                render: (r) => (r.tanggal_realisasi_selesai ? new Date(`${r.tanggal_realisasi_selesai}T00:00:00`).toLocaleDateString("id-ID") : "-"),
+              },
+              { key: "ot", label: "Overtime", render: (r) => (r.overtime ? "Ya" : "-") },
+              { key: "dinilai", label: "Tahap Dinilai", render: (r) => `${(r.task_evaluations || []).length}/4` },
             ]}
-            rows={selectedEvaluations}
+            rows={taskRows}
           />
         </Card>
       )}
@@ -226,11 +200,11 @@ const inputStyle = {
   outline: "none",
 };
 
-const linkButtonStyle = {
+const linkBtn = {
   border: `1px solid ${BORDER}`,
   background: "#fff",
-  borderRadius: 6,
-  padding: "4px 10px",
+  borderRadius: 9,
+  padding: "5px 11px",
   fontSize: 11,
   cursor: "pointer",
 };
