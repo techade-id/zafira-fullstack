@@ -79,6 +79,7 @@ create table if not exists customer_kpr (
 
 alter table customer_kpr enable row level security;
 
+drop policy if exists "customer_kpr_rw" on customer_kpr;
 create policy "customer_kpr_rw" on customer_kpr for all using (
   current_role_name() in ('admin','manager') or
   exists (select 1 from customers c where c.id = customer_id and c.sales_agent_id = auth.uid())
@@ -100,7 +101,9 @@ create table if not exists sales_targets (
 
 alter table sales_targets enable row level security;
 
+drop policy if exists "sales_targets_read_all" on sales_targets;
 create policy "sales_targets_read_all" on sales_targets for select using (true);
+drop policy if exists "sales_targets_write_admin_manager" on sales_targets;
 create policy "sales_targets_write_admin_manager" on sales_targets for all using (current_role_name() in ('admin','manager'));
 
 -- ---------- 6. Admin-editable business reference lists ----------
@@ -115,7 +118,9 @@ create table if not exists business_settings (
 
 alter table business_settings enable row level security;
 
+drop policy if exists "business_settings_read_all" on business_settings;
 create policy "business_settings_read_all" on business_settings for select using (true);
+drop policy if exists "business_settings_write_admin_manager" on business_settings;
 create policy "business_settings_write_admin_manager" on business_settings for all using (current_role_name() in ('admin','manager'));
 
 -- Seed the values already in use in the spreadsheet
@@ -167,5 +172,7 @@ create table if not exists customer_transfers (
 
 alter table customer_transfers enable row level security;
 
+drop policy if exists "customer_transfers_read_all" on customer_transfers;
 create policy "customer_transfers_read_all" on customer_transfers for select using (true);
+drop policy if exists "customer_transfers_write_admin_manager" on customer_transfers;
 create policy "customer_transfers_write_admin_manager" on customer_transfers for all using (current_role_name() in ('admin','manager'));
