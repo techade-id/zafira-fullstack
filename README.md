@@ -25,6 +25,12 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
    Proyek tasks (4 stages, working-day deadlines, warranty), per-stage
    contractor evaluation, complaint warranty/severity, and the working
    calendar (weekend config + holidays).
+   Optional: `supabase/seed_siteplan_kaligangsa.sql` creates the Kaligangsa
+   project with all 158 units already positioned on the siteplan, and
+   `supabase/seed_demo_data.sql` fills every page with example prospek,
+   konsumen, KPR, pembayaran, komplain, evaluasi kontraktor and ads data so
+   the app can be demoed. Every demo row's id starts with `5eed` — run
+   `supabase/seed_demo_data_remove.sql` to delete all of it before real use.
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
    `complaint-photos`) and their RLS policies, needed by Siteplan Digital,
