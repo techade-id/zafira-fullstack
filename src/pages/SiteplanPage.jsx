@@ -18,6 +18,7 @@ export default function SiteplanPage() {
   const [uploading, setUploading] = useState(false);
 
   const [placingUnitId, setPlacingUnitId] = useState("");
+  const [highlight, setHighlight] = useState("");
   const [modalUnit, setModalUnit] = useState(null);
   const [modalCustomer, setModalCustomer] = useState(null);
   const [modalFieldProject, setModalFieldProject] = useState(null);
@@ -120,8 +121,14 @@ export default function SiteplanPage() {
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
               <div style={{ fontSize: 13, color: TEXT_MID }}>
-                {placingUnitId ? "Klik pada gambar untuk menempatkan unit terpilih." : "Peta siteplan — klik pin untuk detail unit."}
+                {placingUnitId ? "Klik pada gambar untuk menempatkan unit terpilih." : "Peta siteplan — klik unit untuk detail."}
               </div>
+              <input
+                value={highlight}
+                onChange={(e) => setHighlight(e.target.value)}
+                placeholder="Cari unit (mis. A12)"
+                style={{ padding: "7px 12px", border: `1px solid ${BORDER}`, borderRadius: 999, fontSize: 12, outline: "none", width: 150 }}
+              />
               <label style={{ fontSize: 12, cursor: "pointer", color: ORANGE, fontWeight: 600 }}>
                 {uploading ? "Mengunggah..." : activeProject.siteplan_image_url ? "Ganti Gambar Siteplan" : "Unggah Gambar Siteplan"}
                 <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} disabled={uploading} />
@@ -148,26 +155,31 @@ export default function SiteplanPage() {
                       e.stopPropagation();
                       openUnit(u);
                     }}
-                    title={u.unit_code}
+                    title={`${u.unit_code}${u.type ? ` — Type ${u.type}` : ""} (${u.status})`}
                     style={{
                       position: "absolute",
+                      // Sized in % of the image so pins keep covering their box
+                      // as the drawing scales — a fixed px size overlaps badly
+                      // at 158 units.
                       left: `${u.pos_x * 100}%`,
                       top: `${u.pos_y * 100}%`,
                       transform: "translate(-50%, -50%)",
-                      width: 22,
-                      height: 22,
-                      borderRadius: "50%",
-                      border: "2px solid #fff",
+                      width: "2.1%",
+                      aspectRatio: "1",
+                      minWidth: 12,
+                      padding: 0,
+                      borderRadius: 4,
+                      border: `1px solid ${highlight && u.unit_code.toLowerCase().includes(highlight.toLowerCase()) ? "#111" : "rgba(255,255,255,0.9)"}`,
                       background: PIN_COLORS[u.status] || "#5f5e5a",
+                      opacity: highlight && !u.unit_code.toLowerCase().includes(highlight.toLowerCase()) ? 0.25 : 0.9,
                       color: "#fff",
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: 700,
+                      lineHeight: 1,
                       cursor: "pointer",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
                     }}
-                  >
-                    {u.unit_code.slice(-2)}
-                  </button>
+                  />
                 ))}
               </div>
             ) : (
@@ -179,7 +191,8 @@ export default function SiteplanPage() {
             <div style={{ display: "flex", gap: 14, marginTop: 14, fontSize: 12, color: TEXT_MID, flexWrap: "wrap" }}>
               {Object.entries(PIN_COLORS).map(([status, color]) => (
                 <div key={status} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: color, display: "inline-block" }} />
+                  <b style={{ color: "inherit" }}>{projectUnits.filter((u) => u.status === status).length}</b>
                   {status}
                 </div>
               ))}
@@ -233,9 +246,13 @@ export default function SiteplanPage() {
               <Badge value={modalUnit.status} />
             </div>
             <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 12 }}>
-              {modalUnit.block ? `Blok ${modalUnit.block} · ` : ""}
-              {modalUnit.type ? `Tipe ${modalUnit.type} · ` : ""}
-              {modalUnit.price ? `Rp${Number(modalUnit.price).toLocaleString("id-ID")}` : ""}
+              {[
+                modalUnit.block && `Blok ${modalUnit.block}`,
+                modalUnit.type && `Tipe ${modalUnit.type}`,
+                modalUnit.price && `Rp${Number(modalUnit.price).toLocaleString("id-ID")}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </div>
 
             <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", color: TEXT_MID, marginBottom: 6 }}>Konsumen</div>
