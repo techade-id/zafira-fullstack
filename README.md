@@ -50,14 +50,31 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
    update profiles set role = 'admin' where id = 'YOUR-USER-UUID';
    ```
 
-## 2. Run locally
+## 2. Domain (zafiraproperty.id)
+
+DNS and the Vercel domain binding have to be done by hand — they are not
+part of this repo:
+
+1. Vercel → Project → Settings → Domains → add `zafiraproperty.id` and
+   `www.zafiraproperty.id`.
+2. At the registrar, point the records Vercel shows you:
+   - `A` record for the apex `@` → `76.76.21.21`
+   - `CNAME` for `www` → `cname.vercel-dns.com`
+   (use whatever Vercel displays — it is authoritative over these values)
+3. Wait for propagation; Vercel issues the TLS certificate automatically.
+4. Supabase → Authentication → URL Configuration: set **Site URL** to
+   `https://zafiraproperty.id` and add it to **Redirect URLs**, otherwise
+   password-reset and confirmation links keep pointing at the old
+   `*.vercel.app` address.
+
+## 3. Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 3. Deploy to Vercel
+## 4. Deploy to Vercel
 
 ```bash
 npx vercel
@@ -123,9 +140,17 @@ page and the dashboard.
 
 ## Roles
 
-Four roles are baked into RLS: `admin`, `manager`, `sales_agent`,
-`tim_lapangan`. Admin/manager see everything; sales agents only see leads and
-customers assigned to them; field team only sees field projects/reports they're
-assigned to. Adjust the policies in `schema.sql` as your process solidifies.
+| Role | Reach |
+|---|---|
+| `admin` | everything, and the only role that can change another user's role |
+| `manager` / `supervisor` | everything except changing roles |
+| `administrasi` | pemberkasan — every customer's documents, KPR progress and payments, but no writes to the sales pipeline |
+| `marketing` / `sales_agent` | only the leads and customers assigned to them |
+| `tim_lapangan` | only the field projects/reports they are assigned to |
+
+The role lists live in two helper functions, `is_full_access()` and
+`is_berkas_access()` (see `migration_005_roles_and_dashboard.sql`), which every
+policy calls — so changing who counts as manager-level is a single edit rather
+than a sweep through ~28 policies.
 # zafira-fullstack
 

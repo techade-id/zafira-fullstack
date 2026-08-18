@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID } from "../components/ui";
 
-const ROLE_OPTIONS = ["admin", "manager", "sales_agent", "tim_lapangan"];
+const ROLE_OPTIONS = ["admin", "manager", "supervisor", "marketing", "administrasi", "sales_agent", "tim_lapangan"];
 
 export default function DataAgenPage() {
   const [agents, setAgents] = useState([]);

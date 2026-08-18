@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
-import { Card, PageTitle, PrimaryButton, DataTable, TEXT_MID, ORANGE, ORANGE_DARK } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE, ORANGE_DARK } from "../components/ui";
+
+/** Rows are objects with varying keys; take the union so nothing is dropped. */
+function toMatrix(rows) {
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  return { cols, body: rows.map((r) => cols.map((c) => (r[c] == null ? "" : String(r[c])))) };
+}
 
 function groupCount(rows, key) {
   const map = {};
@@ -70,12 +78,78 @@ export default function LaporanPage() {
     XLSX.writeFile(wb, `laporan-griya-zafira-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  function exportPDF() {
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const today = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+
+    doc.setFontSize(16);
+    doc.text("Laporan Griya Zafira", 40, 44);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text(`Dicetak ${today}`, 40, 60);
+    doc.setTextColor(0);
+
+    autoTable(doc, {
+      startY: 78,
+      head: [["Ringkasan", "Nilai"]],
+      body: statCards.map((c) => [c.label, String(c.value)]),
+      theme: "grid",
+      headStyles: { fillColor: [75, 107, 79] },
+      styles: { fontSize: 9 },
+    });
+
+    const sections = [
+      ["Prospek", leads],
+      ["Konsumen", customers],
+      ["Pembayaran", payments],
+      [
+        "Monitoring Lapangan",
+        fieldProjects.map((f) => ({
+          unit: f.units?.unit_code,
+          status: f.status,
+          progress_percent: f.progress_percent,
+          start_date: f.start_date,
+          target_end_date: f.target_end_date,
+        })),
+      ],
+      ["Komplain", complaints],
+    ];
+
+    for (const [title, rows] of sections) {
+      if (!rows.length) continue;
+      const { cols, body } = toMatrix(rows);
+      doc.addPage();
+      doc.setFontSize(13);
+      doc.text(title, 40, 44);
+      autoTable(doc, {
+        startY: 58,
+        head: [cols],
+        body,
+        theme: "striped",
+        headStyles: { fillColor: [75, 107, 79] },
+        styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
+      });
+    }
+
+    doc.save(`laporan-griya-zafira-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
   return (
     <div>
       <PageTitle
         title="Laporan"
         subtitle="Ringkasan sales, customer, closing, dan progres proyek"
-        action={<PrimaryButton onClick={exportExcel}>Export ke Excel</PrimaryButton>}
+        action={
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <PrimaryButton onClick={exportExcel}>Export Excel</PrimaryButton>
+            <PrimaryButton
+              onClick={exportPDF}
+              style={{ background: "#fff", color: ORANGE_DARK, border: `1px solid ${BORDER}` }}
+            >
+              Export PDF
+            </PrimaryButton>
+          </div>
+        }
       />
 
       <div className="rg-4" style={{ marginBottom: 22 }}>
