@@ -334,11 +334,11 @@ export default function RencanaProyekPage() {
                     warning="Seluruh evaluasi tahap untuk task ini ikut terhapus."
                     onDelete={() => supabase.from("project_tasks").delete().eq("id", r.id)}
                     onDone={() => {
-                    if (selectedId === r.id) {
-                    setSelectedId(null);
-                    setDetail(null);
-                    }
-                    fetchAll();
+                      if (selectedId === r.id) {
+                        setSelectedId(null);
+                        setDetail(null);
+                      }
+                      fetchAll();
                     }}
                   />
                 </RowActions>

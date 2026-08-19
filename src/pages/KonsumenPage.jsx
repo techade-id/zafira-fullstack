@@ -346,34 +346,15 @@ export default function KonsumenPage() {
                     warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
                     onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
                     onDone={() => {
-                    if (selectedCustomerId === row.id) {
-                    setSelectedCustomerId(null);
-                    setKpr(null);
-                    setDocuments([]);
-                    }
-                    fetchAll();
+                      if (selectedCustomerId === row.id) {
+                        setSelectedCustomerId(null);
+                        setKpr(null);
+                        setDocuments([]);
+                      }
+                      fetchAll();
                     }}
                   />
                 </RowActions>
-              ),
-            },
-            {
-              key: "aksi",
-              label: "",
-              render: (row) => (
-                <DeleteButton
-                  itemName={row.name}
-                  warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
-                  onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
-                  onDone={() => {
-                    if (selectedCustomerId === row.id) {
-                      setSelectedCustomerId(null);
-                      setKpr(null);
-                      setDocuments([]);
-                    }
-                    fetchAll();
-                  }}
-                />
               ),
             },
           ]}
@@ -440,17 +421,6 @@ export default function KonsumenPage() {
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
-                  ),
-                },
-                {
-                  key: "aksi",
-                  label: "",
-                  render: (row) => (
-                    <DeleteButton
-                      itemName={row.doc_type}
-                      onDelete={() => supabase.from("customer_documents").delete().eq("id", row.id)}
-                      onDone={() => fetchDocumentsFor(selectedCustomerId)}
-                    />
                   ),
                 },
                 {
