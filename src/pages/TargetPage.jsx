@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton } from "../components/ui";
 
 const emptyForm = {
   agent_id: "",
@@ -116,6 +116,17 @@ export default function TargetPage() {
             { key: "target_prospek_per_hari", label: "Prospek/Hari" },
             { key: "target_closing_per_hari", label: "Closing/Hari" },
             { key: "target_deal_value", label: "Deal Value", render: (row) => `Rp${Number(row.target_deal_value).toLocaleString("id-ID")}` },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={`Target ${row.profiles?.full_name || "Umum"}`}
+                  onDelete={() => supabase.from("sales_targets").delete().eq("id", row.id)}
+                  onDone={fetchAll}
+                />
+              ),
+            },
           ]}
           rows={targets}
         />

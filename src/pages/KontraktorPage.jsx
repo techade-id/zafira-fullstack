@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT } from "../components/ui";
+import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT, DeleteButton } from "../components/ui";
 
 function Stars({ value }) {
   if (value == null) return <span style={{ color: TEXT_MID }}>-</span>;
@@ -156,6 +156,18 @@ export default function KontraktorPage() {
                 <button onClick={() => openContractor(r)} style={linkBtn}>
                   {selected?.contractor_id === r.contractor_id ? "Tutup" : "Detail"}
                 </button>
+              ),
+            },
+            {
+              key: "hapus",
+              label: "",
+              render: (r) => (
+                <DeleteButton
+                  itemName={r.contractor_name}
+                  warning="Kontraktor yang masih punya task di Rencana Proyek tidak bisa dihapus, agar riwayat pekerjaannya tidak hilang."
+                  onDelete={() => supabase.from("contractors").delete().eq("id", r.contractor_id)}
+                  onDone={fetchScores}
+                />
               ),
             },
           ]}

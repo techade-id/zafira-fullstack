@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useBusinessSettings } from "../lib/useBusinessSettings";
-import { Card, PageTitle, SectionTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT } from "../components/ui";
+import { Card, PageTitle, SectionTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT, DeleteButton } from "../components/ui";
 
 const STAGES = [1, 2, 3, 4];
 
@@ -287,6 +287,24 @@ export default function RencanaProyekPage() {
                 <button onClick={() => openDetail(r)} style={linkBtn}>
                   {selectedId === r.id ? "Tutup" : "Kelola"}
                 </button>
+              ),
+            },
+            {
+              key: "hapus",
+              label: "",
+              render: (r) => (
+                <DeleteButton
+                  itemName={r.task_name}
+                  warning="Seluruh evaluasi tahap untuk task ini ikut terhapus."
+                  onDelete={() => supabase.from("project_tasks").delete().eq("id", r.id)}
+                  onDone={() => {
+                    if (selectedId === r.id) {
+                      setSelectedId(null);
+                      setDetail(null);
+                    }
+                    fetchAll();
+                  }}
+                />
               ),
             },
           ]}

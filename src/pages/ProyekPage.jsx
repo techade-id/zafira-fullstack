@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE_LIGHT } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE_LIGHT, DeleteButton } from "../components/ui";
 
 const UNIT_STATUS_OPTIONS = ["tersedia", "booking", "terjual", "batal"];
 
@@ -143,7 +143,21 @@ export default function ProyekPage() {
           <PageTitle
             title={`Unit — ${activeProject.name}`}
             subtitle={activeProject.location}
-            action={<PrimaryButton onClick={() => setShowUnitForm((v) => !v)}>+ Unit</PrimaryButton>}
+            action={
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <DeleteButton
+                  label="Hapus Proyek"
+                  itemName={activeProject.name}
+                  warning={`Seluruh ${projectUnits.length} unit di proyek ini ikut terhapus permanen, termasuk posisinya pada Siteplan Digital.`}
+                  onDelete={() => supabase.from("projects").delete().eq("id", activeProject.id)}
+                  onDone={() => {
+                    setActiveProjectId(null);
+                    fetchAll();
+                  }}
+                />
+                <PrimaryButton onClick={() => setShowUnitForm((v) => !v)}>+ Unit</PrimaryButton>
+              </div>
+            }
           />
 
           {showUnitForm && (
@@ -184,6 +198,18 @@ export default function ProyekPage() {
                       </option>
                     ))}
                   </select>
+                ),
+              },
+              {
+                key: "hapus",
+                label: "",
+                render: (row) => (
+                  <DeleteButton
+                    itemName={`Unit ${row.unit_code}`}
+                    warning="Posisi unit pada Siteplan Digital ikut hilang. Konsumen dan komplain yang terkait tetap ada, hanya kehilangan kaitan unitnya."
+                    onDelete={() => supabase.from("units").delete().eq("id", row.id)}
+                    onDone={fetchAll}
+                  />
                 ),
               },
             ]}

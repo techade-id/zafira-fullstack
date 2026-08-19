@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton } from "../components/ui";
 
 export default function PembatalanPage() {
   const [cancellations, setCancellations] = useState([]);
@@ -101,6 +101,18 @@ export default function PembatalanPage() {
             { key: "detail", label: "Detail", render: (row) => row.detail || "-" },
             { key: "cancelled_by", label: "Diproses Oleh", render: (row) => row.profiles?.full_name || "-" },
             { key: "cancelled_at", label: "Tanggal", render: (row) => new Date(row.cancelled_at).toLocaleDateString("id-ID") },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={`Pembatalan ${row.customers?.name || ""}`.trim()}
+                  warning="Status konsumen tidak otomatis kembali aktif. Ubah manual di halaman Konsumen bila perlu."
+                  onDelete={() => supabase.from("cancellations").delete().eq("id", row.id)}
+                  onDone={fetchData}
+                />
+              ),
+            },
           ]}
           rows={cancellations}
         />

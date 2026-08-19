@@ -4,7 +4,7 @@ import { fetchAllRows } from "../lib/fetchAllRows";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, DeleteButton } from "../components/ui";
 
 const CUSTOMER_STATUS_OPTIONS = ["proses", "aktif", "selesai", "batal"];
 const DOC_TYPES = ["KTP", "KK", "NPWP", "Slip Gaji", "Akad"];
@@ -173,6 +173,16 @@ export default function KonsumenPage() {
     setDocuments(data || []);
   }
 
+  async function fetchDocumentsFor(customerId) {
+    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false });
+    setDocuments(data || []);
+  }
+
+  async function fetchDocumentsFor(customerId) {
+    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false });
+    setDocuments(data || []);
+  }
+
   async function updateDocStatus(docId, status) {
     await supabase.from("customer_documents").update({ status }).eq("id", docId);
     const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", selectedCustomerId).order("uploaded_at", { ascending: false });
@@ -292,6 +302,44 @@ export default function KonsumenPage() {
                 </button>
               ),
             },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={row.name}
+                  warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
+                  onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
+                  onDone={() => {
+                    if (selectedCustomerId === row.id) {
+                      setSelectedCustomerId(null);
+                      setKpr(null);
+                      setDocuments([]);
+                    }
+                    fetchAll();
+                  }}
+                />
+              ),
+            },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={row.name}
+                  warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
+                  onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
+                  onDone={() => {
+                    if (selectedCustomerId === row.id) {
+                      setSelectedCustomerId(null);
+                      setKpr(null);
+                      setDocuments([]);
+                    }
+                    fetchAll();
+                  }}
+                />
+              ),
+            },
           ]}
           rows={customers}
         />
@@ -356,6 +404,28 @@ export default function KonsumenPage() {
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
+                  ),
+                },
+                {
+                  key: "aksi",
+                  label: "",
+                  render: (row) => (
+                    <DeleteButton
+                      itemName={row.doc_type}
+                      onDelete={() => supabase.from("customer_documents").delete().eq("id", row.id)}
+                      onDone={() => fetchDocumentsFor(selectedCustomerId)}
+                    />
+                  ),
+                },
+                {
+                  key: "aksi",
+                  label: "",
+                  render: (row) => (
+                    <DeleteButton
+                      itemName={row.doc_type}
+                      onDelete={() => supabase.from("customer_documents").delete().eq("id", row.id)}
+                      onDone={() => fetchDocumentsFor(selectedCustomerId)}
+                    />
                   ),
                 },
               ]}

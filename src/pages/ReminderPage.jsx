@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, DataTable, Badge, TEXT_MID, PRIMARY, NEGATIVE } from "../components/ui";
+import { Card, PageTitle, DataTable, Badge, TEXT_MID, PRIMARY, NEGATIVE, DeleteButton } from "../components/ui";
 
 const WARNING = "#b07d2b";
 
@@ -83,6 +83,20 @@ export default function ReminderPage() {
               key: "sisa",
               label: "Sisa Hari",
               render: (row) => <span style={{ color: sisaColor(row._sisa), fontWeight: 600 }}>{sisaLabel(row._sisa)}</span>,
+            },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  label="Hapus jadwal"
+                  confirmLabel="Hapus jadwal"
+                  itemName={`Jadwal follow-up ${row.name}`}
+                  warning="Prospeknya tidak dihapus — hanya tanggal rencana follow-up yang dikosongkan, sehingga hilang dari daftar ini."
+                  onDelete={() => supabase.from("leads").update({ tanggal_rencana: null }).eq("id", row.id)}
+                  onDone={fetchData}
+                />
+              ),
             },
           ]}
           rows={withSisa}

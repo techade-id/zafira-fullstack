@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE, DeleteButton } from "../components/ui";
 
 const PLATFORMS = ["Instagram", "Facebook Ads", "TikTok", "Google Ads", "Lainnya"];
 
@@ -139,6 +139,17 @@ export default function IklanPage() {
             { key: "impressions", label: "Impressions", render: (row) => Number(row.impressions).toLocaleString("id-ID") },
             { key: "clicks", label: "Klik" },
             { key: "leads_generated", label: "Leads" },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={`${row.platform} ${row.campaign_name || ""}`.trim()}
+                  onDelete={() => supabase.from("ads_analytics").delete().eq("id", row.id)}
+                  onDone={fetchAds}
+                />
+              ),
+            },
           ]}
           rows={ads}
         />

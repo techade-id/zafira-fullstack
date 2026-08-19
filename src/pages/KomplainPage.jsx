@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, DeleteButton } from "../components/ui";
 
 const PRIORITY_OPTIONS = ["rendah", "sedang", "tinggi"];
 const STATUS_OPTIONS = ["baru", "diproses", "selesai"];
@@ -299,6 +299,17 @@ export default function KomplainPage() {
               ),
             },
             { key: "photo", label: "Foto", render: (r) => (r.photo_url ? <button onClick={() => viewPhoto(r.photo_url)} style={linkBtn}>Lihat</button> : "-") },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={row.category || row.description}
+                  onDelete={() => supabase.from("complaints").delete().eq("id", row.id)}
+                  onDone={fetchAll}
+                />
+              ),
+            },
           ]}
           rows={complaints}
         />

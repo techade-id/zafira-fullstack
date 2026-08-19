@@ -413,3 +413,116 @@ export function ListRow({ icon: Icon, title, meta, trailing, trailingMuted, last
     </div>
   );
 }
+
+/* ============================================================
+   Deleting
+   ============================================================ */
+
+/**
+ * Turns a Postgres/PostgREST error into something a sales admin can act on.
+ * The raw messages are English and mention constraint names.
+ */
+export function friendlyDbError(error) {
+  if (!error) return "";
+  const code = error.code || "";
+  if (code === "23503") {
+    return "Data ini masih dipakai oleh data lain sehingga tidak bisa dihapus. Lepaskan atau hapus keterkaitannya terlebih dahulu.";
+  }
+  if (code === "42501" || /row-level security/i.test(error.message || "")) {
+    return "Anda tidak punya akses untuk menghapus data ini.";
+  }
+  return error.message || "Gagal menghapus data.";
+}
+
+export function ConfirmDialog({ open, title, message, warning, confirmLabel = "Hapus", busy, error, onConfirm, onCancel }) {
+  if (!open) return null;
+  return (
+    <div
+      onClick={onCancel}
+      // whiteSpace is reset because the dialog is rendered inside a table cell
+      // that sets nowrap, which would otherwise stop the text wrapping.
+      style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 16, whiteSpace: "normal" }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ background: SURFACE, borderRadius: RADIUS, padding: 24, width: 420, maxWidth: "100%", boxSizing: "border-box", textAlign: "left" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+        <div style={{ fontSize: 13.5, color: TEXT_MID, marginBottom: warning ? 12 : 18, lineHeight: 1.5 }}>{message}</div>
+
+        {warning && (
+          <div style={{ fontSize: 12.5, color: "#8a4b4b", background: "#f8e9e9", border: "1px solid #efd3d3", borderRadius: 12, padding: "10px 12px", marginBottom: 18, lineHeight: 1.5 }}>
+            {warning}
+          </div>
+        )}
+
+        {error && <div style={{ fontSize: 12.5, color: NEGATIVE, marginBottom: 14 }}>{error}</div>}
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            style={{ padding: "10px 18px", borderRadius: 999, border: `1px solid ${BORDER}`, background: SURFACE, color: TEXT_MID, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            Batal
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            style={{ padding: "10px 18px", borderRadius: 999, border: "none", background: NEGATIVE, color: "#fff", fontSize: 13, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? "Menghapus..." : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Delete control with a built-in confirmation step.
+ *
+ * `onDelete` should return the Supabase `{ error }` shape; `warning` is for
+ * spelling out what else disappears (cascades), which the user cannot see.
+ */
+export function DeleteButton({ onDelete, onDone, itemName, warning, label = "Hapus", confirmLabel = "Hapus" }) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  async function confirm() {
+    setBusy(true);
+    setError("");
+    const res = (await onDelete()) || {};
+    setBusy(false);
+    if (res.error) {
+      setError(friendlyDbError(res.error));
+      return;
+    }
+    setOpen(false);
+    onDone && onDone();
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => {
+          setError("");
+          setOpen(true);
+        }}
+        title={`Hapus ${itemName || ""}`.trim()}
+        style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: NEGATIVE, borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+      >
+        {label}
+      </button>
+      <ConfirmDialog
+        open={open}
+        title="Hapus data ini?"
+        message={itemName ? `“${itemName}” akan dihapus permanen dan tidak bisa dikembalikan.` : "Data akan dihapus permanen dan tidak bisa dikembalikan."}
+        warning={warning}
+        confirmLabel={confirmLabel}
+        busy={busy}
+        error={error}
+        onConfirm={confirm}
+        onCancel={() => !busy && setOpen(false)}
+      />
+    </>
+  );
+}

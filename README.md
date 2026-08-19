@@ -31,6 +31,9 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
    konsumen, KPR, pembayaran, komplain, evaluasi kontraktor and ads data so
    the app can be demoed. Every demo row's id starts with `5eed` — run
    `supabase/seed_demo_data_remove.sql` to delete all of it before real use.
+   `supabase/migration_006_delete_behaviour.sql` is needed for the delete
+   buttons: without it Postgres refuses to delete a prospek that became a
+   konsumen, or a konsumen that has a komplain.
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
    `complaint-photos`) and their RLS policies, needed by Siteplan Digital,

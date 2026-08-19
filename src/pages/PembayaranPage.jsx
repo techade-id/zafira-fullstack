@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
-import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton } from "../components/ui";
 
 const PAYMENT_TYPES = ["booking", "dp", "dana_talangan", "termin", "pelunasan", "lainnya"];
 
@@ -117,6 +117,17 @@ export default function PembayaranPage() {
                     Verifikasi
                   </button>
                 ),
+            },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={`${row.payment_type} ${row.customers?.name || ""}`.trim()}
+                  onDelete={() => supabase.from("payments").delete().eq("id", row.id)}
+                  onDone={fetchData}
+                />
+              ),
             },
           ]}
           rows={payments}

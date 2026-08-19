@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton } from "../components/ui";
 
 const STATUS_OPTIONS = ["leads", "cold", "warm", "appointment", "deal", "cancel"];
 const MARITAL_OPTIONS = ["Nikah", "Janda/Duda", "Single"];
@@ -186,6 +186,18 @@ export default function ProspekPage() {
               ),
             },
             { key: "created_at", label: "Dibuat", render: (row) => new Date(row.created_at).toLocaleDateString("id-ID") },
+            {
+              key: "aksi",
+              label: "",
+              render: (row) => (
+                <DeleteButton
+                  itemName={row.name}
+                  warning="Riwayat aktivitas prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
+                  onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
+                  onDone={fetchLeads}
+                />
+              ),
+            },
           ]}
           rows={leads}
         />
