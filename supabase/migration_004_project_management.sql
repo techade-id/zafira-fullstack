@@ -336,3 +336,8 @@ insert into contractors (name)
 select v.name
 from (values ('Rozikin'), ('Slamet'), ('Deddy Dwi Atmoro'), ('Nasif'), ('Rizqi'), ('Wahidun')) as v(name)
 where not exists (select 1 from contractors c where c.name = v.name);
+
+-- Tell PostgREST to pick up the new functions immediately. Without this the
+-- API can keep answering "Could not find the function ... in the schema cache"
+-- until Supabase reloads on its own.
+notify pgrst, 'reload schema';

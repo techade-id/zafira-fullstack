@@ -293,3 +293,8 @@ begin
 end $$;
 
 grant execute on function dashboard_stats(date, date) to authenticated;
+
+-- Tell PostgREST to pick up the new functions immediately. Without this the
+-- API can keep answering "Could not find the function ... in the schema cache"
+-- until Supabase reloads on its own.
+notify pgrst, 'reload schema';

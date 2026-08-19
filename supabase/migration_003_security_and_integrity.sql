@@ -227,3 +227,8 @@ end $$;
 grant execute on function dashboard_stats() to authenticated;
 grant execute on function cancel_customer(uuid, text, text) to authenticated;
 grant execute on function transfer_customer(uuid, uuid, text) to authenticated;
+
+-- Tell PostgREST to pick up the new functions immediately. Without this the
+-- API can keep answering "Could not find the function ... in the schema cache"
+-- until Supabase reloads on its own.
+notify pgrst, 'reload schema';
