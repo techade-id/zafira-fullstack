@@ -4,7 +4,7 @@ import { fetchAllRows } from "../lib/fetchAllRows";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 const CUSTOMER_STATUS_OPTIONS = ["proses", "aktif", "selesai", "batal"];
 const DOC_TYPES = ["KTP", "KK", "NPWP", "Slip Gaji", "Akad"];
@@ -47,7 +47,31 @@ export default function KonsumenPage() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", ktp_number: "", address: "", unit_id: "", lead_id: "" });
+  const emptyForm = { name: "", phone: "", email: "", ktp_number: "", address: "", unit_id: "", lead_id: "" };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      name: row.name || "",
+      phone: row.phone || "",
+      email: row.email || "",
+      ktp_number: row.ktp_number || "",
+      address: row.address || "",
+      unit_id: row.unit_id || "",
+      lead_id: row.lead_id || "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -102,7 +126,7 @@ export default function KonsumenPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("customers").insert({
+    const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
@@ -110,16 +134,18 @@ export default function KonsumenPage() {
       address: form.address.trim() || null,
       unit_id: form.unit_id || null,
       lead_id: form.lead_id || null,
-      sales_agent_id: profile?.id || null,
-      status: "proses",
-    });
+    };
+    // Ownership and status are set on create only — editing must not reassign
+    // the customer to whoever happens to be editing, or reset their stage.
+    const { error } = editingId
+      ? await supabase.from("customers").update(payload).eq("id", editingId)
+      : await supabase.from("customers").insert({ ...payload, sales_agent_id: profile?.id || null, status: "proses" });
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm({ name: "", phone: "", email: "", ktp_number: "", address: "", unit_id: "", lead_id: "" });
-    setShowForm(false);
+    resetForm();
     fetchAll();
   }
 
@@ -262,9 +288,16 @@ export default function KonsumenPage() {
             </select>
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddCustomer} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Konsumen"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddCustomer} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Konsumen"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -306,19 +339,22 @@ export default function KonsumenPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={row.name}
-                  warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
-                  onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
-                  onDone={() => {
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={row.name}
+                    warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
+                    onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
+                    onDone={() => {
                     if (selectedCustomerId === row.id) {
-                      setSelectedCustomerId(null);
-                      setKpr(null);
-                      setDocuments([]);
+                    setSelectedCustomerId(null);
+                    setKpr(null);
+                    setDocuments([]);
                     }
                     fetchAll();
-                  }}
-                />
+                    }}
+                  />
+                </RowActions>
               ),
             },
             {

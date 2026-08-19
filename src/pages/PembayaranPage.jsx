@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
-import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID } from "../components/ui";
 
 const PAYMENT_TYPES = ["booking", "dp", "dana_talangan", "termin", "pelunasan", "lainnya"];
 
@@ -10,7 +10,28 @@ export default function PembayaranPage() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ customer_id: "", payment_type: "booking", amount: "", payment_date: "" });
+  const emptyForm = { customer_id: "", payment_type: "booking", amount: "", payment_date: "" };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      customer_id: row.customer_id || "",
+      payment_type: row.payment_type || "booking",
+      amount: row.amount ?? "",
+      payment_date: row.payment_date || "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,20 +57,22 @@ export default function PembayaranPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("payments").insert({
+    const payload = {
       customer_id: form.customer_id,
       payment_type: form.payment_type,
       amount: Number(form.amount),
       payment_date: form.payment_date || new Date().toISOString().slice(0, 10),
-      status: "menunggu",
-    });
+    };
+    // Editing must not silently re-open a payment that was already verified.
+    const { error } = editingId
+      ? await supabase.from("payments").update(payload).eq("id", editingId)
+      : await supabase.from("payments").insert({ ...payload, status: "menunggu" });
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm({ customer_id: "", payment_type: "booking", amount: "", payment_date: "" });
-    setShowForm(false);
+    resetForm();
     fetchData();
   }
 
@@ -88,9 +111,16 @@ export default function PembayaranPage() {
             <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} style={inputStyle} />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddPayment} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Pembayaran"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddPayment} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Pembayaran"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -122,11 +152,14 @@ export default function PembayaranPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={`${row.payment_type} ${row.customers?.name || ""}`.trim()}
-                  onDelete={() => supabase.from("payments").delete().eq("id", row.id)}
-                  onDone={fetchData}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={`${row.payment_type} ${row.customers?.name || ""}`.trim()}
+                    onDelete={() => supabase.from("payments").delete().eq("id", row.id)}
+                    onDone={fetchData}
+                  />
+                </RowActions>
               ),
             },
           ]}

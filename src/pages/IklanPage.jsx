@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 const PLATFORMS = ["Instagram", "Facebook Ads", "TikTok", "Google Ads", "Lainnya"];
 
@@ -8,7 +8,31 @@ export default function IklanPage() {
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ platform: PLATFORMS[0], campaign_name: "", report_date: "", spend: "", impressions: "", clicks: "", leads_generated: "" });
+  const emptyForm = { platform: PLATFORMS[0], campaign_name: "", report_date: "", spend: "", impressions: "", clicks: "", leads_generated: "" };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      platform: row.platform || PLATFORMS[0],
+      campaign_name: row.campaign_name || "",
+      report_date: row.report_date || "",
+      spend: row.spend ?? "",
+      impressions: row.impressions ?? "",
+      clicks: row.clicks ?? "",
+      leads_generated: row.leads_generated ?? "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,7 +54,7 @@ export default function IklanPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("ads_analytics").insert({
+    const payload = {
       platform: form.platform,
       campaign_name: form.campaign_name.trim() || null,
       report_date: form.report_date,
@@ -38,14 +62,16 @@ export default function IklanPage() {
       impressions: form.impressions ? Number(form.impressions) : 0,
       clicks: form.clicks ? Number(form.clicks) : 0,
       leads_generated: form.leads_generated ? Number(form.leads_generated) : 0,
-    });
+    };
+    const { error } = editingId
+      ? await supabase.from("ads_analytics").update(payload).eq("id", editingId)
+      : await supabase.from("ads_analytics").insert(payload);
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm({ platform: PLATFORMS[0], campaign_name: "", report_date: "", spend: "", impressions: "", clicks: "", leads_generated: "" });
-    setShowForm(false);
+    resetForm();
     fetchAds();
   }
 
@@ -90,9 +116,16 @@ export default function IklanPage() {
             <input placeholder="Leads dihasilkan" type="number" value={form.leads_generated} onChange={(e) => setForm({ ...form, leads_generated: e.target.value })} style={inputStyle} />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddAd} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddAd} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -143,11 +176,14 @@ export default function IklanPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={`${row.platform} ${row.campaign_name || ""}`.trim()}
-                  onDelete={() => supabase.from("ads_analytics").delete().eq("id", row.id)}
-                  onDone={fetchAds}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={`${row.platform} ${row.campaign_name || ""}`.trim()}
+                    onDelete={() => supabase.from("ads_analytics").delete().eq("id", row.id)}
+                    onDone={fetchAds}
+                  />
+                </RowActions>
               ),
             },
           ]}

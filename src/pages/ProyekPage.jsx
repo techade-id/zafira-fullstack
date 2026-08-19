@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE_LIGHT, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE_LIGHT, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 const UNIT_STATUS_OPTIONS = ["tersedia", "booking", "terjual", "batal"];
 
@@ -12,10 +12,40 @@ export default function ProyekPage() {
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState({ name: "", location: "", description: "" });
+  const [editingProjectId, setEditingProjectId] = useState(null);
   const [savingProject, setSavingProject] = useState(false);
 
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [unitForm, setUnitForm] = useState({ unit_code: "", block: "", type: "", price: "" });
+  const [editingUnitId, setEditingUnitId] = useState(null);
+
+  function resetProjectForm() {
+    setProjectForm({ name: "", location: "", description: "" });
+    setEditingProjectId(null);
+    setShowProjectForm(false);
+    setError("");
+  }
+
+  function startEditProject(proj) {
+    setProjectForm({ name: proj.name || "", location: proj.location || "", description: proj.description || "" });
+    setEditingProjectId(proj.id);
+    setShowProjectForm(true);
+    setError("");
+  }
+
+  function resetUnitForm() {
+    setUnitForm({ unit_code: "", block: "", type: "", price: "" });
+    setEditingUnitId(null);
+    setShowUnitForm(false);
+    setError("");
+  }
+
+  function startEditUnit(u) {
+    setUnitForm({ unit_code: u.unit_code || "", block: u.block || "", type: u.type || "", price: u.price ?? "" });
+    setEditingUnitId(u.id);
+    setShowUnitForm(true);
+    setError("");
+  }
   const [savingUnit, setSavingUnit] = useState(false);
 
   const [error, setError] = useState("");
@@ -43,18 +73,20 @@ export default function ProyekPage() {
     }
     setSavingProject(true);
     setError("");
-    const { error } = await supabase.from("projects").insert({
+    const payload = {
       name: projectForm.name.trim(),
       location: projectForm.location.trim() || null,
       description: projectForm.description.trim() || null,
-    });
+    };
+    const { error } = editingProjectId
+      ? await supabase.from("projects").update(payload).eq("id", editingProjectId)
+      : await supabase.from("projects").insert(payload);
     setSavingProject(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setProjectForm({ name: "", location: "", description: "" });
-    setShowProjectForm(false);
+    resetProjectForm();
     fetchAll();
   }
 
@@ -65,20 +97,21 @@ export default function ProyekPage() {
     }
     setSavingUnit(true);
     setError("");
-    const { error } = await supabase.from("units").insert({
-      project_id: activeProjectId,
+    const payload = {
       unit_code: unitForm.unit_code.trim(),
       block: unitForm.block.trim() || null,
       type: unitForm.type.trim() || null,
       price: unitForm.price ? Number(unitForm.price) : null,
-    });
+    };
+    const { error } = editingUnitId
+      ? await supabase.from("units").update(payload).eq("id", editingUnitId)
+      : await supabase.from("units").insert({ ...payload, project_id: activeProjectId });
     setSavingUnit(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setUnitForm({ unit_code: "", block: "", type: "", price: "" });
-    setShowUnitForm(false);
+    resetUnitForm();
     fetchAll();
   }
 
@@ -106,9 +139,16 @@ export default function ProyekPage() {
             <input placeholder="Deskripsi singkat" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} style={inputStyle} />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddProject} disabled={savingProject}>
-            {savingProject ? "Menyimpan..." : "Simpan Proyek"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddProject} disabled={savingProject}>
+              {savingProject ? "Menyimpan..." : editingProjectId ? "Simpan Perubahan" : "Simpan Proyek"}
+            </PrimaryButton>
+            {editingProjectId && (
+              <button onClick={resetProjectForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -145,6 +185,7 @@ export default function ProyekPage() {
             subtitle={activeProject.location}
             action={
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <EditButton label="Ubah Proyek" onClick={() => startEditProject(activeProject)} />
                 <DeleteButton
                   label="Hapus Proyek"
                   itemName={activeProject.name}
@@ -168,9 +209,16 @@ export default function ProyekPage() {
               <input placeholder="Harga (Rp)" type="number" value={unitForm.price} onChange={(e) => setUnitForm({ ...unitForm, price: e.target.value })} style={inputStyle} />
               <div style={{ gridColumn: "1 / -1" }}>
                 {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
-                <PrimaryButton onClick={handleAddUnit} disabled={savingUnit}>
-                  {savingUnit ? "Menyimpan..." : "Simpan Unit"}
-                </PrimaryButton>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <PrimaryButton onClick={handleAddUnit} disabled={savingUnit}>
+                    {savingUnit ? "Menyimpan..." : editingUnitId ? "Simpan Perubahan" : "Simpan Unit"}
+                  </PrimaryButton>
+                  {editingUnitId && (
+                    <button onClick={resetUnitForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      Batal
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -204,12 +252,15 @@ export default function ProyekPage() {
                 key: "hapus",
                 label: "",
                 render: (row) => (
-                  <DeleteButton
-                    itemName={`Unit ${row.unit_code}`}
-                    warning="Posisi unit pada Siteplan Digital ikut hilang. Konsumen dan komplain yang terkait tetap ada, hanya kehilangan kaitan unitnya."
-                    onDelete={() => supabase.from("units").delete().eq("id", row.id)}
-                    onDone={fetchAll}
-                  />
+                  <RowActions>
+                    <EditButton onClick={() => startEditUnit(row)} />
+                    <DeleteButton
+                      itemName={`Unit ${row.unit_code}`}
+                      warning="Posisi unit pada Siteplan Digital ikut hilang. Konsumen dan komplain yang terkait tetap ada, hanya kehilangan kaitan unitnya."
+                      onDelete={() => supabase.from("units").delete().eq("id", row.id)}
+                      onDone={fetchAll}
+                    />
+                  </RowActions>
                 ),
               },
             ]}

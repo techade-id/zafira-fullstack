@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 const PRIORITY_OPTIONS = ["rendah", "sedang", "tinggi"];
 const STATUS_OPTIONS = ["baru", "diproses", "selesai"];
@@ -41,6 +41,32 @@ export default function KomplainPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setPhoto(null);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      customer_id: row.customer_id || "",
+      unit_id: row.unit_id || "",
+      contractor_id: row.contractor_id || "",
+      category: row.category || "",
+      jenis_komplain: row.jenis_komplain || "",
+      priority: row.priority || "sedang",
+      description: row.description || "",
+      tanggal_komplain: row.tanggal_komplain || "",
+      tanggal_serah_terima_kunci: row.tanggal_serah_terima_kunci || "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [photo, setPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -101,7 +127,7 @@ export default function KomplainPage() {
     setSaving(true);
     setError("");
     const { path } = await uploadFile("complaint-photos", "complaints", photo);
-    const { error } = await supabase.from("complaints").insert({
+    const payload = {
       customer_id: form.customer_id || null,
       unit_id: form.unit_id || null,
       contractor_id: form.contractor_id || null,
@@ -111,17 +137,19 @@ export default function KomplainPage() {
       description: form.description.trim(),
       tanggal_komplain: form.tanggal_komplain || null,
       tanggal_serah_terima_kunci: form.tanggal_serah_terima_kunci || null,
-      photo_url: path,
-      status: "baru",
-    });
+    };
+    // Only overwrite the photo when a new one was picked, and leave status
+    // alone on edit since it is managed from the table.
+    if (path) payload.photo_url = path;
+    const { error } = editingId
+      ? await supabase.from("complaints").update(payload).eq("id", editingId)
+      : await supabase.from("complaints").insert({ ...payload, status: "baru" });
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm(emptyForm);
-    setPhoto(null);
-    setShowForm(false);
+    resetForm();
     fetchAll();
   }
 
@@ -223,9 +251,16 @@ export default function KomplainPage() {
             Masa garansi dan bobot nilai dihitung otomatis dari tanggal serah terima kunci dan jenis komplain.
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAdd} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Komplain"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAdd} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Komplain"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -303,11 +338,14 @@ export default function KomplainPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={row.category || row.description}
-                  onDelete={() => supabase.from("complaints").delete().eq("id", row.id)}
-                  onDone={fetchAll}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={row.category || row.description}
+                    onDelete={() => supabase.from("complaints").delete().eq("id", row.id)}
+                    onDone={fetchAll}
+                  />
+                </RowActions>
               ),
             },
           ]}

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID } from "../components/ui";
 
 const STATUS_OPTIONS = ["leads", "cold", "warm", "appointment", "deal", "cancel"];
 const MARITAL_OPTIONS = ["Nikah", "Janda/Duda", "Single"];
@@ -32,6 +32,38 @@ export default function ProspekPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      name: row.name ?? "",
+      phone: row.phone ?? "",
+      usia: row.usia ?? "",
+      marital_status: row.marital_status ?? "",
+      pekerjaan: row.pekerjaan ?? "",
+      perusahaan_tempat_kerja: row.perusahaan_tempat_kerja ?? "",
+      gaji: row.gaji ?? "",
+      domisili: row.domisili ?? "",
+      kabupaten: row.kabupaten ?? "",
+      kecamatan: row.kecamatan ?? "",
+      kelurahan: row.kelurahan ?? "",
+      source: row.source ?? "",
+      rencana_selanjutnya: row.rencana_selanjutnya ?? "",
+      kategori_rencana: row.kategori_rencana ?? "",
+      tanggal_rencana: row.tanggal_rencana ?? "",
+      notes: row.notes ?? "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -60,7 +92,7 @@ export default function ProspekPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("leads").insert({
+    const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       usia: form.usia ? Number(form.usia) : null,
@@ -77,15 +109,18 @@ export default function ProspekPage() {
       kategori_rencana: form.kategori_rencana || null,
       tanggal_rencana: form.tanggal_rencana || null,
       notes: form.notes.trim() || null,
-      status: "leads",
-    });
+    };
+    // Status is only set on create — it is changed from the table afterwards,
+    // so editing must not reset a lead back to the first stage.
+    const { error } = editingId
+      ? await supabase.from("leads").update(payload).eq("id", editingId)
+      : await supabase.from("leads").insert({ ...payload, status: "leads" });
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm(emptyForm);
-    setShowForm(false);
+    resetForm();
     fetchLeads();
   }
 
@@ -152,9 +187,16 @@ export default function ProspekPage() {
             <input placeholder="Catatan" value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...inputStyle, gridColumn: "1 / -1" }} />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddLead} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Prospek"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddLead} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Prospek"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -190,12 +232,15 @@ export default function ProspekPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={row.name}
-                  warning="Riwayat aktivitas prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
-                  onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
-                  onDone={fetchLeads}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={row.name}
+                    warning="Riwayat aktivitas prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
+                    onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
+                    onDone={fetchLeads}
+                  />
+                </RowActions>
               ),
             },
           ]}

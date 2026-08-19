@@ -526,3 +526,20 @@ export function DeleteButton({ onDelete, onDone, itemName, warning, label = "Hap
     </>
   );
 }
+
+/** Secondary row action, sized to sit next to DeleteButton. */
+export function EditButton({ onClick, label = "Ubah" }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: TEXT_DARK, borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Wraps row actions so Ubah/Hapus stay on one line. */
+export function RowActions({ children }) {
+  return <div style={{ display: "flex", gap: 6, alignItems: "center" }}>{children}</div>;
+}

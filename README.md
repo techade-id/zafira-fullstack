@@ -127,6 +127,16 @@ matching your `.env`.
 - **Pengaturan Bisnis**: admin-editable dropdown lists (lead sources, banks,
   cancel reasons, follow-up categories, progres berkas) used across the app.
 
+Every list has an **Ubah** and a **Hapus** button on each row. "Ubah" reopens
+the same form the row was created with, pre-filled, and saves as an update
+rather than a new row; "Batal" leaves edit mode without touching anything. A
+handful of fields stay create-only on purpose because a dedicated control
+already owns them — a lead's status (the inline funnel select), a customer's
+sales agent (the transfer flow on Data Agen, which writes an audit row), and
+the status of a customer, complaint or payment. Agent details and the business
+dropdown lists edit in place: type over the value and it saves when the field
+loses focus.
+
 The modules above mirror the team's live sales spreadsheet: the 9-stage
 funnel, full lead intake (usia, marital status, pekerjaan, gaji, domisili),
 and the KPR customer pipeline (Booking → DP → Bank → SP3K → Akad → Serah

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID } from "../components/ui";
 
 const emptyForm = {
   agent_id: "",
@@ -19,6 +19,30 @@ export default function TargetPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      agent_id: row.agent_id || "",
+      periode_start: row.periode_start || "",
+      periode_end: row.periode_end || "",
+      target_total_prospek: row.target_total_prospek ?? "",
+      target_total_closing: row.target_total_closing ?? "",
+      target_prospek_per_hari: row.target_prospek_per_hari ?? "",
+      target_closing_per_hari: row.target_closing_per_hari ?? "",
+      target_deal_value: row.target_deal_value ?? "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -48,7 +72,7 @@ export default function TargetPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("sales_targets").insert({
+    const payload = {
       agent_id: form.agent_id || null,
       periode_start: form.periode_start,
       periode_end: form.periode_end,
@@ -57,14 +81,16 @@ export default function TargetPage() {
       target_prospek_per_hari: Number(form.target_prospek_per_hari) || 0,
       target_closing_per_hari: Number(form.target_closing_per_hari) || 0,
       target_deal_value: Number(form.target_deal_value) || 0,
-    });
+    };
+    const { error } = editingId
+      ? await supabase.from("sales_targets").update(payload).eq("id", editingId)
+      : await supabase.from("sales_targets").insert(payload);
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm(emptyForm);
-    setShowForm(false);
+    resetForm();
     fetchAll();
   }
 
@@ -94,9 +120,16 @@ export default function TargetPage() {
             <input placeholder="Target Closing / Hari" type="number" value={form.target_closing_per_hari} onChange={(e) => set("target_closing_per_hari", e.target.value)} style={inputStyle} />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAdd} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Target"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAdd} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Target"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -120,11 +153,14 @@ export default function TargetPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={`Target ${row.profiles?.full_name || "Umum"}`}
-                  onDelete={() => supabase.from("sales_targets").delete().eq("id", row.id)}
-                  onDone={fetchAll}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={`Target ${row.profiles?.full_name || "Umum"}`}
+                    onDelete={() => supabase.from("sales_targets").delete().eq("id", row.id)}
+                    onDone={fetchAll}
+                  />
+                </RowActions>
               ),
             },
           ]}

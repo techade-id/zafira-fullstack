@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT, DeleteButton } from "../components/ui";
+import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 function Stars({ value }) {
   if (value == null) return <span style={{ color: TEXT_MID }}>-</span>;
@@ -26,6 +26,27 @@ export default function KontraktorPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", specialization: "", notes: "" });
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm({ name: "", phone: "", specialization: "", notes: "" });
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  async function startEdit(row) {
+    const { data } = await supabase.from("contractors").select("*").eq("id", row.contractor_id).maybeSingle();
+    setForm({
+      name: data?.name || row.contractor_name || "",
+      phone: data?.phone || "",
+      specialization: data?.specialization || "",
+      notes: data?.notes || "",
+    });
+    setEditingId(row.contractor_id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
 
   const [selected, setSelected] = useState(null);
@@ -78,19 +99,21 @@ export default function KontraktorPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("contractors").insert({
+    const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       specialization: form.specialization.trim() || null,
       notes: form.notes.trim() || null,
-    });
+    };
+    const { error } = editingId
+      ? await supabase.from("contractors").update(payload).eq("id", editingId)
+      : await supabase.from("contractors").insert(payload);
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm({ name: "", phone: "", specialization: "", notes: "" });
-    setShowForm(false);
+    resetForm();
     fetchScores();
   }
 
@@ -111,9 +134,16 @@ export default function KontraktorPage() {
             <input placeholder="Catatan" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} style={inputStyle} />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddContractor} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Kontraktor"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddContractor} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Kontraktor"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -162,12 +192,15 @@ export default function KontraktorPage() {
               key: "hapus",
               label: "",
               render: (r) => (
-                <DeleteButton
-                  itemName={r.contractor_name}
-                  warning="Kontraktor yang masih punya task di Rencana Proyek tidak bisa dihapus, agar riwayat pekerjaannya tidak hilang."
-                  onDelete={() => supabase.from("contractors").delete().eq("id", r.contractor_id)}
-                  onDone={fetchScores}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(r)} />
+                  <DeleteButton
+                    itemName={r.contractor_name}
+                    warning="Kontraktor yang masih punya task di Rencana Proyek tidak bisa dihapus, agar riwayat pekerjaannya tidak hilang."
+                    onDelete={() => supabase.from("contractors").delete().eq("id", r.contractor_id)}
+                    onDone={fetchScores}
+                  />
+                </RowActions>
               ),
             },
           ]}

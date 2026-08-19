@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useBusinessSettings } from "../lib/useBusinessSettings";
-import { Card, PageTitle, SectionTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT, DeleteButton } from "../components/ui";
+import { Card, PageTitle, SectionTitle, PrimaryButton, Badge, DataTable, BORDER, TEXT_MID, PRIMARY, PRIMARY_SOFT, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 const STAGES = [1, 2, 3, 4];
 
@@ -29,6 +29,31 @@ export default function RencanaProyekPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({
+      project_id: row.project_id || "",
+      contractor_id: row.contractor_id || "",
+      task_name: row.task_name || "",
+      unit_id: row.unit_id || "",
+      dokumen_kerja_url: row.dokumen_kerja_url || "",
+      pic: row.pic || "",
+      tanggal_mulai: row.tanggal_mulai || "",
+      working_days: row.working_days ?? "",
+      hari_garansi: row.hari_garansi ?? "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,7 +94,7 @@ export default function RencanaProyekPage() {
     }
     setSaving(true);
     setError("");
-    const { error } = await supabase.from("project_tasks").insert({
+    const payload = {
       project_id: form.project_id,
       contractor_id: form.contractor_id || null,
       task_name: form.task_name.trim(),
@@ -79,14 +104,16 @@ export default function RencanaProyekPage() {
       tanggal_mulai: form.tanggal_mulai || null,
       working_days: form.working_days ? Number(form.working_days) : null,
       hari_garansi: form.hari_garansi ? Number(form.hari_garansi) : null,
-    });
+    };
+    const { error } = editingId
+      ? await supabase.from("project_tasks").update(payload).eq("id", editingId)
+      : await supabase.from("project_tasks").insert(payload);
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm(emptyForm);
-    setShowForm(false);
+    resetForm();
     fetchAll();
   }
 
@@ -255,9 +282,16 @@ export default function RencanaProyekPage() {
             Rencana deadline dihitung otomatis dari tanggal mulai + working days, mengikuti pengaturan hari libur dan kalender libur.
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAdd} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Task"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAdd} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Task"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -293,18 +327,21 @@ export default function RencanaProyekPage() {
               key: "hapus",
               label: "",
               render: (r) => (
-                <DeleteButton
-                  itemName={r.task_name}
-                  warning="Seluruh evaluasi tahap untuk task ini ikut terhapus."
-                  onDelete={() => supabase.from("project_tasks").delete().eq("id", r.id)}
-                  onDone={() => {
+                <RowActions>
+                  <EditButton onClick={() => startEdit(r)} />
+                  <DeleteButton
+                    itemName={r.task_name}
+                    warning="Seluruh evaluasi tahap untuk task ini ikut terhapus."
+                    onDelete={() => supabase.from("project_tasks").delete().eq("id", r.id)}
+                    onDone={() => {
                     if (selectedId === r.id) {
-                      setSelectedId(null);
-                      setDetail(null);
+                    setSelectedId(null);
+                    setDetail(null);
                     }
                     fetchAll();
-                  }}
-                />
+                    }}
+                  />
+                </RowActions>
               ),
             },
           ]}

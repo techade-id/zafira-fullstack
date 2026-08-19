@@ -1,14 +1,30 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton } from "../components/ui";
+import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID } from "../components/ui";
 
 export default function PembatalanPage() {
   const [cancellations, setCancellations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ customer_id: "", reason: "", detail: "" });
+  const emptyForm = { customer_id: "", reason: "", detail: "" };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm({ customer_id: row.customer_id || "", reason: row.reason || "", detail: row.detail || "" });
+    setEditingId(row.id);
+    setShowForm(true);
+    setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const cancelReasons = useBusinessSettings("cancel_reason");
@@ -35,20 +51,27 @@ export default function PembatalanPage() {
     }
     setSaving(true);
     setError("");
-    // One RPC = one transaction. Doing the insert and the customer status
-    // update as two calls could leave a cancellation against a live customer.
-    const { error } = await supabase.rpc("cancel_customer", {
-      p_customer_id: form.customer_id,
-      p_reason: form.reason.trim(),
-      p_detail: form.detail.trim() || null,
-    });
+    // Creating goes through the RPC so the cancellation and the customer's
+    // status change land in one transaction. Editing only touches the
+    // cancellation row, so a plain update is correct there.
+    const { error } = editingId
+      ? await supabase
+          .from("cancellations")
+          .update({ customer_id: form.customer_id, reason: form.reason.trim(), detail: form.detail.trim() || null })
+          .eq("id", editingId)
+      : (
+          await supabase.rpc("cancel_customer", {
+            p_customer_id: form.customer_id,
+            p_reason: form.reason.trim(),
+            p_detail: form.detail.trim() || null,
+          })
+        );
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setForm({ customer_id: "", reason: "", detail: "" });
-    setShowForm(false);
+    resetForm();
     fetchData();
   }
 
@@ -85,9 +108,16 @@ export default function PembatalanPage() {
             />
           </div>
           {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={handleAddCancellation} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Pembatalan"}
-          </PrimaryButton>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <PrimaryButton onClick={handleAddCancellation} disabled={saving}>
+              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Pembatalan"}
+            </PrimaryButton>
+            {editingId && (
+              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Batal
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -105,12 +135,15 @@ export default function PembatalanPage() {
               key: "aksi",
               label: "",
               render: (row) => (
-                <DeleteButton
-                  itemName={`Pembatalan ${row.customers?.name || ""}`.trim()}
-                  warning="Status konsumen tidak otomatis kembali aktif. Ubah manual di halaman Konsumen bila perlu."
-                  onDelete={() => supabase.from("cancellations").delete().eq("id", row.id)}
-                  onDone={fetchData}
-                />
+                <RowActions>
+                  <EditButton onClick={() => startEdit(row)} />
+                  <DeleteButton
+                    itemName={`Pembatalan ${row.customers?.name || ""}`.trim()}
+                    warning="Status konsumen tidak otomatis kembali aktif. Ubah manual di halaman Konsumen bila perlu."
+                    onDelete={() => supabase.from("cancellations").delete().eq("id", row.id)}
+                    onDone={fetchData}
+                  />
+                </RowActions>
               ),
             },
           ]}

@@ -76,7 +76,29 @@ export default function DataAgenPage() {
           loading={loading}
           emptyLabel="Belum ada agen."
           columns={[
-            { key: "full_name", label: "Nama" },
+            {
+              key: "full_name",
+              label: "Nama",
+              render: (row) => (
+                <input
+                  defaultValue={row.full_name || ""}
+                  onBlur={(e) => e.target.value.trim() && e.target.value !== row.full_name && updateAgent(row.id, { full_name: e.target.value.trim() })}
+                  style={{ ...cellInputStyle, width: 150 }}
+                />
+              ),
+            },
+            {
+              key: "phone",
+              label: "Telepon",
+              render: (row) => (
+                <input
+                  defaultValue={row.phone || ""}
+                  onBlur={(e) => e.target.value !== (row.phone || "") && updateAgent(row.id, { phone: e.target.value || null })}
+                  style={cellInputStyle}
+                  placeholder="-"
+                />
+              ),
+            },
             {
               key: "role",
               label: "Role",

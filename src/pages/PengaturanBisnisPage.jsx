@@ -51,6 +51,14 @@ export default function PengaturanBisnisPage() {
     fetchAll();
   }
 
+  async function renameValue(item, next) {
+    const value = (next || "").trim();
+    if (!value || value === item.value) return;
+    const { error } = await supabase.from("business_settings").update({ value }).eq("id", item.id);
+    if (error) return setError(error.message);
+    fetchAll();
+  }
+
   async function removeValue(id) {
     await supabase.from("business_settings").delete().eq("id", id);
     fetchAll();
@@ -170,7 +178,12 @@ export default function PengaturanBisnisPage() {
                       key={item.id}
                       style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${BORDER}`, fontSize: 13 }}
                     >
-                      <span>{item.value}</span>
+                      <input
+                        defaultValue={item.value}
+                        onBlur={(e) => renameValue(item, e.target.value)}
+                        style={{ flex: 1, marginRight: 10, border: "1px solid transparent", borderRadius: 8, padding: "4px 8px", fontSize: 13, outline: "none", background: "transparent" }}
+                        onFocus={(e) => (e.target.style.border = `1px solid ${BORDER}`)}
+                      />
                       <button onClick={() => removeValue(item.id)} style={{ border: "none", background: "none", color: "#c25b5b", cursor: "pointer", fontSize: 12 }}>
                         Hapus
                       </button>
