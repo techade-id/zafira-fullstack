@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Wallet } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
-import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID, ACCENT, ACCENT_DARK, NEGATIVE, ReadOnlyBanner } from "../components/ui";
+import { segarkanNotifikasi } from "../lib/useNotifications";
+import { rupiah, rupiahInput, angkaDariRupiah, tanggal, labelJenisBayar } from "../lib/format";
+import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID, TEXT_DARK, ACCENT, ACCENT_DARK, NEGATIVE, ReadOnlyBanner, inputStyle } from "../components/ui";
 
 const PAYMENT_TYPES = ["booking", "dp", "dana_talangan", "termin", "pelunasan", "lainnya"];
 
@@ -72,6 +77,9 @@ function VerifyWithReceipt({ row, onDone }) {
 
 export default function PembayaranPage() {
   const { profile } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
   const canVerify = canWrite(profile, "payment_verify");
   const [payments, setPayments] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -137,10 +145,13 @@ export default function PembayaranPage() {
     setSaving(false);
     if (error) {
       setError(error.message);
+      toast.gagal(`Gagal menyimpan: ${error.message}`);
       return;
     }
+    toast.sukses(editingId ? "Perubahan tersimpan." : `${labelJenisBayar(payload.payment_type)} ${rupiah(payload.amount)} masuk antrean verifikasi.`);
     resetForm();
     fetchData();
+    segarkanNotifikasi();
   }
 
   async function viewReceipt(path) {
@@ -166,24 +177,42 @@ export default function PembayaranPage() {
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div className="rg-4" style={{ marginBottom: 12 }}>
-            <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} style={inputStyle}>
-              <option value="">Pilih Konsumen</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <select value={form.payment_type} onChange={(e) => setForm({ ...form, payment_type: e.target.value })} style={inputStyle}>
-              {PAYMENT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t.replace("_", " ")}
-                </option>
-              ))}
-            </select>
-            <input placeholder="Nominal (Rp)" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
-            <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} style={inputStyle} />
+          <div className="rg-4" style={{ marginBottom: 14, rowGap: 14 }}>
+            <Bidang label="Konsumen" wajib>
+              <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} style={inputStyle}>
+                <option value="">— pilih —</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Bidang>
+            <Bidang label="Jenis Pembayaran">
+              <select value={form.payment_type} onChange={(e) => setForm({ ...form, payment_type: e.target.value })} style={inputStyle}>
+                {PAYMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {labelJenisBayar(t)}
+                  </option>
+                ))}
+              </select>
+            </Bidang>
+            <Bidang label="Nominal" wajib>
+              {/* Pemisah ribuan hidup: `type="number"` menampilkan 350000000
+                  polos, dan salah satu nol yang terlewat di sini adalah
+                  kesalahan yang mahal. */}
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="mis. 5.000.000"
+                value={rupiahInput(form.amount)}
+                onChange={(e) => setForm({ ...form, amount: angkaDariRupiah(e.target.value) })}
+                style={inputStyle}
+              />
+            </Bidang>
+            <Bidang label="Tanggal Pembayaran">
+              <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} style={inputStyle} />
+            </Bidang>
           </div>
           {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -202,24 +231,65 @@ export default function PembayaranPage() {
       <Card>
         <DataTable
           loading={loading}
-          emptyLabel="Belum ada riwayat pembayaran."
+          sortable
+          searchable
+          searchPlaceholder="Cari konsumen…"
+          searchExtra={(row) => row.customers?.name || ""}
+          pageSize={25}
+          defaultSort={{ key: "payment_date", arah: "desc" }}
+          // Lonceng menautkan langsung ke baris pembayaran yang menunggu.
+          highlightId={params.get("sorot") || undefined}
+          emptyIcon={Wallet}
+          emptyLabel="Belum ada riwayat pembayaran"
+          emptyHint="Booking fee dari konversi prospek akan otomatis muncul di sini sebagai antrean verifikasi."
+          // Finance membuka halaman ini untuk satu hal: menemukan yang belum
+          // diverifikasi. Sebelum ini, satu-satunya caranya adalah memelototi
+          // seluruh daftar.
+          filters={[
+            {
+              key: "status",
+              label: "Semua status",
+              options: [
+                { value: "menunggu", label: "Menunggu verifikasi" },
+                { value: "terverifikasi", label: "Terverifikasi" },
+              ],
+            },
+            {
+              key: "payment_type",
+              label: "Semua jenis",
+              options: PAYMENT_TYPES.map((t) => ({ value: t, label: labelJenisBayar(t) })),
+            },
+          ]}
+          onRowClick={(row) => row.customer_id && navigate(`/konsumen/${row.customer_id}`)}
           columns={[
-            { key: "customer", label: "Konsumen", render: (row) => row.customers?.name || "-" },
-            { key: "payment_type", label: "Jenis", render: (row) => <span style={{ textTransform: "capitalize" }}>{row.payment_type.replace("_", " ")}</span> },
-            { key: "amount", label: "Nominal", render: (row) => `Rp${Number(row.amount).toLocaleString("id-ID")}` },
-            { key: "payment_date", label: "Tanggal", render: (row) => new Date(row.payment_date).toLocaleDateString("id-ID") },
+            { key: "customer", label: "Konsumen", sortValue: (row) => row.customers?.name, render: (row) => row.customers?.name || "-" },
+            { key: "payment_type", label: "Jenis", render: (row) => labelJenisBayar(row.payment_type) },
+            { key: "amount", label: "Nominal", align: "right", sortValue: (row) => Number(row.amount), render: (row) => rupiah(row.amount) },
+            { key: "payment_date", label: "Tanggal", render: (row) => tanggal(row.payment_date) },
             {
               key: "status",
               label: "Status",
+              sortable: false,
               render: (row) => {
                 if (row.status === "terverifikasi") return <Badge value={row.status} />;
-                if (canVerify) return <VerifyWithReceipt row={row} onDone={fetchData} />;
+                if (canVerify)
+                  return (
+                    <VerifyWithReceipt
+                      row={row}
+                      onDone={() => {
+                        fetchData();
+                        segarkanNotifikasi();
+                        toast.sukses("Pembayaran terverifikasi dan kuitansi tersimpan.");
+                      }}
+                    />
+                  );
                 return <Badge value="menunggu" />;
               },
             },
             {
               key: "proof_url",
               label: "Kuitansi",
+              sortable: false,
               render: (row) =>
                 row.proof_url ? (
                   <button
@@ -235,6 +305,7 @@ export default function PembayaranPage() {
             {
               key: "aksi",
               label: "",
+              sortable: false,
               render: (row) => (
                 <RowActions>
                   {/* A verified payment is an accounting record — editing it is
@@ -257,10 +328,15 @@ export default function PembayaranPage() {
   );
 }
 
-const inputStyle = {
-  padding: "10px 12px",
-  border: `1px solid ${BORDER}`,
-  borderRadius: 12,
-  fontSize: 13,
-  outline: "none",
-};
+/** Label sungguhan di atas kontrol — placeholder hilang begitu orang mengetik. */
+function Bidang({ label, wajib, children }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
+        {label}
+        {wajib && <span style={{ color: ACCENT_DARK }} aria-hidden="true"> *</span>}
+      </label>
+      {children}
+    </div>
+  );
+}

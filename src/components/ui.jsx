@@ -1,6 +1,9 @@
 import React from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, ChevronsUpDown, Search as SearchIcon, Inbox } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { isReadOnly, canWrite } from "../lib/permissions";
+import { labelUmum } from "../lib/format";
 
 /**
  * Read-only roles (Supervisor Marketing, Pengawas) must never be shown a
@@ -122,6 +125,66 @@ export function PrimaryButton({ children, subject, ...props }) {
   );
 }
 
+/* ============================================================
+   Formulir
+   ============================================================ */
+
+export const inputStyle = {
+  padding: "10px 12px",
+  border: `1px solid ${BORDER}`,
+  borderRadius: 12,
+  fontSize: 13,
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+  background: SURFACE,
+  color: TEXT_DARK,
+};
+
+let nomorField = 0;
+
+/**
+ * Label sungguhan di atas kontrolnya.
+ *
+ * Placeholder yang dipakai sebagai label akan hilang begitu pengguna mulai
+ * mengetik — dan formulir Prospek punya tujuh belas bidang seperti itu, jadi
+ * di tengah pengisian tidak ada lagi keterangan bidang mana yang sedang diisi.
+ *
+ * Anak elemen menerima `id` dan `aria-describedby` lewat cloning, sehingga
+ * pemanggil cukup menulis `<Field label="…"><input …/></Field>`.
+ */
+export function Field({ label, wajib, hint, error, children, style }) {
+  const id = React.useMemo(() => `f${++nomorField}`, []);
+  const idHint = hint || error ? `${id}-ket` : undefined;
+
+  const kontrol = React.isValidElement(children)
+    ? React.cloneElement(children, {
+        id: children.props.id || id,
+        "aria-describedby": children.props["aria-describedby"] || idHint,
+        "aria-invalid": error ? true : children.props["aria-invalid"],
+        "aria-required": wajib || undefined,
+        style: { ...inputStyle, ...(error ? { borderColor: NEGATIVE } : null), ...children.props.style },
+      })
+    : children;
+
+  return (
+    <div style={{ minWidth: 0, ...style }}>
+      {label && (
+        <label htmlFor={React.isValidElement(children) ? children.props.id || id : undefined} style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
+          {label}
+          {wajib && <span style={{ color: ACCENT_DARK }} aria-hidden="true"> *</span>}
+        </label>
+      )}
+      {kontrol}
+      {(hint || error) && (
+        <div id={idHint} style={{ fontSize: 11.5, color: error ? NEGATIVE : TEXT_MID, marginTop: 4, lineHeight: 1.45 }}>
+          {error || hint}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* Three families, so a colour always means the same thing:
    navy = neutral / in progress, accent = needs attention (Urgent, Due Date),
    green = settled, red = failed or cancelled. */
@@ -169,8 +232,13 @@ const badgeColors = {
   tinggi: URGENT,
 };
 
-export function Badge({ value }) {
-  const key = (value || "").toLowerCase().replace(" ", "_");
+/**
+ * `value` adalah nilai enum apa adanya dari database; yang ditampilkan adalah
+ * terjemahannya. Sebelumnya nilai mentah lolos ke layar — pengguna membaca
+ * "dana_talangan" dan "aftersales" begitu saja.
+ */
+export function Badge({ value, label }) {
+  const key = String(value || "").toLowerCase().replace(/\s/g, "_");
   const s = badgeColors[key] || NEUTRAL;
   return (
     <span
@@ -183,65 +251,352 @@ export function Badge({ value }) {
         color: s.color,
         whiteSpace: "nowrap",
         display: "inline-block",
-        textTransform: "capitalize",
       }}
     >
-      {value}
+      {label ?? labelUmum(value)}
     </span>
   );
 }
 
-export function DataTable({ columns, rows, loading, emptyLabel = "Belum ada data." }) {
-  if (loading) {
-    return <div style={{ padding: 20, color: TEXT_MID, fontSize: 13 }}>Memuat data...</div>;
-  }
-  if (!rows || rows.length === 0) {
-    return <div style={{ padding: 20, color: TEXT_MID, fontSize: 13 }}>{emptyLabel}</div>;
-  }
+/** Keadaan kosong yang mengarahkan, bukan sekadar satu baris abu-abu. */
+export function EmptyState({ icon: Icon = Inbox, label = "Belum ada data.", hint, action }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr>
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                style={{
-                  textAlign: "left",
-                  color: TEXT_MID,
-                  fontWeight: 500,
-                  fontSize: 12,
-                  padding: "10px 12px",
-                  borderBottom: `1px solid ${BORDER}`,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.id || i}>
-              {columns.map((col) => (
-                <td
-                  key={col.key}
-                  style={{
-                    padding: "12px 12px",
-                    borderBottom: i === rows.length - 1 ? "none" : `1px solid ${BORDER}`,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {col.render ? col.render(row) : row[col.key]}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div style={{ padding: "34px 20px", textAlign: "center" }}>
+      <div
+        aria-hidden="true"
+        style={{
+          width: 46,
+          height: 46,
+          borderRadius: 15,
+          background: PRIMARY_SOFT,
+          color: PRIMARY,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 12px",
+        }}
+      >
+        <Icon size={21} />
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: TEXT_DARK, marginBottom: hint ? 5 : 0 }}>{label}</div>
+      {hint && <div style={{ fontSize: 12.5, color: TEXT_MID, lineHeight: 1.55, maxWidth: 380, margin: "0 auto" }}>{hint}</div>}
+      {action && <div style={{ marginTop: 15 }}>{action}</div>}
     </div>
   );
+}
+
+/** Nilai yang dipakai untuk mengurutkan dan mencari — bukan hasil render-nya. */
+function nilaiKolom(col, row) {
+  if (col.sortValue) return col.sortValue(row);
+  return row[col.key];
+}
+
+function bandingkan(a, b) {
+  if (a === null || a === undefined || a === "") return 1; // kosong selalu di bawah
+  if (b === null || b === undefined || b === "") return -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const da = Date.parse(a);
+  const db = Date.parse(b);
+  if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+  return String(a).localeCompare(String(b), "id-ID", { numeric: true, sensitivity: "base" });
+}
+
+/**
+ * Tabel data untuk seluruh aplikasi.
+ *
+ * Semua kemampuan tambahan bersifat opsional agar keempat belas pemanggil lama
+ * tidak berubah perilaku: tanpa `sortable`, `searchable`, `filters`, atau
+ * `pageSize`, komponen ini berperilaku persis seperti versi sebelumnya.
+ *
+ * Kolom: `{ key, label, render?, sortValue?, sortable?, align?, utama? }`.
+ * `utama` menandai kolom yang menjadi judul kartu pada tampilan ponsel.
+ */
+export function DataTable({
+  columns,
+  rows,
+  loading,
+  emptyLabel = "Belum ada data.",
+  emptyHint,
+  emptyIcon,
+  emptyAction,
+  sortable = false,
+  defaultSort,
+  searchable = false,
+  searchPlaceholder = "Cari di daftar ini…",
+  searchExtra,
+  initialSearch = "",
+  filters,
+  pageSize,
+  onRowClick,
+  highlightId,
+}) {
+  const [urut, setUrut] = React.useState(defaultSort || null);
+  const [cari, setCari] = React.useState(initialSearch);
+  const [pilihFilter, setPilihFilter] = React.useState({});
+  const [halaman, setHalaman] = React.useState(0);
+  const barisTersorot = React.useRef(null);
+
+  // Baris yang dituju digulir ke tengah pandangan. Tanpa ini, sorotan pada
+  // baris ke-40 tidak berarti apa-apa: pengguna tetap harus mencarinya.
+  React.useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => barisTersorot.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+    return () => clearTimeout(t);
+  }, [highlightId, rows]);
+
+  const semua = React.useMemo(() => rows || [], [rows]);
+
+  const tersaring = React.useMemo(() => {
+    let hasil = semua;
+
+    for (const f of filters || []) {
+      const dipilih = pilihFilter[f.key];
+      if (!dipilih) continue;
+      hasil = hasil.filter((row) => String(f.get ? f.get(row) : row[f.key]) === dipilih);
+    }
+
+    const q = cari.trim().toLowerCase();
+    if (q) {
+      hasil = hasil.filter((row) => {
+        const bagian = columns.map((c) => nilaiKolom(c, row));
+        if (searchExtra) bagian.push(searchExtra(row));
+        return bagian.filter((v) => v !== null && v !== undefined).some((v) => String(v).toLowerCase().includes(q));
+      });
+    }
+
+    if (urut) {
+      const col = columns.find((c) => c.key === urut.key);
+      if (col) {
+        hasil = [...hasil].sort((a, b) => {
+          const hasilBanding = bandingkan(nilaiKolom(col, a), nilaiKolom(col, b));
+          return urut.arah === "desc" ? -hasilBanding : hasilBanding;
+        });
+      }
+    }
+
+    return hasil;
+  }, [semua, columns, cari, urut, pilihFilter, filters, searchExtra]);
+
+  // Menyaring sampai halaman aktif kosong akan menampilkan tabel hampa tanpa
+  // sebab yang terlihat; halaman mundur sendiri agar hasilnya selalu tampak.
+  const totalHalaman = pageSize ? Math.max(1, Math.ceil(tersaring.length / pageSize)) : 1;
+  const halamanAman = Math.min(halaman, totalHalaman - 1);
+  React.useEffect(() => {
+    setHalaman(0);
+  }, [cari, urut, pilihFilter]);
+
+  const tampil = pageSize ? tersaring.slice(halamanAman * pageSize, (halamanAman + 1) * pageSize) : tersaring;
+
+  const adaKendali = searchable || (filters && filters.length > 0);
+
+  function klikJudul(col) {
+    if (!sortable || col.sortable === false || col.key === "aksi") return;
+    setUrut((v) =>
+      v && v.key === col.key ? (v.arah === "asc" ? { key: col.key, arah: "desc" } : null) : { key: col.key, arah: "asc" }
+    );
+  }
+
+  const kendali = adaKendali && (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+      {searchable && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "0 12px", flex: "1 1 260px", maxWidth: 380 }}>
+          <SearchIcon size={15} color={TEXT_MID} aria-hidden="true" />
+          <input
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
+            style={{ flex: 1, minWidth: 0, border: "none", outline: "none", padding: "9px 0", fontSize: 13, color: TEXT_DARK, background: "transparent" }}
+          />
+          {cari && (
+            <button onClick={() => setCari("")} aria-label="Bersihkan pencarian" style={{ border: "none", background: "none", color: TEXT_MID, cursor: "pointer", fontSize: 13 }}>
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+      {(filters || []).map((f) => (
+        <select
+          key={f.key}
+          value={pilihFilter[f.key] || ""}
+          onChange={(e) => setPilihFilter((v) => ({ ...v, [f.key]: e.target.value }))}
+          aria-label={f.label}
+          style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "9px 12px", fontSize: 13, color: TEXT_DARK, background: SURFACE }}
+        >
+          <option value="">{f.label}</option>
+          {f.options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ))}
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <>
+        {kendali}
+        <div style={{ padding: 20, color: TEXT_MID, fontSize: 13 }}>Memuat data...</div>
+      </>
+    );
+  }
+
+  if (tersaring.length === 0) {
+    const menyaring = cari.trim() || Object.values(pilihFilter).some(Boolean);
+    return (
+      <>
+        {kendali}
+        {menyaring ? (
+          <EmptyState icon={SearchIcon} label="Tidak ada yang cocok" hint="Coba kata kunci lain, atau kosongkan saringan di atas." />
+        ) : (
+          <EmptyState icon={emptyIcon} label={emptyLabel} hint={emptyHint} action={emptyAction} />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {kendali}
+
+      <div className="dt-scroll" style={{ overflowX: "auto" }}>
+        <table className="dt-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr>
+              {columns.map((col) => {
+                const bisaUrut = sortable && col.sortable !== false && col.key !== "aksi";
+                const aktif = urut && urut.key === col.key;
+                const Panah = !aktif ? ChevronsUpDown : urut.arah === "asc" ? ChevronUp : ChevronDown;
+                return (
+                  <th
+                    key={col.key}
+                    // aria-sort memberi tahu pembaca layar arah urutan aktif;
+                    // panah kecil saja hanya berarti bagi yang melihatnya.
+                    aria-sort={aktif ? (urut.arah === "asc" ? "ascending" : "descending") : bisaUrut ? "none" : undefined}
+                    style={{
+                      textAlign: col.align || "left",
+                      color: aktif ? TEXT_DARK : TEXT_MID,
+                      fontWeight: aktif ? 600 : 500,
+                      fontSize: 12,
+                      padding: 0,
+                      borderBottom: `1px solid ${BORDER}`,
+                      whiteSpace: "nowrap",
+                      position: "sticky",
+                      top: 0,
+                      background: SURFACE,
+                      zIndex: 1,
+                    }}
+                  >
+                    {bisaUrut ? (
+                      <button
+                        onClick={() => klikJudul(col)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                          width: "100%",
+                          padding: "10px 12px",
+                          border: "none",
+                          background: "none",
+                          font: "inherit",
+                          color: "inherit",
+                          cursor: "pointer",
+                          justifyContent: col.align === "right" ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        {col.label}
+                        <Panah size={13} style={{ opacity: aktif ? 1 : 0.45, flexShrink: 0 }} aria-hidden="true" />
+                      </button>
+                    ) : (
+                      <div style={{ padding: "10px 12px" }}>{col.label}</div>
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {tampil.map((row, i) => (
+              <tr
+                key={row.id || i}
+                // Datang dari pencarian global atau lonceng: baris yang dituju
+                // harus menonjol. Menyaring daftar saja belum menjawab "yang
+                // mana" ketika hasilnya masih puluhan baris.
+                ref={highlightId && row.id === highlightId ? barisTersorot : undefined}
+                className={[onRowClick ? "dt-row-klik" : null, highlightId && row.id === highlightId ? "dt-row-sorot" : null]
+                  .filter(Boolean)
+                  .join(" ") || undefined}
+                onClick={onRowClick ? (e) => {
+                  // Tombol dan kontrol di dalam baris tetap milik dirinya
+                  // sendiri — mengklik "Hapus" tidak boleh ikut membuka detail.
+                  if (e.target.closest("button, a, select, input, label")) return;
+                  onRowClick(row);
+                } : undefined}
+                style={onRowClick ? { cursor: "pointer" } : undefined}
+              >
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    data-label={col.label}
+                    style={{
+                      padding: "12px 12px",
+                      textAlign: col.align || "left",
+                      borderBottom: i === tampil.length - 1 ? "none" : `1px solid ${BORDER}`,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {col.render ? col.render(row) : row[col.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {pageSize && tersaring.length > pageSize && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: TEXT_MID }}>
+            {halamanAman * pageSize + 1}–{Math.min((halamanAman + 1) * pageSize, tersaring.length)} dari {tersaring.length}
+          </span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={() => setHalaman((h) => Math.max(0, h - 1))}
+              disabled={halamanAman === 0}
+              style={gayaHalaman(halamanAman === 0)}
+            >
+              Sebelumnya
+            </button>
+            <span style={{ fontSize: 12, color: TEXT_MID, alignSelf: "center", padding: "0 4px" }}>
+              {halamanAman + 1} / {totalHalaman}
+            </span>
+            <button
+              onClick={() => setHalaman((h) => Math.min(totalHalaman - 1, h + 1))}
+              disabled={halamanAman >= totalHalaman - 1}
+              style={gayaHalaman(halamanAman >= totalHalaman - 1)}
+            >
+              Berikutnya
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function gayaHalaman(mati) {
+  return {
+    border: `1px solid ${BORDER}`,
+    background: SURFACE,
+    color: mati ? PRIMARY_MUTED : TEXT_DARK,
+    borderRadius: 9,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: mati ? "default" : "pointer",
+  };
 }
 
 /* ============================================================
@@ -490,17 +845,105 @@ export function friendlyDbError(error) {
   return error.message || "Gagal menghapus data.";
 }
 
-export function ConfirmDialog({ open, title, message, warning, confirmLabel = "Hapus", busy, error, onConfirm, onCancel }) {
+/**
+ * Dialog modal dengan perangkap fokus.
+ *
+ * Tanpa perangkap, Tab membawa fokus keluar ke halaman di belakang dialog:
+ * pengguna keyboard bisa menekan tombol yang tertutup lapisan gelap tanpa
+ * melihatnya. Escape ditambahkan karena itu yang dicoba orang lebih dulu
+ * sebelum mencari tombol Batal.
+ */
+export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
+  const kotak = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const fokusSebelumnya = document.activeElement;
+    // Fokus awal ke dalam dialog, kalau tidak pembaca layar tetap membacakan
+    // halaman di belakangnya.
+    const pertama = kotak.current?.querySelector(FOKUSABLE);
+    (pertama || kotak.current)?.focus();
+
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const bisa = Array.from(kotak.current?.querySelectorAll(FOKUSABLE) || []).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement
+      );
+      if (bisa.length === 0) return;
+      const awal = bisa[0];
+      const akhir = bisa[bisa.length - 1];
+      if (e.shiftKey && document.activeElement === awal) {
+        e.preventDefault();
+        akhir.focus();
+      } else if (!e.shiftKey && document.activeElement === akhir) {
+        e.preventDefault();
+        awal.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      if (fokusSebelumnya instanceof HTMLElement) fokusSebelumnya.focus();
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
-  return (
+
+  // Di-portal ke <body>: dialog ini kerap dipanggil dari dalam sel tabel yang
+  // punya overflow:auto sendiri, dan di sana ia akan terpotong. Portal juga
+  // melepaskannya dari <span> pemanggilnya, sehingga <div> tidak bersarang di
+  // dalam elemen inline.
+  return createPortal(
     <div
-      onClick={onCancel}
+      onClick={onClose}
       // whiteSpace is reset because the dialog is rendered inside a table cell
       // that sets nowrap, which would otherwise stop the text wrapping.
       style={{ position: "fixed", inset: 0, background: "rgba(10,29,66,0.48)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 16, whiteSpace: "normal" }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ background: SURFACE, borderRadius: RADIUS, padding: 24, width: 420, maxWidth: "100%", boxSizing: "border-box", textAlign: "left" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+      <div
+        ref={kotak}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: SURFACE,
+          borderRadius: RADIUS,
+          padding: 24,
+          width,
+          maxWidth: "100%",
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
+          boxSizing: "border-box",
+          textAlign: "left",
+          outline: "none",
+        }}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+const FOKUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function ConfirmDialog({ open, title, message, warning, confirmLabel = "Hapus", busy, error, onConfirm, onCancel }) {
+  const idJudul = React.useMemo(() => `d${++nomorField}`, []);
+  if (!open) return null;
+  return (
+    <Modal open={open} labelledBy={idJudul} onClose={() => !busy && onCancel?.()}>
+      <>
+        <div id={idJudul} style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{title}</div>
         <div style={{ fontSize: 13.5, color: TEXT_MID, marginBottom: warning ? 12 : 18, lineHeight: 1.5 }}>{message}</div>
 
         {warning && (
@@ -527,8 +970,8 @@ export function ConfirmDialog({ open, title, message, warning, confirmLabel = "H
             {busy ? "Menghapus..." : confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }
 

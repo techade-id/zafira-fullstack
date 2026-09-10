@@ -1,12 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Target } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
+import { tanggal, tanggalRelatif, labelTahap, rupiahInput, angkaDariRupiah } from "../lib/format";
 import FollowUpTimeline from "../components/FollowUpTimeline";
+import KontakAksi from "../components/KontakAksi";
+import KonversiBookingModal from "../components/KonversiBookingModal";
+import UbahTahapModal from "../components/UbahTahapModal";
 import {
   Card,
   PageTitle,
@@ -17,10 +22,14 @@ import {
   TEXT_MID,
   TEXT_DARK,
   PRIMARY,
+  ACCENT,
+  ACCENT_DARK,
+  NEGATIVE,
   DeleteButton,
   EditButton,
   RowActions,
   ReadOnlyBanner,
+  inputStyle,
 } from "../components/ui";
 
 /**
@@ -87,11 +96,13 @@ const emptyForm = {
 
 export default function ProspekPage() {
   const { profile } = useAuth();
+  const toast = useToast();
   const [params] = useSearchParams();
 
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [partners, setPartners] = useState([]);
+  const [terkonversi, setTerkonversi] = useState(new Map());
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
@@ -101,8 +112,9 @@ export default function ProspekPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [query, setQuery] = useState(params.get("cari") || "");
   const [openLeadId, setOpenLeadId] = useState(params.get("sorot") || null);
+  const [konversiLead, setKonversiLead] = useState(null);
+  const [tahapLead, setTahapLead] = useState(null);
 
   const sources = useBusinessSettings("lead_source");
   const followupCategories = useBusinessSettings("followup_category");
@@ -112,16 +124,21 @@ export default function ProspekPage() {
 
   async function fetchLeads() {
     setLoading(true);
-    const [{ data, error: leadError }, campaignRes, partnerRes] = await Promise.all([
+    const [{ data, error: leadError }, campaignRes, partnerRes, custRes] = await Promise.all([
       fetchAllRows(() => supabase.from("leads").select("*").order("created_at", { ascending: false })),
       supabase.from("ads_campaigns").select("id, name, platform").eq("is_active", true).order("name"),
       supabase.from("partners").select("id, name, type").eq("is_active", true).order("name"),
+      // Prospek yang sudah punya konsumen tidak boleh ditawari konversi lagi —
+      // RPC-nya memang menolak, tetapi menawarkan tombol yang pasti gagal itu
+      // sendiri sudah salah.
+      supabase.from("customers").select("id, lead_id").not("lead_id", "is", null),
     ]);
     if (!leadError) setLeads(data);
     // These two tables arrive with migration_009; until it runs the page still
     // works, it just has no relational sources to offer.
     setCampaigns(campaignRes.data || []);
     setPartners(partnerRes.data || []);
+    setTerkonversi(new Map((custRes.data || []).map((c) => [c.lead_id, c.id])));
     setLoading(false);
   }
 
@@ -193,28 +210,13 @@ export default function ProspekPage() {
     setSaving(false);
     if (saveError) {
       setError(saveError.message);
+      toast.gagal(`Gagal menyimpan: ${saveError.message}`);
       return;
     }
+    toast.sukses(editingId ? "Perubahan tersimpan." : `${payload.name} ditambahkan sebagai prospek.`);
     resetForm();
     fetchLeads();
   }
-
-  async function updateStatus(leadId, status) {
-    const { error: statusError } = await supabase.from("leads").update({ status }).eq("id", leadId);
-    if (statusError) setError(statusError.message);
-    fetchLeads();
-  }
-
-  /** Filters the loaded list; the header box searches the whole database. */
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return leads;
-    return leads.filter((row) =>
-      [row.name, row.phone, row.username_sosmed, row.notes, row.rencana_selanjutnya, row.source, row.domisili, row.kecamatan]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q))
-    );
-  }, [leads, query]);
 
   function sourceLabel(row) {
     if (row.source_type === "ads") {
@@ -377,93 +379,175 @@ export default function ProspekPage() {
       )}
 
       <Card>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "0 12px", marginBottom: 14, maxWidth: 380 }}>
-          <Search size={15} color={TEXT_MID} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Saring daftar — nama, telepon, catatan…"
-            style={{ flex: 1, border: "none", outline: "none", padding: "10px 0", fontSize: 13, color: TEXT_DARK }}
-          />
-          {query && (
-            <button onClick={() => setQuery("")} style={{ border: "none", background: "none", color: TEXT_MID, cursor: "pointer", fontSize: 12 }}>
-              ✕
-            </button>
-          )}
-        </div>
-
         <DataTable
           loading={loading}
-          emptyLabel={query ? "Tidak ada prospek yang cocok dengan pencarian." : "Belum ada prospek."}
+          sortable
+          searchable
+          searchPlaceholder="Saring daftar — nama, telepon, catatan…"
+          searchExtra={(row) => [row.notes, row.username_sosmed, row.domisili, row.kecamatan, row.rencana_selanjutnya].filter(Boolean).join(" ")}
+          // Datang dari hasil pencarian global: kata kuncinya diteruskan ke
+          // saringan daftar, supaya baris yang dicari langsung terlihat.
+          initialSearch={params.get("cari") || ""}
+          highlightId={params.get("sorot") || undefined}
+          pageSize={25}
+          defaultSort={{ key: "created_at", arah: "desc" }}
+          emptyIcon={Target}
+          emptyLabel="Belum ada prospek"
+          emptyHint="Cukup tiga hal untuk memulai: nama, nomor telepon, dan dari mana prospek ini datang."
+          filters={[
+            {
+              key: "status",
+              label: "Semua tahap",
+              options: [...MANUAL_STAGES, ...AUTO_STAGES, "cancel"].map((s) => ({ value: s, label: STAGE_LABELS[s] })),
+            },
+          ]}
           columns={[
             { key: "name", label: "Nama / Username" },
-            { key: "phone", label: "Telepon", render: (row) => row.phone || "-" },
-            { key: "source", label: "Sumber", render: sourceLabel },
-            { key: "domisili", label: "Domisili", render: (row) => row.kecamatan || row.domisili || "-" },
+            {
+              key: "phone",
+              label: "Kontak",
+              sortable: false,
+              render: (row) => (
+                <KontakAksi phone={row.phone} nama={row.name} tahap={row.status} leadId={row.id} onCatat={fetchLeads} />
+              ),
+            },
+            { key: "source", label: "Sumber", sortValue: sourceLabel, render: sourceLabel },
+            { key: "domisili", label: "Domisili", sortValue: (row) => row.kecamatan || row.domisili, render: (row) => row.kecamatan || row.domisili || "-" },
             {
               key: "status",
               label: "Tahap",
+              // Tahap Booking ke atas ditulis trigger dari kuitansi dan tanggal
+              // KPR; membiarkannya dipilih tangan hanya akan membatalkan apa
+              // yang baru saja dicatat sistem.
               render: (row) =>
                 AUTO_STAGES.includes(row.status) || !mayWrite ? (
-                  <Badge value={STAGE_LABELS[row.status] || row.status} />
+                  <Badge value={row.status} label={STAGE_LABELS[row.status] || labelTahap(row.status)} />
                 ) : (
-                  <select
-                    value={MANUAL_STAGES.includes(row.status) ? row.status : "leads"}
-                    onChange={(e) => updateStatus(row.id, e.target.value)}
-                    style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
+                  <button
+                    onClick={() => setTahapLead(row)}
+                    title="Ubah tahap dan jadwalkan follow-up berikutnya"
+                    style={gayaTahap(row.status)}
                   >
-                    {[...MANUAL_STAGES, "cancel"].map((s) => (
-                      <option key={s} value={s}>
-                        {STAGE_LABELS[s]}
-                      </option>
-                    ))}
-                  </select>
+                    {STAGE_LABELS[row.status] || labelTahap(row.status)} ▾
+                  </button>
                 ),
             },
             {
-              key: "followup",
+              key: "tanggal_rencana",
               label: "Follow Up",
-              render: (row) => (
-                <button
-                  onClick={() => setOpenLeadId(openLeadId === row.id ? null : row.id)}
-                  style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                >
-                  {openLeadId === row.id ? "Tutup" : "Riwayat"}
-                </button>
-              ),
+              render: (row) =>
+                row.tanggal_rencana ? (
+                  <span
+                    title={row.rencana_selanjutnya || ""}
+                    style={{ fontSize: 12, fontWeight: 600, color: warnaJadwal(row.tanggal_rencana), whiteSpace: "nowrap" }}
+                  >
+                    {tanggalRelatif(row.tanggal_rencana)}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 12, color: TEXT_MID }}>belum dijadwalkan</span>
+                ),
             },
-            { key: "created_at", label: "Dibuat", render: (row) => new Date(row.created_at).toLocaleDateString("id-ID") },
+            { key: "created_at", label: "Dibuat", render: (row) => tanggal(row.created_at) },
             {
               key: "aksi",
               label: "",
-              render: (row) => (
-                <RowActions>
-                  <EditButton subject="lead" onClick={() => startEdit(row)} />
-                  <DeleteButton
-                    subject="lead"
-                    itemName={row.name}
-                    warning="Riwayat follow-up prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
-                    onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
-                    onDone={fetchLeads}
-                  />
-                </RowActions>
-              ),
+              sortable: false,
+              render: (row) => {
+                const sudah = terkonversi.get(row.id);
+                const bisaKonversi = mayWrite && !sudah && !["cancel"].includes(row.status);
+                return (
+                  <RowActions>
+                    {sudah ? (
+                      <a href={`/konsumen/${sudah}`} style={{ ...gayaKecil, textDecoration: "none", color: PRIMARY }}>
+                        Lihat Konsumen
+                      </a>
+                    ) : (
+                      bisaKonversi && (
+                        <button onClick={() => setKonversiLead(row)} style={gayaKonversi} title="Buat konsumen, reserve unit, dan catat booking fee sekaligus">
+                          + Booking
+                        </button>
+                      )
+                    )}
+                    <button onClick={() => setOpenLeadId(openLeadId === row.id ? null : row.id)} style={gayaKecil}>
+                      {openLeadId === row.id ? "Tutup" : "Riwayat"}
+                    </button>
+                    <EditButton subject="lead" onClick={() => startEdit(row)} />
+                    <DeleteButton
+                      subject="lead"
+                      itemName={row.name}
+                      warning="Riwayat follow-up prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
+                      onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
+                      onDone={fetchLeads}
+                    />
+                  </RowActions>
+                );
+              },
             },
           ]}
-          rows={shown}
+          rows={leads}
         />
       </Card>
 
       {openLead && <FollowUpTimeline leadId={openLead.id} title={`Riwayat Follow Up — ${openLead.name}`} />}
+
+      <KonversiBookingModal
+        lead={konversiLead}
+        open={Boolean(konversiLead)}
+        onClose={() => setKonversiLead(null)}
+        onSelesai={fetchLeads}
+      />
+
+      <UbahTahapModal
+        lead={tahapLead}
+        open={Boolean(tahapLead)}
+        onClose={() => setTahapLead(null)}
+        onSelesai={fetchLeads}
+      />
     </div>
   );
 }
 
-const inputStyle = {
-  padding: "10px 12px",
+/** Jadwal yang lewat harus terbaca sebagai utang pekerjaan, bukan sekadar tanggal. */
+function warnaJadwal(tgl) {
+  const d = new Date(`${tgl}T00:00:00`);
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+  const selisih = Math.round((d - hariIni) / 86400000);
+  if (selisih < 0) return NEGATIVE;
+  if (selisih <= 2) return ACCENT_DARK;
+  return TEXT_DARK;
+}
+
+function gayaTahap(status) {
+  const panas = status === "hot";
+  return {
+    border: `1px solid ${panas ? ACCENT : BORDER}`,
+    background: "#fff",
+    color: panas ? ACCENT_DARK : TEXT_DARK,
+    borderRadius: 999,
+    padding: "5px 11px",
+    fontSize: 11.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+}
+
+const gayaKecil = {
   border: `1px solid ${BORDER}`,
-  borderRadius: 12,
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
+  background: "#fff",
+  color: TEXT_DARK,
+  borderRadius: 9,
+  padding: "5px 11px",
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const gayaKonversi = {
+  ...gayaKecil,
+  border: "none",
+  background: ACCENT,
+  color: "#fff",
 };

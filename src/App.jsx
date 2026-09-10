@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute, { RoleRoute } from "./routes/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
@@ -9,6 +10,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ProspekPage from "./pages/ProspekPage";
 import PembayaranPage from "./pages/PembayaranPage";
 import KonsumenPage from "./pages/KonsumenPage";
+import KonsumenDetailPage from "./pages/KonsumenDetailPage";
 import PembatalanPage from "./pages/PembatalanPage";
 import ProyekPage from "./pages/ProyekPage";
 import SiteplanPage from "./pages/SiteplanPage";
@@ -28,6 +30,7 @@ import LapanganPage from "./pages/LapanganPage";
 export default function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -42,6 +45,18 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
+
+            {/* Kartu konsumen 360°. Rute bersarang, jadi canVisit() harus
+                mencocokkan awalan — lihat permissions.js. */}
+            <Route
+              path="konsumen/:id"
+              element={
+                <RoleRoute>
+                  <KonsumenDetailPage />
+                </RoleRoute>
+              }
+            />
+
             {[
               ["prospek", <ProspekPage />],
               ["pembayaran", <PembayaranPage />],
@@ -67,6 +82,7 @@ export default function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

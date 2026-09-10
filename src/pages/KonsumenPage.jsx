@@ -1,57 +1,56 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Users } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
-import { uploadFile, getSignedUrl } from "../lib/storage";
-import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
-import { canEditCustomer, canEditBerkas, isLocked, lockReason, roleOf } from "../lib/permissions";
-import FollowUpTimeline from "../components/FollowUpTimeline";
-import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, ACCENT_DARK, DeleteButton, EditButton, RowActions, ReadOnlyBanner, LockBanner } from "../components/ui";
+import { useToast } from "../context/ToastContext";
+import { canEditCustomer, isLocked, lockReason } from "../lib/permissions";
+import { durasiHari, telepon } from "../lib/format";
+import KontakAksi from "../components/KontakAksi";
+import {
+  Card,
+  PageTitle,
+  PrimaryButton,
+  DataTable,
+  Badge,
+  BORDER,
+  TEXT_MID,
+  ACCENT_DARK,
+  DeleteButton,
+  EditButton,
+  RowActions,
+  ReadOnlyBanner,
+  inputStyle,
+} from "../components/ui";
 
 const CUSTOMER_STATUS_OPTIONS = ["proses", "aktif", "selesai", "batal"];
-const DOC_TYPES = ["KTP", "KK", "NPWP", "Slip Gaji", "Akad"];
-const DOC_STATUS_OPTIONS = ["menunggu", "terverifikasi", "ditolak"];
 
-function daysBetween(a, b) {
-  if (!a || !b) return null;
-  return Math.round((new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24));
-}
-
-function durationLabel(startedAt, completedAt) {
-  const days = daysBetween(startedAt, completedAt || new Date());
-  return completedAt ? `${days} hari (selesai)` : `${days} hari (berjalan)`;
-}
-
-const KPR_FIELDS = [
-  { key: "tanggal_booking", label: "Tanggal Booking", type: "date" },
-  { key: "nominal_booking", label: "Nominal Booking", type: "number" },
-  { key: "tanggal_dp", label: "Tanggal Pembayaran DP", type: "date" },
-  { key: "nominal_dp", label: "Nominal DP", type: "number" },
-  { key: "biaya_tambahan_tanah", label: "Biaya Tambahan Tanah", type: "number" },
-  { key: "nominal_total_dp", label: "Total DP (Promo + Tanah)", type: "number" },
-  { key: "dp_terbayar", label: "DP Terbayar", type: "number" },
-  { key: "nama_bank", label: "Nama Bank", type: "bank" },
-  { key: "tanggal_masuk_bank", label: "Tanggal Masuk Bank", type: "date" },
-  { key: "progres_berkas", label: "Progres Berkas", type: "progres" },
-  { key: "tanggal_sp3k_terbit", label: "Tanggal SP3K Terbit", type: "date" },
-  { key: "tanggal_sp3k_expired", label: "Tanggal SP3K Expired", type: "date" },
-  { key: "tanggal_sp3k_perpanjangan", label: "Tanggal SP3K Perpanjangan", type: "date" },
-  { key: "tanggal_akad", label: "Tanggal Akad", type: "date" },
-  { key: "tanggal_serah_terima_kunci", label: "Tanggal Serah Terima Kunci", type: "date" },
-  { key: "bphtb", label: "BPHTB", type: "number" },
-  { key: "shm", label: "SHM", type: "text" },
-];
-
+/**
+ * Daftar konsumen.
+ *
+ * Seluruh isi kartu konsumen — progres KPR, dokumen, pembayaran, riwayat — kini
+ * tinggal di `/konsumen/:id`. Sebelumnya semuanya mengembang di bawah tabel ini,
+ * sehingga satu-satunya cara melihat seorang konsumen adalah menggulir, dan
+ * tidak ada URL yang bisa dikirimkan ke rekan kerja.
+ */
 export default function KonsumenPage() {
   const { profile } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+
   const [customers, setCustomers] = useState([]);
   const [units, setUnits] = useState([]);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+
   const emptyForm = { name: "", phone: "", email: "", username_sosmed: "", ktp_number: "", address: "", unit_id: "", lead_id: "" };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   function resetForm() {
     setForm(emptyForm);
@@ -75,26 +74,15 @@ export default function KonsumenPage() {
     setShowForm(true);
     setError("");
   }
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-  const [kpr, setKpr] = useState(null);
-  const [kprSaving, setKprSaving] = useState(false);
-  const [documents, setDocuments] = useState([]);
-  const [docType, setDocType] = useState(DOC_TYPES[0]);
-  const [docFile, setDocFile] = useState(null);
-  const [uploadingDoc, setUploadingDoc] = useState(false);
-
-  const banks = useBusinessSettings("bank");
-  const progresBerkasOptions = useBusinessSettings("progres_berkas");
 
   async function fetchAll() {
     setLoading(true);
     const [{ data: cust }, { data: unt }, { data: ld }] = await Promise.all([
-      fetchAllRows(() => supabase.from("customers").select("*, units(unit_code)").order("created_at", { ascending: false })),
+      fetchAllRows(() =>
+        supabase.from("customers").select("*, units(unit_code), leads(status)").order("created_at", { ascending: false })
+      ),
       supabase.from("units").select("id, unit_code, status").order("unit_code"),
-      supabase.from("leads").select("id, name").order("name"),
+      supabase.from("leads").select("id, name, phone").order("name"),
     ]);
     setCustomers(cust || []);
     setUnits(unt || []);
@@ -106,21 +94,12 @@ export default function KonsumenPage() {
     fetchAll();
   }, []);
 
-  async function openCustomer(customerId) {
-    if (selectedCustomerId === customerId) {
-      setSelectedCustomerId(null);
-      setKpr(null);
-      setDocuments([]);
-      return;
-    }
-    setSelectedCustomerId(customerId);
-    const [{ data: kprRow }, { data: docs }] = await Promise.all([
-      supabase.from("customer_kpr").select("*").eq("customer_id", customerId).maybeSingle(),
-      supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false }),
-    ]);
-    setKpr(kprRow || { customer_id: customerId });
-    setDocuments(docs || []);
-  }
+  // Hasil pencarian global menautkan ke `/konsumen/<id>`, tetapi tautan lama
+  // yang memakai `?sorot=` tetap dihormati agar tidak mati begitu saja.
+  useEffect(() => {
+    const sorot = params.get("sorot");
+    if (sorot) navigate(`/konsumen/${sorot}`, { replace: true });
+  }, [params, navigate]);
 
   async function handleAddCustomer() {
     if (!form.name.trim()) {
@@ -141,14 +120,16 @@ export default function KonsumenPage() {
     };
     // Ownership and status are set on create only — editing must not reassign
     // the customer to whoever happens to be editing, or reset their stage.
-    const { error } = editingId
+    const { error: saveError } = editingId
       ? await supabase.from("customers").update(payload).eq("id", editingId)
       : await supabase.from("customers").insert({ ...payload, sales_agent_id: profile?.id || null, status: "proses" });
     setSaving(false);
-    if (error) {
-      setError(error.message);
+    if (saveError) {
+      setError(saveError.message);
+      toast.gagal(`Gagal menyimpan: ${saveError.message}`);
       return;
     }
+    toast.sukses(editingId ? "Perubahan tersimpan." : `${payload.name} ditambahkan.`);
     resetForm();
     fetchAll();
   }
@@ -162,152 +143,88 @@ export default function KonsumenPage() {
     if (status === "selesai" && !current?.process_completed_at) {
       patch.process_completed_at = new Date().toISOString();
     }
-    await supabase.from("customers").update(patch).eq("id", customerId);
+    // Hasilnya diperiksa: sebelumnya penolakan RLS lewat tanpa jejak apa pun,
+    // dan pengguna hanya melihat status lama muncul kembali tanpa sebab.
+    const { error: statusError } = await supabase.from("customers").update(patch).eq("id", customerId);
+    if (statusError) {
+      toast.gagal(`Status gagal diubah: ${statusError.message}`);
+      return;
+    }
     fetchAll();
   }
-
-  function setKprField(key, value) {
-    setKpr((k) => ({ ...k, [key]: value }));
-  }
-
-  async function saveKpr() {
-    setKprSaving(true);
-    const payload = { ...kpr, customer_id: selectedCustomerId, updated_at: new Date().toISOString() };
-    // normalize empty strings to null
-    for (const k of Object.keys(payload)) {
-      if (payload[k] === "") payload[k] = null;
-    }
-    const { error } = await supabase.from("customer_kpr").upsert(payload, { onConflict: "customer_id" });
-    setKprSaving(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    const { data } = await supabase.from("customer_kpr").select("*").eq("customer_id", selectedCustomerId).maybeSingle();
-    setKpr(data || { customer_id: selectedCustomerId });
-  }
-
-  async function handleUploadDoc() {
-    if (!docFile || !selectedCustomerId) return;
-    setUploadingDoc(true);
-    const { path, error: upErr } = await uploadFile("customer-documents", selectedCustomerId, docFile);
-    if (upErr) {
-      setError(upErr.message);
-      setUploadingDoc(false);
-      return;
-    }
-    await supabase.from("customer_documents").insert({ customer_id: selectedCustomerId, doc_type: docType, file_url: path, status: "menunggu" });
-    setDocFile(null);
-    setUploadingDoc(false);
-    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", selectedCustomerId).order("uploaded_at", { ascending: false });
-    setDocuments(data || []);
-  }
-
-  async function fetchDocumentsFor(customerId) {
-    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false });
-    setDocuments(data || []);
-  }
-
-  async function updateDocStatus(docId, status) {
-    await supabase.from("customer_documents").update({ status }).eq("id", docId);
-    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", selectedCustomerId).order("uploaded_at", { ascending: false });
-    setDocuments(data || []);
-  }
-
-  async function viewDoc(path) {
-    const url = await getSignedUrl("customer-documents", path);
-    if (url) window.open(url, "_blank");
-  }
-
-  // Handover Hard-Lock (PRD §3.2). Once Finance has verified the Booking Fee
-  // receipt the customer belongs to Admin Marketing; Sales keeps read access.
-  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId) || null;
-  const berkasEditable = canEditBerkas(profile, selectedCustomer);
-  const lockedForMe = selectedCustomer && isLocked(selectedCustomer) && roleOf(profile) === "sales";
-
-  function renderKprInput(field) {
-    const value = kpr?.[field.key] ?? "";
-    const locked = !berkasEditable;
-    const style = locked ? { ...inputStyle, background: "#F4F6FA", color: TEXT_MID } : inputStyle;
-
-    if (field.type === "bank") {
-      return (
-        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={style} disabled={locked}>
-          <option value="">Pilih Bank</option>
-          {withCurrentValue(banks, value).map((b) => (
-            <option key={b} value={b}>{b}</option>
-          ))}
-        </select>
-      );
-    }
-    if (field.type === "progres") {
-      return (
-        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={style} disabled={locked}>
-          <option value="">Pilih Progres</option>
-          {withCurrentValue(progresBerkasOptions, value).map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-      );
-    }
-    return <input type={field.type} value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={style} disabled={locked} />;
-  }
-
-  const durations = kpr
-    ? {
-        berkas: daysBetween(kpr.tanggal_masuk_bank, kpr.tanggal_sp3k_terbit),
-        sp3k: daysBetween(kpr.tanggal_sp3k_terbit, kpr.tanggal_akad),
-        akad: daysBetween(kpr.tanggal_dp, kpr.tanggal_akad),
-        serah: daysBetween(kpr.tanggal_akad, kpr.tanggal_serah_terima_kunci),
-      }
-    : {};
 
   return (
     <div>
       <PageTitle
         title="Konsumen"
         subtitle={`${customers.length} konsumen tercatat`}
-        action={<PrimaryButton subject="customer" onClick={() => setShowForm((v) => !v)}>+ Konsumen Baru</PrimaryButton>}
+        action={
+          <PrimaryButton subject="customer" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+            {showForm ? "Tutup" : "+ Konsumen Baru"}
+          </PrimaryButton>
+        }
       />
 
       <ReadOnlyBanner />
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div className="rg-3" style={{ marginBottom: 12 }}>
-            <input placeholder="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
-            <input placeholder="Telepon" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
-            <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
-            <input placeholder="Username Sosial Media" value={form.username_sosmed} onChange={(e) => setForm({ ...form, username_sosmed: e.target.value })} style={inputStyle} />
-            <input placeholder="No. KTP" value={form.ktp_number} onChange={(e) => setForm({ ...form, ktp_number: e.target.value })} style={inputStyle} />
-            <input placeholder="Alamat" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} />
-            <select value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} style={inputStyle}>
-              <option value="">Pilih Unit (opsional)</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.unit_code} ({u.status})
-                </option>
-              ))}
-            </select>
-            <select value={form.lead_id} onChange={(e) => setForm({ ...form, lead_id: e.target.value })} style={inputStyle}>
-              <option value="">Dari Prospek (opsional)</option>
-              {leads.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+          <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 12, lineHeight: 1.5 }}>
+            Untuk prospek yang sudah booking, gunakan tombol <b>Konversi ke Booking</b> di halaman Prospek — datanya terbawa otomatis
+            dan unitnya sekaligus ter-<i>reserve</i>.
           </div>
+
+          <div className="rg-3" style={{ marginBottom: 14, rowGap: 14 }}>
+            <Bidang label="Nama" wajib>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+            </Bidang>
+            <Bidang label="Telepon">
+              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+            </Bidang>
+            <Bidang label="Email">
+              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
+            </Bidang>
+            <Bidang label="Username Sosial Media">
+              <input value={form.username_sosmed} onChange={(e) => setForm({ ...form, username_sosmed: e.target.value })} style={inputStyle} />
+            </Bidang>
+            <Bidang label="No. KTP">
+              <input value={form.ktp_number} onChange={(e) => setForm({ ...form, ktp_number: e.target.value })} style={inputStyle} />
+            </Bidang>
+            <Bidang label="Alamat">
+              <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} />
+            </Bidang>
+            <Bidang label="Unit">
+              <select value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} style={inputStyle}>
+                <option value="">Belum ditentukan</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.unit_code} ({u.status})
+                  </option>
+                ))}
+              </select>
+            </Bidang>
+            <Bidang label="Dari Prospek" hint="Mengaitkan konsumen ke riwayat follow-up sebelum booking.">
+              <select value={form.lead_id} onChange={(e) => setForm({ ...form, lead_id: e.target.value })} style={inputStyle}>
+                <option value="">Tidak dikaitkan</option>
+                {leads.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                    {l.phone ? ` — ${telepon(l.phone)}` : ""}
+                  </option>
+                ))}
+              </select>
+            </Bidang>
+          </div>
+
           {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <PrimaryButton subject="customer" onClick={handleAddCustomer} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Konsumen"}
             </PrimaryButton>
-            {editingId && (
-              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Batal
-              </button>
-            )}
+            <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Batal
+            </button>
           </div>
         </Card>
       )}
@@ -315,11 +232,55 @@ export default function KonsumenPage() {
       <Card>
         <DataTable
           loading={loading}
-          emptyLabel="Belum ada konsumen."
+          sortable
+          searchable
+          searchPlaceholder="Cari nama, telepon, unit…"
+          searchExtra={(row) => `${row.units?.unit_code || ""} ${row.ktp_number || ""} ${row.email || ""}`}
+          pageSize={25}
+          onRowClick={(row) => navigate(`/konsumen/${row.id}`)}
+          emptyIcon={Users}
+          emptyLabel="Belum ada konsumen"
+          emptyHint="Konsumen lahir dari prospek yang dikonversi ke Booking, atau bisa ditambahkan langsung di sini."
+          filters={[
+            {
+              key: "status",
+              label: "Semua status",
+              options: CUSTOMER_STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+            },
+            {
+              key: "handover",
+              label: "Semua tanggung jawab",
+              get: (row) => (isLocked(row) ? "terkunci" : "sales"),
+              options: [
+                { value: "sales", label: "Dipegang Sales" },
+                { value: "terkunci", label: "Admin Marketing" },
+              ],
+            },
+          ]}
           columns={[
             { key: "name", label: "Nama" },
-            { key: "unit", label: "Unit", render: (row) => row.units?.unit_code || "-" },
-            { key: "duration", label: "Lama Proses", render: (row) => durationLabel(row.process_started_at, row.process_completed_at) },
+            {
+              key: "phone",
+              label: "Kontak",
+              sortable: false,
+              render: (row) => (
+                <KontakAksi
+                  phone={row.phone}
+                  nama={row.name}
+                  tahap={row.leads?.status || row.status}
+                  unit={row.units?.unit_code}
+                  customerId={row.id}
+                  onCatat={fetchAll}
+                />
+              ),
+            },
+            { key: "unit", label: "Unit", sortValue: (row) => row.units?.unit_code, render: (row) => row.units?.unit_code || "-" },
+            {
+              key: "duration",
+              label: "Lama Proses",
+              sortValue: (row) => row.process_started_at,
+              render: (row) => durasiHari(row.process_started_at, row.process_completed_at),
+            },
             {
               key: "status",
               label: "Status",
@@ -328,6 +289,7 @@ export default function KonsumenPage() {
                   <select
                     value={row.status}
                     onChange={(e) => updateStatus(row.id, e.target.value)}
+                    aria-label={`Status ${row.name}`}
                     style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
                   >
                     {CUSTOMER_STATUS_OPTIONS.map((s) => (
@@ -343,6 +305,7 @@ export default function KonsumenPage() {
             {
               key: "handover",
               label: "Tanggung Jawab",
+              sortValue: (row) => (isLocked(row) ? 1 : 0),
               render: (row) =>
                 isLocked(row) ? (
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: ACCENT_DARK, whiteSpace: "nowrap" }} title={lockReason(row)}>
@@ -353,33 +316,21 @@ export default function KonsumenPage() {
                 ),
             },
             {
-              key: "kpr",
-              label: "Progres KPR",
-              render: (row) => (
-                <button onClick={() => openCustomer(row.id)} style={linkButtonStyle}>
-                  {selectedCustomerId === row.id ? "Tutup" : "Kelola"}
-                </button>
-              ),
-            },
-            {
               key: "aksi",
               label: "",
+              sortable: false,
               render: (row) => (
                 <RowActions>
+                  <button onClick={() => navigate(`/konsumen/${row.id}`)} style={gayaBuka}>
+                    Buka
+                  </button>
                   {canEditCustomer(profile, row) && <EditButton subject="customer" onClick={() => startEdit(row)} />}
                   <DeleteButton
                     subject="customer_delete"
                     itemName={row.name}
                     warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
                     onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
-                    onDone={() => {
-                      if (selectedCustomerId === row.id) {
-                        setSelectedCustomerId(null);
-                        setKpr(null);
-                        setDocuments([]);
-                      }
-                      fetchAll();
-                    }}
+                    onDone={fetchAll}
                   />
                 </RowActions>
               ),
@@ -388,133 +339,32 @@ export default function KonsumenPage() {
           rows={customers}
         />
       </Card>
-
-      {selectedCustomerId && kpr && (
-        <Card style={{ marginTop: 18 }}>
-          <PageTitle title="Progres KPR" subtitle="Booking → DP → Bank → SP3K → Akad → Serah Terima Kunci → BPHTB → SHM" />
-
-          {lockedForMe && <LockBanner message={lockReason(selectedCustomer)} />}
-
-          <div className="rg-3" style={{ marginBottom: 14 }}>
-            {KPR_FIELDS.map((field) => (
-              <div key={field.key}>
-                <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>{field.label}</div>
-                {renderKprInput(field)}
-              </div>
-            ))}
-            <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Kendala atau Catatan</div>
-              <textarea
-                value={kpr.kendala ?? ""}
-                onChange={(e) => setKprField("kendala", e.target.value)}
-                disabled={!berkasEditable}
-                style={{ ...inputStyle, width: "100%", minHeight: 56, resize: "vertical", fontFamily: "inherit", background: berkasEditable ? undefined : "#F4F6FA" }}
-              />
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Alamat KTP</div>
-              <input
-                value={kpr.alamat_ktp ?? ""}
-                onChange={(e) => setKprField("alamat_ktp", e.target.value)}
-                disabled={!berkasEditable}
-                style={{ ...inputStyle, width: "100%", background: berkasEditable ? undefined : "#F4F6FA" }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 16, fontSize: 12, color: TEXT_MID, marginBottom: 14, flexWrap: "wrap" }}>
-            {durations.berkas != null && <span>Pengumpulan berkas: <b>{durations.berkas} hari</b></span>}
-            {durations.sp3k != null && <span>SP3K → Akad: <b>{durations.sp3k} hari</b></span>}
-            {durations.akad != null && <span>Persiapan akad: <b>{durations.akad} hari</b></span>}
-            {durations.serah != null && <span>Persiapan serah terima: <b>{durations.serah} hari</b></span>}
-          </div>
-
-          {berkasEditable && (
-            <PrimaryButton subject="kpr" onClick={saveKpr} disabled={kprSaving}>
-              {kprSaving ? "Menyimpan..." : "Simpan Progres KPR"}
-            </PrimaryButton>
-          )}
-
-          <div style={{ marginTop: 22, borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Dokumen Administrasi</div>
-            {berkasEditable && (
-              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-                <select value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle}>
-                  {DOC_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-                <input type="file" onChange={(e) => setDocFile(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
-                <PrimaryButton subject="document" onClick={handleUploadDoc} disabled={uploadingDoc || !docFile}>
-                  {uploadingDoc ? "Mengunggah..." : "Unggah"}
-                </PrimaryButton>
-              </div>
-            )}
-            <DataTable
-              emptyLabel="Belum ada dokumen diunggah."
-              columns={[
-                { key: "doc_type", label: "Jenis" },
-                { key: "file_url", label: "File", render: (row) => (row.file_url ? <button onClick={() => viewDoc(row.file_url)} style={linkButtonStyle}>Lihat</button> : "-") },
-                { key: "uploaded_at", label: "Diunggah", render: (row) => new Date(row.uploaded_at).toLocaleDateString("id-ID") },
-                {
-                  key: "status",
-                  label: "Status",
-                  // Verifying a document is a pemberkasan act — Sales sees the
-                  // outcome, Admin Marketing decides it.
-                  render: (row) =>
-                    berkasEditable ? (
-                      <select value={row.status} onChange={(e) => updateDocStatus(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}>
-                        {DOC_STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Badge value={row.status} />
-                    ),
-                },
-                {
-                  key: "aksi",
-                  label: "",
-                  render: (row) => (
-                    <DeleteButton
-                      subject="document_delete"
-                      itemName={row.doc_type}
-                      onDelete={() => supabase.from("customer_documents").delete().eq("id", row.id)}
-                      onDone={() => fetchDocumentsFor(selectedCustomerId)}
-                    />
-                  ),
-                },
-              ]}
-              rows={documents}
-            />
-          </div>
-        </Card>
-      )}
-
-      {/* Stays writable for Sales even after the Hard-Lock — the relationship
-          continues past booking, only the paperwork changes hands. */}
-      {selectedCustomer && (
-        <FollowUpTimeline customerId={selectedCustomer.id} title={`Riwayat Follow Up — ${selectedCustomer.name}`} />
-      )}
     </div>
   );
 }
 
-const inputStyle = {
-  padding: "10px 12px",
-  border: `1px solid ${BORDER}`,
-  borderRadius: 12,
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
+/** Label sungguhan di atas kontrol — placeholder hilang begitu orang mengetik. */
+function Bidang({ label, wajib, hint, children }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
+        {label}
+        {wajib && <span style={{ color: ACCENT_DARK }} aria-hidden="true"> *</span>}
+      </label>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 4, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  );
+}
 
-const linkButtonStyle = {
+const gayaBuka = {
   border: `1px solid ${BORDER}`,
   background: "#fff",
-  borderRadius: 6,
-  padding: "4px 10px",
+  color: "#0F2A5C",
+  borderRadius: 9,
+  padding: "5px 11px",
   fontSize: 11,
+  fontWeight: 600,
   cursor: "pointer",
+  whiteSpace: "nowrap",
 };

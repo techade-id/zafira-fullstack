@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { bersihkanNotifikasi } from "../lib/useNotifications";
 
 const AuthContext = createContext(null);
 
@@ -27,6 +28,11 @@ export function AuthProvider({ children }) {
       } else {
         setProfile(null);
       }
+      // Ringkasan notifikasi disimpan di tingkat modul agar lonceng dan
+      // dashboard berbagi satu hasil; ia harus dibuang tiap kali sesi berubah,
+      // supaya pengguna berikutnya tidak sempat melihat antrean milik
+      // pengguna sebelumnya.
+      bersihkanNotifikasi();
     });
 
     return () => listener.subscription.unsubscribe();

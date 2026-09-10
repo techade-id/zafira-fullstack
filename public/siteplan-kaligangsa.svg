@@ -1,0 +1,331 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 888.6 614.4" width="888.6" height="614.4">
+  <title>Siteplan Perumahan Zafira Permai Kaligangsa</title>
+  <desc>158 kavling blok A-H. Tiap kavling satu polygon ber-id "kav-&lt;kode&gt;".</desc>
+  <style>
+    .kavling { fill: #fff; stroke: #0F2A5C; stroke-width: .8; }
+    .fasilitas { fill: #E8EDF7; stroke: #0F2A5C; stroke-width: .8; }
+    text { font: 600 6px system-ui, sans-serif; fill: #64748B; }
+  </style>
+  <g id="kavling">
+    <polygon id="kav-A1" class="kavling" data-unit="A1" data-blok="A" points="93.7,14.0 113.2,20.5 101.6,55.3 82.1,48.8"><title>A1</title></polygon>
+    <text x="97.7" y="34.7" text-anchor="middle" dominant-baseline="central">A1</text>
+    <polygon id="kav-A2" class="kavling" data-unit="A2" data-blok="A" points="116.8,21.7 136.6,28.3 125.0,63.1 105.2,56.5"><title>A2</title></polygon>
+    <text x="120.9" y="42.4" text-anchor="middle" dominant-baseline="central">A2</text>
+    <polygon id="kav-A3" class="kavling" data-unit="A3" data-blok="A" points="139.9,29.4 159.7,36.0 148.1,70.8 128.3,64.2"><title>A3</title></polygon>
+    <text x="144.0" y="50.1" text-anchor="middle" dominant-baseline="central">A3</text>
+    <polygon id="kav-A4" class="kavling" data-unit="A4" data-blok="A" points="163.0,37.1 182.5,43.6 170.9,78.4 151.4,71.9"><title>A4</title></polygon>
+    <text x="167.0" y="57.8" text-anchor="middle" dominant-baseline="central">A4</text>
+    <polygon id="kav-A5" class="kavling" data-unit="A5" data-blok="A" points="186.1,44.8 205.9,51.4 194.3,86.2 174.5,79.6"><title>A5</title></polygon>
+    <text x="190.2" y="65.5" text-anchor="middle" dominant-baseline="central">A5</text>
+    <polygon id="kav-A6" class="kavling" data-unit="A6" data-blok="A" points="209.2,52.5 229.0,59.1 217.4,93.9 197.6,87.3"><title>A6</title></polygon>
+    <text x="213.3" y="73.2" text-anchor="middle" dominant-baseline="central">A6</text>
+    <polygon id="kav-A7" class="kavling" data-unit="A7" data-blok="A" points="232.3,60.2 252.1,66.8 240.5,101.6 220.7,95.0"><title>A7</title></polygon>
+    <text x="236.4" y="80.9" text-anchor="middle" dominant-baseline="central">A7</text>
+    <polygon id="kav-A8" class="kavling" data-unit="A8" data-blok="A" points="255.4,67.9 275.2,74.5 263.6,109.3 243.8,102.7"><title>A8</title></polygon>
+    <text x="259.5" y="88.6" text-anchor="middle" dominant-baseline="central">A8</text>
+    <polygon id="kav-A9" class="kavling" data-unit="A9" data-blok="A" points="278.8,75.7 298.3,82.2 286.6,117.3 267.1,110.8"><title>A9</title></polygon>
+    <text x="282.7" y="96.5" text-anchor="middle" dominant-baseline="central">A9</text>
+    <polygon id="kav-A10" class="kavling" data-unit="A10" data-blok="A" points="301.6,83.3 321.4,89.9 309.7,125.0 289.9,118.4"><title>A10</title></polygon>
+    <text x="305.7" y="104.2" text-anchor="middle" dominant-baseline="central">A10</text>
+    <polygon id="kav-A11" class="kavling" data-unit="A11" data-blok="A" points="325.0,91.1 344.5,97.6 332.8,132.7 313.3,126.2"><title>A11</title></polygon>
+    <text x="328.9" y="111.9" text-anchor="middle" dominant-baseline="central">A11</text>
+    <polygon id="kav-A12" class="kavling" data-unit="A12" data-blok="A" points="348.1,98.8 367.6,105.3 355.9,140.4 336.4,133.9"><title>A12</title></polygon>
+    <text x="352.0" y="119.6" text-anchor="middle" dominant-baseline="central">A12</text>
+    <polygon id="kav-A13" class="kavling" data-unit="A13" data-blok="A" points="371.2,106.5 390.7,113.0 379.0,148.1 359.5,141.6"><title>A13</title></polygon>
+    <text x="375.1" y="127.3" text-anchor="middle" dominant-baseline="central">A13</text>
+    <polygon id="kav-A14" class="kavling" data-unit="A14" data-blok="A" points="394.3,114.2 413.8,120.7 402.1,155.8 382.6,149.3"><title>A14</title></polygon>
+    <text x="398.2" y="135.0" text-anchor="middle" dominant-baseline="central">A14</text>
+    <polygon id="kav-A15" class="kavling" data-unit="A15" data-blok="A" points="417.4,121.9 436.9,128.4 425.2,163.5 405.7,157.0"><title>A15</title></polygon>
+    <text x="421.3" y="142.7" text-anchor="middle" dominant-baseline="central">A15</text>
+    <polygon id="kav-A16" class="kavling" data-unit="A16" data-blok="A" points="440.5,129.6 460.3,136.2 448.6,171.3 428.8,164.7"><title>A16</title></polygon>
+    <text x="444.6" y="150.5" text-anchor="middle" dominant-baseline="central">A16</text>
+    <polygon id="kav-A17" class="kavling" data-unit="A17" data-blok="A" points="508.0,152.1 527.5,158.6 515.8,193.7 496.3,187.2"><title>A17</title></polygon>
+    <text x="511.9" y="172.9" text-anchor="middle" dominant-baseline="central">A17</text>
+    <polygon id="kav-A18" class="kavling" data-unit="A18" data-blok="A" points="531.1,159.8 550.6,166.3 538.9,201.4 519.4,194.9"><title>A18</title></polygon>
+    <text x="535.0" y="180.6" text-anchor="middle" dominant-baseline="central">A18</text>
+    <polygon id="kav-A19" class="kavling" data-unit="A19" data-blok="A" points="554.2,167.5 574.0,174.1 562.3,209.2 542.5,202.6"><title>A19</title></polygon>
+    <text x="558.3" y="188.4" text-anchor="middle" dominant-baseline="central">A19</text>
+    <polygon id="kav-A20" class="kavling" data-unit="A20" data-blok="A" points="577.3,175.2 596.8,181.7 585.1,216.8 565.6,210.3"><title>A20</title></polygon>
+    <text x="581.2" y="196.0" text-anchor="middle" dominant-baseline="central">A20</text>
+    <polygon id="kav-A21" class="kavling" data-unit="A21" data-blok="A" points="600.4,182.9 620.2,189.5 608.5,224.6 588.7,218.0"><title>A21</title></polygon>
+    <text x="604.5" y="203.8" text-anchor="middle" dominant-baseline="central">A21</text>
+    <polygon id="kav-A22" class="kavling" data-unit="A22" data-blok="A" points="623.5,190.6 643.3,197.2 631.6,232.3 611.8,225.7"><title>A22</title></polygon>
+    <text x="627.6" y="211.5" text-anchor="middle" dominant-baseline="central">A22</text>
+    <polygon id="kav-A23" class="kavling" data-unit="A23" data-blok="A" points="646.6,198.3 666.4,204.9 654.7,240.0 634.9,233.4"><title>A23</title></polygon>
+    <text x="650.7" y="219.1" text-anchor="middle" dominant-baseline="central">A23</text>
+    <polygon id="kav-A24" class="kavling" data-unit="A24" data-blok="A" points="669.7,206.0 689.5,212.6 677.8,247.7 658.0,241.1"><title>A24</title></polygon>
+    <text x="673.8" y="226.9" text-anchor="middle" dominant-baseline="central">A24</text>
+    <polygon id="kav-A25" class="kavling" data-unit="A25" data-blok="A" points="692.8,213.7 712.6,220.3 700.9,255.4 681.1,248.8"><title>A25</title></polygon>
+    <text x="696.9" y="234.6" text-anchor="middle" dominant-baseline="central">A25</text>
+    <polygon id="kav-A26" class="kavling" data-unit="A26" data-blok="A" points="715.9,221.4 735.7,228.0 724.0,263.1 704.2,256.5"><title>A26</title></polygon>
+    <text x="720.0" y="242.3" text-anchor="middle" dominant-baseline="central">A26</text>
+    <polygon id="kav-A27" class="kavling" data-unit="A27" data-blok="A" points="739.3,229.2 758.8,235.7 747.1,270.8 727.6,264.3"><title>A27</title></polygon>
+    <text x="743.2" y="250.0" text-anchor="middle" dominant-baseline="central">A27</text>
+    <polygon id="kav-A28" class="kavling" data-unit="A28" data-blok="A" points="762.4,236.9 781.9,243.4 770.2,278.5 750.7,272.0"><title>A28</title></polygon>
+    <text x="766.3" y="257.7" text-anchor="middle" dominant-baseline="central">A28</text>
+    <polygon id="kav-A29" class="kavling" data-unit="A29" data-blok="A" points="785.5,244.6 805.0,251.1 793.3,286.2 773.8,279.7"><title>A29</title></polygon>
+    <text x="789.4" y="265.4" text-anchor="middle" dominant-baseline="central">A29</text>
+    <polygon id="kav-A30" class="kavling" data-unit="A30" data-blok="A" points="808.6,252.3 828.1,258.8 816.4,293.9 796.9,287.4"><title>A30</title></polygon>
+    <text x="812.5" y="273.1" text-anchor="middle" dominant-baseline="central">A30</text>
+    <polygon id="kav-A31" class="kavling" data-unit="A31" data-blok="A" points="831.7,260.0 851.2,266.5 839.5,301.6 820.0,295.1"><title>A31</title></polygon>
+    <text x="835.6" y="280.8" text-anchor="middle" dominant-baseline="central">A31</text>
+    <polygon id="kav-A32" class="kavling" data-unit="A32" data-blok="A" points="854.8,267.7 874.6,274.3 862.9,309.4 843.1,302.8"><title>A32</title></polygon>
+    <text x="858.9" y="288.6" text-anchor="middle" dominant-baseline="central">A32</text>
+    <polygon id="kav-B1" class="kavling" data-unit="B1" data-blok="B" points="65.5,102.6 102.7,115.0 96.2,134.5 59.0,122.1"><title>B1</title></polygon>
+    <text x="80.9" y="118.6" text-anchor="middle" dominant-baseline="central">B1</text>
+    <polygon id="kav-B2" class="kavling" data-unit="B2" data-blok="B" points="57.9,125.4 95.1,137.8 88.5,157.6 51.3,145.2"><title>B2</title></polygon>
+    <text x="73.2" y="141.5" text-anchor="middle" dominant-baseline="central">B2</text>
+    <polygon id="kav-B3" class="kavling" data-unit="B3" data-blok="B" points="50.4,148.9 87.3,161.2 80.8,180.7 43.9,168.4"><title>B3</title></polygon>
+    <text x="65.6" y="164.8" text-anchor="middle" dominant-baseline="central">B3</text>
+    <polygon id="kav-B4" class="kavling" data-unit="B4" data-blok="B" points="43.1,171.8 79.7,184.0 73.1,203.8 36.5,191.6"><title>B4</title></polygon>
+    <text x="58.1" y="187.8" text-anchor="middle" dominant-baseline="central">B4</text>
+    <polygon id="kav-B5" class="kavling" data-unit="B5" data-blok="B" points="35.4,194.9 72.0,207.1 65.4,226.9 28.8,214.7"><title>B5</title></polygon>
+    <text x="50.4" y="210.9" text-anchor="middle" dominant-baseline="central">B5</text>
+    <polygon id="kav-B6" class="kavling" data-unit="B6" data-blok="B" points="27.9,218.4 64.2,230.5 57.6,250.3 21.3,238.2"><title>B6</title></polygon>
+    <text x="42.8" y="234.4" text-anchor="middle" dominant-baseline="central">B6</text>
+    <polygon id="kav-B7" class="kavling" data-unit="B7" data-blok="B" points="20.5,241.6 56.5,253.6 50.0,273.1 14.0,261.1"><title>B7</title></polygon>
+    <text x="35.3" y="257.4" text-anchor="middle" dominant-baseline="central">B7</text>
+    <polygon id="kav-B8" class="kavling" data-unit="B8" data-blok="B" points="127.7,123.0 162.5,134.6 155.9,154.4 121.1,142.8"><title>B8</title></polygon>
+    <text x="141.8" y="138.7" text-anchor="middle" dominant-baseline="central">B8</text>
+    <polygon id="kav-B9" class="kavling" data-unit="B9" data-blok="B" points="119.7,146.0 154.8,157.7 148.2,177.5 113.1,165.8"><title>B9</title></polygon>
+    <text x="134.0" y="161.8" text-anchor="middle" dominant-baseline="central">B9</text>
+    <polygon id="kav-B10" class="kavling" data-unit="B10" data-blok="B" points="112.3,169.2 147.1,180.8 140.5,200.6 105.7,189.0"><title>B10</title></polygon>
+    <text x="126.4" y="184.9" text-anchor="middle" dominant-baseline="central">B10</text>
+    <polygon id="kav-B11" class="kavling" data-unit="B11" data-blok="B" points="104.2,192.5 139.3,204.2 132.7,224.0 97.6,212.3"><title>B11</title></polygon>
+    <text x="118.5" y="208.3" text-anchor="middle" dominant-baseline="central">B11</text>
+    <polygon id="kav-B12" class="kavling" data-unit="B12" data-blok="B" points="96.5,215.6 131.6,227.3 125.1,246.8 90.0,235.1"><title>B12</title></polygon>
+    <text x="110.8" y="231.2" text-anchor="middle" dominant-baseline="central">B12</text>
+    <polygon id="kav-B13" class="kavling" data-unit="B13" data-blok="B" points="88.8,238.7 123.9,250.4 117.4,269.9 82.3,258.2"><title>B13</title></polygon>
+    <text x="103.1" y="254.3" text-anchor="middle" dominant-baseline="central">B13</text>
+    <polygon id="kav-B14" class="kavling" data-unit="B14" data-blok="B" points="81.1,261.8 116.2,273.5 109.7,293.0 74.6,281.3"><title>B14</title></polygon>
+    <text x="95.4" y="277.4" text-anchor="middle" dominant-baseline="central">B14</text>
+    <polygon id="kav-B15" class="kavling" data-unit="B15" data-blok="B" points="166.0,136.1 201.1,147.8 194.6,167.3 159.5,155.6"><title>B15</title></polygon>
+    <text x="180.3" y="151.7" text-anchor="middle" dominant-baseline="central">B15</text>
+    <polygon id="kav-B16" class="kavling" data-unit="B16" data-blok="B" points="158.4,158.9 193.5,170.6 186.9,190.4 151.8,178.7"><title>B16</title></polygon>
+    <text x="172.7" y="174.7" text-anchor="middle" dominant-baseline="central">B16</text>
+    <polygon id="kav-B17" class="kavling" data-unit="B17" data-blok="B" points="150.6,182.3 185.7,194.0 179.2,213.5 144.1,201.8"><title>B17</title></polygon>
+    <text x="164.9" y="197.9" text-anchor="middle" dominant-baseline="central">B17</text>
+    <polygon id="kav-B18" class="kavling" data-unit="B18" data-blok="B" points="142.6,205.3 178.0,217.1 171.5,236.6 136.1,224.8"><title>B18</title></polygon>
+    <text x="157.1" y="221.0" text-anchor="middle" dominant-baseline="central">B18</text>
+    <polygon id="kav-B19" class="kavling" data-unit="B19" data-blok="B" points="135.2,228.5 170.3,240.2 163.8,259.7 128.7,248.0"><title>B19</title></polygon>
+    <text x="149.5" y="244.1" text-anchor="middle" dominant-baseline="central">B19</text>
+    <polygon id="kav-B20" class="kavling" data-unit="B20" data-blok="B" points="127.5,251.6 162.3,263.2 155.7,283.0 120.9,271.4"><title>B20</title></polygon>
+    <text x="141.6" y="267.3" text-anchor="middle" dominant-baseline="central">B20</text>
+    <polygon id="kav-B21" class="kavling" data-unit="B21" data-blok="B" points="119.8,274.7 154.6,286.3 148.1,305.8 113.3,294.2"><title>B21</title></polygon>
+    <text x="134.0" y="290.3" text-anchor="middle" dominant-baseline="central">B21</text>
+    <polygon id="kav-C1" class="kavling" data-unit="C1" data-blok="C" points="233.5,132.6 268.6,144.3 262.0,164.1 226.9,152.4"><title>C1</title></polygon>
+    <text x="247.8" y="148.4" text-anchor="middle" dominant-baseline="central">C1</text>
+    <polygon id="kav-C2" class="kavling" data-unit="C2" data-blok="C" points="225.7,156.0 260.8,167.7 254.3,187.2 219.2,175.5"><title>C2</title></polygon>
+    <text x="240.0" y="171.6" text-anchor="middle" dominant-baseline="central">C2</text>
+    <polygon id="kav-C3" class="kavling" data-unit="C3" data-blok="C" points="218.1,178.8 253.2,190.5 246.6,210.3 211.5,198.6"><title>C3</title></polygon>
+    <text x="232.4" y="194.6" text-anchor="middle" dominant-baseline="central">C3</text>
+    <polygon id="kav-C4" class="kavling" data-unit="C4" data-blok="C" points="210.4,201.9 245.5,213.6 238.9,233.4 203.8,221.7"><title>C4</title></polygon>
+    <text x="224.7" y="217.7" text-anchor="middle" dominant-baseline="central">C4</text>
+    <polygon id="kav-C5" class="kavling" data-unit="C5" data-blok="C" points="202.6,225.3 237.4,236.9 230.9,256.4 196.1,244.8"><title>C5</title></polygon>
+    <text x="216.8" y="240.9" text-anchor="middle" dominant-baseline="central">C5</text>
+    <polygon id="kav-C6" class="kavling" data-unit="C6" data-blok="C" points="194.9,248.4 229.7,260.0 223.2,279.5 188.4,267.9"><title>C6</title></polygon>
+    <text x="209.1" y="264.0" text-anchor="middle" dominant-baseline="central">C6</text>
+    <polygon id="kav-C7" class="kavling" data-unit="C7" data-blok="C" points="187.2,271.5 222.3,283.2 215.8,302.7 180.7,291.0"><title>C7</title></polygon>
+    <text x="201.5" y="287.1" text-anchor="middle" dominant-baseline="central">C7</text>
+    <polygon id="kav-C8" class="kavling" data-unit="C8" data-blok="C" points="179.5,294.6 214.6,306.3 208.1,325.8 173.0,314.1"><title>C8</title></polygon>
+    <text x="193.8" y="310.2" text-anchor="middle" dominant-baseline="central">C8</text>
+    <polygon id="kav-C9" class="kavling" data-unit="C9" data-blok="C" points="272.2,145.5 307.0,157.1 300.4,176.9 265.6,165.3"><title>C9</title></polygon>
+    <text x="286.3" y="161.2" text-anchor="middle" dominant-baseline="central">C9</text>
+    <polygon id="kav-C10" class="kavling" data-unit="C10" data-blok="C" points="264.1,168.8 299.2,180.5 292.7,200.0 257.6,188.3"><title>C10</title></polygon>
+    <text x="278.4" y="184.4" text-anchor="middle" dominant-baseline="central">C10</text>
+    <polygon id="kav-C11" class="kavling" data-unit="C11" data-blok="C" points="256.5,191.6 291.6,203.3 285.0,223.1 249.9,211.4"><title>C11</title></polygon>
+    <text x="270.8" y="207.4" text-anchor="middle" dominant-baseline="central">C11</text>
+    <polygon id="kav-C12" class="kavling" data-unit="C12" data-blok="C" points="248.7,215.0 284.1,226.8 277.6,246.3 242.2,234.5"><title>C12</title></polygon>
+    <text x="263.2" y="230.7" text-anchor="middle" dominant-baseline="central">C12</text>
+    <polygon id="kav-C13" class="kavling" data-unit="C13" data-blok="C" points="241.0,238.1 276.1,249.8 269.6,269.3 234.5,257.6"><title>C13</title></polygon>
+    <text x="255.3" y="253.7" text-anchor="middle" dominant-baseline="central">C13</text>
+    <polygon id="kav-C14" class="kavling" data-unit="C14" data-blok="C" points="233.3,261.2 268.4,272.9 261.9,292.4 226.8,280.7"><title>C14</title></polygon>
+    <text x="247.6" y="276.8" text-anchor="middle" dominant-baseline="central">C14</text>
+    <polygon id="kav-C15" class="kavling" data-unit="C15" data-blok="C" points="225.6,284.3 260.7,296.0 254.1,315.8 219.0,304.1"><title>C15</title></polygon>
+    <text x="239.9" y="300.0" text-anchor="middle" dominant-baseline="central">C15</text>
+    <polygon id="kav-C16" class="kavling" data-unit="C16" data-blok="C" points="218.2,307.5 253.0,319.1 246.5,338.6 211.7,327.0"><title>C16</title></polygon>
+    <text x="232.4" y="323.1" text-anchor="middle" dominant-baseline="central">C16</text>
+    <polygon id="kav-D1" class="kavling" data-unit="D1" data-blok="D" points="331.6,165.3 366.7,177.0 360.1,196.8 325.0,185.1"><title>D1</title></polygon>
+    <text x="345.9" y="181.1" text-anchor="middle" dominant-baseline="central">D1</text>
+    <polygon id="kav-D2" class="kavling" data-unit="D2" data-blok="D" points="324.1,188.8 358.9,200.4 352.4,219.9 317.6,208.3"><title>D2</title></polygon>
+    <text x="338.3" y="204.4" text-anchor="middle" dominant-baseline="central">D2</text>
+    <polygon id="kav-D3" class="kavling" data-unit="D3" data-blok="D" points="316.4,211.9 351.2,223.5 344.7,243.0 309.9,231.4"><title>D3</title></polygon>
+    <text x="330.6" y="227.5" text-anchor="middle" dominant-baseline="central">D3</text>
+    <polygon id="kav-D4" class="kavling" data-unit="D4" data-blok="D" points="308.8,234.7 343.6,246.3 337.0,266.1 302.2,254.5"><title>D4</title></polygon>
+    <text x="322.9" y="250.4" text-anchor="middle" dominant-baseline="central">D4</text>
+    <polygon id="kav-D5" class="kavling" data-unit="D5" data-blok="D" points="301.0,258.1 335.8,269.7 329.2,289.5 294.4,277.9"><title>D5</title></polygon>
+    <text x="315.1" y="273.8" text-anchor="middle" dominant-baseline="central">D5</text>
+    <polygon id="kav-D6" class="kavling" data-unit="D6" data-blok="D" points="293.3,281.2 328.1,292.8 321.6,312.3 286.8,300.7"><title>D6</title></polygon>
+    <text x="307.5" y="296.8" text-anchor="middle" dominant-baseline="central">D6</text>
+    <polygon id="kav-D7" class="kavling" data-unit="D7" data-blok="D" points="285.3,304.2 320.4,315.9 313.8,335.7 278.7,324.0"><title>D7</title></polygon>
+    <text x="299.6" y="319.9" text-anchor="middle" dominant-baseline="central">D7</text>
+    <polygon id="kav-D8" class="kavling" data-unit="D8" data-blok="D" points="277.6,327.3 313.0,339.1 306.5,358.6 271.1,346.8"><title>D8</title></polygon>
+    <text x="292.1" y="343.0" text-anchor="middle" dominant-baseline="central">D8</text>
+    <polygon id="kav-D9" class="kavling" data-unit="D9" data-blok="D" points="370.3,178.2 405.4,189.9 398.8,209.7 363.7,198.0"><title>D9</title></polygon>
+    <text x="384.6" y="194.0" text-anchor="middle" dominant-baseline="central">D9</text>
+    <polygon id="kav-D10" class="kavling" data-unit="D10" data-blok="D" points="362.5,201.6 397.3,213.2 390.8,232.7 356.0,221.1"><title>D10</title></polygon>
+    <text x="376.7" y="217.2" text-anchor="middle" dominant-baseline="central">D10</text>
+    <polygon id="kav-D11" class="kavling" data-unit="D11" data-blok="D" points="354.8,224.7 389.9,236.4 383.4,255.9 348.3,244.2"><title>D11</title></polygon>
+    <text x="369.1" y="240.3" text-anchor="middle" dominant-baseline="central">D11</text>
+    <polygon id="kav-D12" class="kavling" data-unit="D12" data-blok="D" points="347.1,247.8 382.2,259.5 375.7,279.0 340.6,267.3"><title>D12</title></polygon>
+    <text x="361.4" y="263.4" text-anchor="middle" dominant-baseline="central">D12</text>
+    <polygon id="kav-D13" class="kavling" data-unit="D13" data-blok="D" points="339.4,270.9 374.5,282.6 368.0,302.1 332.9,290.4"><title>D13</title></polygon>
+    <text x="353.7" y="286.5" text-anchor="middle" dominant-baseline="central">D13</text>
+    <polygon id="kav-D14" class="kavling" data-unit="D14" data-blok="D" points="331.7,294.0 366.8,305.7 360.3,325.2 325.2,313.5"><title>D14</title></polygon>
+    <text x="346.0" y="309.6" text-anchor="middle" dominant-baseline="central">D14</text>
+    <polygon id="kav-D15" class="kavling" data-unit="D15" data-blok="D" points="324.0,317.1 359.1,328.8 352.5,348.6 317.4,336.9"><title>D15</title></polygon>
+    <text x="338.3" y="332.8" text-anchor="middle" dominant-baseline="central">D15</text>
+    <polygon id="kav-D16" class="kavling" data-unit="D16" data-blok="D" points="316.3,340.2 351.4,351.9 344.9,371.4 309.8,359.7"><title>D16</title></polygon>
+    <text x="330.6" y="355.8" text-anchor="middle" dominant-baseline="central">D16</text>
+    <polygon id="kav-D17" class="kavling" data-unit="D17" data-blok="D" points="414.8,244.7 449.6,256.3 443.1,275.8 408.3,264.2"><title>D17</title></polygon>
+    <text x="429.0" y="260.3" text-anchor="middle" dominant-baseline="central">D17</text>
+    <polygon id="kav-D18" class="kavling" data-unit="D18" data-blok="D" points="406.9,267.4 442.0,279.1 435.4,298.9 400.3,287.2"><title>D18</title></polygon>
+    <text x="421.2" y="283.2" text-anchor="middle" dominant-baseline="central">D18</text>
+    <polygon id="kav-D19" class="kavling" data-unit="D19" data-blok="D" points="399.1,290.8 434.2,302.5 427.6,322.3 392.5,310.6"><title>D19</title></polygon>
+    <text x="413.4" y="306.5" text-anchor="middle" dominant-baseline="central">D19</text>
+    <polygon id="kav-D20" class="kavling" data-unit="D20" data-blok="D" points="391.4,313.9 426.5,325.6 420.0,345.1 384.9,333.4"><title>D20</title></polygon>
+    <text x="405.7" y="329.5" text-anchor="middle" dominant-baseline="central">D20</text>
+    <polygon id="kav-D21" class="kavling" data-unit="D21" data-blok="D" points="383.7,337.0 418.8,348.7 412.3,368.2 377.2,356.5"><title>D21</title></polygon>
+    <text x="398.0" y="352.6" text-anchor="middle" dominant-baseline="central">D21</text>
+    <polygon id="kav-D22" class="kavling" data-unit="D22" data-blok="D" points="376.0,360.1 411.1,371.8 404.5,391.6 369.4,379.9"><title>D22</title></polygon>
+    <text x="390.3" y="375.8" text-anchor="middle" dominant-baseline="central">D22</text>
+    <polygon id="kav-D23" class="kavling" data-unit="D23" data-blok="D" points="452.9,257.4 488.0,269.1 481.5,288.6 446.4,276.9"><title>D23</title></polygon>
+    <text x="467.2" y="273.0" text-anchor="middle" dominant-baseline="central">D23</text>
+    <polygon id="kav-D24" class="kavling" data-unit="D24" data-blok="D" points="445.2,280.5 480.6,292.3 474.1,311.8 438.7,300.0"><title>D24</title></polygon>
+    <text x="459.7" y="296.2" text-anchor="middle" dominant-baseline="central">D24</text>
+    <polygon id="kav-D25" class="kavling" data-unit="D25" data-blok="D" points="437.5,303.6 472.9,315.4 466.4,334.9 431.0,323.1"><title>D25</title></polygon>
+    <text x="452.0" y="319.3" text-anchor="middle" dominant-baseline="central">D25</text>
+    <polygon id="kav-D26" class="kavling" data-unit="D26" data-blok="D" points="430.1,326.8 464.9,338.4 458.4,357.9 423.6,346.3"><title>D26</title></polygon>
+    <text x="444.3" y="342.4" text-anchor="middle" dominant-baseline="central">D26</text>
+    <polygon id="kav-D27" class="kavling" data-unit="D27" data-blok="D" points="422.4,349.9 457.2,361.5 450.6,381.3 415.8,369.7"><title>D27</title></polygon>
+    <text x="436.5" y="365.6" text-anchor="middle" dominant-baseline="central">D27</text>
+    <polygon id="kav-D28" class="kavling" data-unit="D28" data-blok="D" points="414.7,373.0 449.8,384.7 443.2,404.5 408.1,392.8"><title>D28</title></polygon>
+    <text x="429.0" y="388.8" text-anchor="middle" dominant-baseline="central">D28</text>
+    <polygon id="kav-E1" class="kavling" data-unit="E1" data-blok="E" points="528.4,230.9 563.5,242.6 556.9,262.4 521.8,250.7"><title>E1</title></polygon>
+    <text x="542.7" y="246.7" text-anchor="middle" dominant-baseline="central">E1</text>
+    <polygon id="kav-E2" class="kavling" data-unit="E2" data-blok="E" points="520.6,254.3 555.7,266.0 549.2,285.5 514.1,273.8"><title>E2</title></polygon>
+    <text x="534.9" y="269.9" text-anchor="middle" dominant-baseline="central">E2</text>
+    <polygon id="kav-E3" class="kavling" data-unit="E3" data-blok="E" points="512.9,277.4 548.0,289.1 541.5,308.6 506.4,296.9"><title>E3</title></polygon>
+    <text x="527.2" y="293.0" text-anchor="middle" dominant-baseline="central">E3</text>
+    <polygon id="kav-E4" class="kavling" data-unit="E4" data-blok="E" points="505.2,300.5 540.0,312.1 533.5,331.6 498.7,320.0"><title>E4</title></polygon>
+    <text x="519.4" y="316.1" text-anchor="middle" dominant-baseline="central">E4</text>
+    <polygon id="kav-E5" class="kavling" data-unit="E5" data-blok="E" points="497.5,323.6 532.3,335.2 525.7,355.0 490.9,343.4"><title>E5</title></polygon>
+    <text x="511.6" y="339.3" text-anchor="middle" dominant-baseline="central">E5</text>
+    <polygon id="kav-E6" class="kavling" data-unit="E6" data-blok="E" points="489.8,346.7 524.6,358.3 518.1,377.8 483.3,366.2"><title>E6</title></polygon>
+    <text x="504.0" y="362.3" text-anchor="middle" dominant-baseline="central">E6</text>
+    <polygon id="kav-E7" class="kavling" data-unit="E7" data-blok="E" points="482.1,369.8 516.9,381.4 510.3,401.2 475.5,389.6"><title>E7</title></polygon>
+    <text x="496.2" y="385.5" text-anchor="middle" dominant-baseline="central">E7</text>
+    <polygon id="kav-E8" class="kavling" data-unit="E8" data-blok="E" points="474.4,392.9 509.5,404.6 503.0,424.1 467.9,412.4"><title>E8</title></polygon>
+    <text x="488.7" y="408.5" text-anchor="middle" dominant-baseline="central">E8</text>
+    <polygon id="kav-E9" class="kavling" data-unit="E9" data-blok="E" points="567.1,243.8 601.9,255.4 595.3,275.2 560.5,263.6"><title>E9</title></polygon>
+    <text x="581.2" y="259.5" text-anchor="middle" dominant-baseline="central">E9</text>
+    <polygon id="kav-E10" class="kavling" data-unit="E10" data-blok="E" points="559.0,267.1 594.1,278.8 587.5,298.6 552.4,286.9"><title>E10</title></polygon>
+    <text x="573.3" y="282.8" text-anchor="middle" dominant-baseline="central">E10</text>
+    <polygon id="kav-E11" class="kavling" data-unit="E11" data-blok="E" points="551.3,290.2 586.4,301.9 579.9,321.4 544.8,309.7"><title>E11</title></polygon>
+    <text x="565.6" y="305.8" text-anchor="middle" dominant-baseline="central">E11</text>
+    <polygon id="kav-E12" class="kavling" data-unit="E12" data-blok="E" points="543.6,313.3 578.7,325.0 572.2,344.5 537.1,332.8"><title>E12</title></polygon>
+    <text x="557.9" y="328.9" text-anchor="middle" dominant-baseline="central">E12</text>
+    <polygon id="kav-E13" class="kavling" data-unit="E13" data-blok="E" points="535.9,336.4 571.0,348.1 564.5,367.6 529.4,355.9"><title>E13</title></polygon>
+    <text x="550.2" y="352.0" text-anchor="middle" dominant-baseline="central">E13</text>
+    <polygon id="kav-E14" class="kavling" data-unit="E14" data-blok="E" points="528.2,359.5 563.3,371.2 556.8,390.7 521.7,379.0"><title>E14</title></polygon>
+    <text x="542.5" y="375.1" text-anchor="middle" dominant-baseline="central">E14</text>
+    <polygon id="kav-E15" class="kavling" data-unit="E15" data-blok="E" points="520.5,382.6 555.6,394.3 549.0,414.1 513.9,402.4"><title>E15</title></polygon>
+    <text x="534.8" y="398.4" text-anchor="middle" dominant-baseline="central">E15</text>
+    <polygon id="kav-E16" class="kavling" data-unit="E16" data-blok="E" points="512.8,405.7 547.9,417.4 541.3,437.2 506.2,425.5"><title>E16</title></polygon>
+    <text x="527.1" y="421.5" text-anchor="middle" dominant-baseline="central">E16</text>
+    <polygon id="kav-F1" class="kavling" data-unit="F1" data-blok="F" points="626.4,263.9 661.5,275.6 655.0,295.1 619.9,283.4"><title>F1</title></polygon>
+    <text x="640.7" y="279.5" text-anchor="middle" dominant-baseline="central">F1</text>
+    <polygon id="kav-F2" class="kavling" data-unit="F2" data-blok="F" points="618.7,287.0 653.8,298.7 647.3,318.2 612.2,306.5"><title>F2</title></polygon>
+    <text x="633.0" y="302.6" text-anchor="middle" dominant-baseline="central">F2</text>
+    <polygon id="kav-F3" class="kavling" data-unit="F3" data-blok="F" points="611.3,310.2 646.1,321.8 639.6,341.3 604.8,329.7"><title>F3</title></polygon>
+    <text x="625.5" y="325.8" text-anchor="middle" dominant-baseline="central">F3</text>
+    <polygon id="kav-F4" class="kavling" data-unit="F4" data-blok="F" points="603.6,333.3 638.4,344.9 631.9,364.4 597.1,352.8"><title>F4</title></polygon>
+    <text x="617.8" y="348.9" text-anchor="middle" dominant-baseline="central">F4</text>
+    <polygon id="kav-F5" class="kavling" data-unit="F5" data-blok="F" points="595.6,356.3 630.7,368.0 624.1,387.8 589.0,376.1"><title>F5</title></polygon>
+    <text x="609.9" y="372.0" text-anchor="middle" dominant-baseline="central">F5</text>
+    <polygon id="kav-F6" class="kavling" data-unit="F6" data-blok="F" points="587.9,379.4 623.0,391.1 616.4,410.9 581.3,399.2"><title>F6</title></polygon>
+    <text x="602.2" y="395.2" text-anchor="middle" dominant-baseline="central">F6</text>
+    <polygon id="kav-F7" class="kavling" data-unit="F7" data-blok="F" points="580.2,402.5 615.3,414.2 608.7,434.0 573.6,422.3"><title>F7</title></polygon>
+    <text x="594.5" y="418.2" text-anchor="middle" dominant-baseline="central">F7</text>
+    <polygon id="kav-F8" class="kavling" data-unit="F8" data-blok="F" points="572.5,425.6 607.6,437.3 601.0,457.1 565.9,445.4"><title>F8</title></polygon>
+    <text x="586.8" y="441.4" text-anchor="middle" dominant-baseline="central">F8</text>
+    <polygon id="kav-F9" class="kavling" data-unit="F9" data-blok="F" points="665.2,276.5 700.0,288.1 693.4,307.9 658.6,296.3"><title>F9</title></polygon>
+    <text x="679.3" y="292.2" text-anchor="middle" dominant-baseline="central">F9</text>
+    <polygon id="kav-F10" class="kavling" data-unit="F10" data-blok="F" points="657.4,299.9 692.5,311.6 685.9,331.4 650.8,319.7"><title>F10</title></polygon>
+    <text x="671.7" y="315.6" text-anchor="middle" dominant-baseline="central">F10</text>
+    <polygon id="kav-F11" class="kavling" data-unit="F11" data-blok="F" points="649.7,323.0 684.5,334.6 678.0,354.1 643.2,342.5"><title>F11</title></polygon>
+    <text x="663.9" y="338.6" text-anchor="middle" dominant-baseline="central">F11</text>
+    <polygon id="kav-F12" class="kavling" data-unit="F12" data-blok="F" points="642.0,346.1 677.1,357.8 670.6,377.3 635.5,365.6"><title>F12</title></polygon>
+    <text x="656.3" y="361.7" text-anchor="middle" dominant-baseline="central">F12</text>
+    <polygon id="kav-F13" class="kavling" data-unit="F13" data-blok="F" points="634.3,369.2 669.4,380.9 662.8,400.7 627.7,389.0"><title>F13</title></polygon>
+    <text x="648.6" y="385.0" text-anchor="middle" dominant-baseline="central">F13</text>
+    <polygon id="kav-F14" class="kavling" data-unit="F14" data-blok="F" points="626.6,392.3 661.7,404.0 655.2,423.5 620.1,411.8"><title>F14</title></polygon>
+    <text x="640.9" y="407.9" text-anchor="middle" dominant-baseline="central">F14</text>
+    <polygon id="kav-F15" class="kavling" data-unit="F15" data-blok="F" points="618.6,415.3 654.0,427.1 647.4,446.9 612.0,435.1"><title>F15</title></polygon>
+    <text x="633.0" y="431.1" text-anchor="middle" dominant-baseline="central">F15</text>
+    <polygon id="kav-F16" class="kavling" data-unit="F16" data-blok="F" points="611.2,438.5 646.3,450.2 639.7,470.0 604.6,458.3"><title>F16</title></polygon>
+    <text x="625.5" y="454.3" text-anchor="middle" dominant-baseline="central">F16</text>
+    <polygon id="kav-G1" class="kavling" data-unit="G1" data-blok="G" points="724.8,296.7 759.9,308.4 753.4,327.9 718.3,316.2"><title>G1</title></polygon>
+    <text x="739.1" y="312.3" text-anchor="middle" dominant-baseline="central">G1</text>
+    <polygon id="kav-G2" class="kavling" data-unit="G2" data-blok="G" points="717.1,319.8 752.2,331.5 745.7,351.0 710.6,339.3"><title>G2</title></polygon>
+    <text x="731.4" y="335.4" text-anchor="middle" dominant-baseline="central">G2</text>
+    <polygon id="kav-G3" class="kavling" data-unit="G3" data-blok="G" points="709.4,342.9 744.5,354.6 737.9,374.4 702.8,362.7"><title>G3</title></polygon>
+    <text x="723.7" y="358.6" text-anchor="middle" dominant-baseline="central">G3</text>
+    <polygon id="kav-G4" class="kavling" data-unit="G4" data-blok="G" points="701.7,366.0 736.8,377.7 730.3,397.2 695.2,385.5"><title>G4</title></polygon>
+    <text x="716.0" y="381.6" text-anchor="middle" dominant-baseline="central">G4</text>
+    <polygon id="kav-G5" class="kavling" data-unit="G5" data-blok="G" points="694.0,389.1 729.1,400.8 722.5,420.6 687.4,408.9"><title>G5</title></polygon>
+    <text x="708.3" y="404.8" text-anchor="middle" dominant-baseline="central">G5</text>
+    <polygon id="kav-G6" class="kavling" data-unit="G6" data-blok="G" points="686.3,412.2 721.1,423.8 714.5,443.6 679.7,432.0"><title>G6</title></polygon>
+    <text x="700.4" y="427.9" text-anchor="middle" dominant-baseline="central">G6</text>
+    <polygon id="kav-G7" class="kavling" data-unit="G7" data-blok="G" points="678.6,435.3 713.4,446.9 706.9,466.4 672.1,454.8"><title>G7</title></polygon>
+    <text x="692.8" y="450.9" text-anchor="middle" dominant-baseline="central">G7</text>
+    <polygon id="kav-G8" class="kavling" data-unit="G8" data-blok="G" points="670.9,458.4 705.7,470.0 699.1,489.8 664.3,478.2"><title>G8</title></polygon>
+    <text x="685.0" y="474.1" text-anchor="middle" dominant-baseline="central">G8</text>
+    <polygon id="kav-G9" class="kavling" data-unit="G9" data-blok="G" points="763.6,309.3 798.4,320.9 791.8,340.7 757.0,329.1"><title>G9</title></polygon>
+    <text x="777.7" y="325.0" text-anchor="middle" dominant-baseline="central">G9</text>
+    <polygon id="kav-G10" class="kavling" data-unit="G10" data-blok="G" points="755.8,332.7 790.6,344.3 784.0,364.1 749.2,352.5"><title>G10</title></polygon>
+    <text x="769.9" y="348.4" text-anchor="middle" dominant-baseline="central">G10</text>
+    <polygon id="kav-G11" class="kavling" data-unit="G11" data-blok="G" points="748.1,355.8 782.9,367.4 776.3,387.2 741.5,375.6"><title>G11</title></polygon>
+    <text x="762.2" y="371.5" text-anchor="middle" dominant-baseline="central">G11</text>
+    <polygon id="kav-G12" class="kavling" data-unit="G12" data-blok="G" points="740.1,378.8 775.2,390.5 768.7,410.0 733.6,398.3"><title>G12</title></polygon>
+    <text x="754.4" y="394.4" text-anchor="middle" dominant-baseline="central">G12</text>
+    <polygon id="kav-G13" class="kavling" data-unit="G13" data-blok="G" points="732.4,401.9 767.5,413.6 760.9,433.4 725.8,421.7"><title>G13</title></polygon>
+    <text x="746.7" y="417.7" text-anchor="middle" dominant-baseline="central">G13</text>
+    <polygon id="kav-G14" class="kavling" data-unit="G14" data-blok="G" points="724.7,425.0 760.1,436.8 753.6,456.3 718.2,444.5"><title>G14</title></polygon>
+    <text x="739.2" y="440.7" text-anchor="middle" dominant-baseline="central">G14</text>
+    <polygon id="kav-G15" class="kavling" data-unit="G15" data-blok="G" points="717.0,448.1 752.1,459.8 745.5,479.6 710.4,467.9"><title>G15</title></polygon>
+    <text x="731.3" y="463.9" text-anchor="middle" dominant-baseline="central">G15</text>
+    <polygon id="kav-G16" class="kavling" data-unit="G16" data-blok="G" points="709.3,471.2 744.4,482.9 737.8,502.7 702.7,491.0"><title>G16</title></polygon>
+    <text x="723.6" y="487.0" text-anchor="middle" dominant-baseline="central">G16</text>
+    <polygon id="kav-H1" class="kavling" data-unit="H1" data-blok="H" points="822.9,329.4 859.5,341.6 853.0,361.1 816.4,348.9"><title>H1</title></polygon>
+    <text x="838.0" y="345.3" text-anchor="middle" dominant-baseline="central">H1</text>
+    <polygon id="kav-H2" class="kavling" data-unit="H2" data-blok="H" points="815.2,352.5 853.6,365.3 847.1,384.8 808.7,372.0"><title>H2</title></polygon>
+    <text x="831.2" y="368.7" text-anchor="middle" dominant-baseline="central">H2</text>
+    <polygon id="kav-H3" class="kavling" data-unit="H3" data-blok="H" points="807.5,375.6 842.6,387.3 836.1,406.8 801.0,395.1"><title>H3</title></polygon>
+    <text x="821.8" y="391.2" text-anchor="middle" dominant-baseline="central">H3</text>
+    <polygon id="kav-H4" class="kavling" data-unit="H4" data-blok="H" points="800.1,398.8 834.9,410.4 828.4,429.9 793.6,418.3"><title>H4</title></polygon>
+    <text x="814.3" y="414.4" text-anchor="middle" dominant-baseline="central">H4</text>
+    <polygon id="kav-H5" class="kavling" data-unit="H5" data-blok="H" points="792.4,421.9 827.2,433.5 820.7,453.0 785.9,441.4"><title>H5</title></polygon>
+    <text x="806.6" y="437.5" text-anchor="middle" dominant-baseline="central">H5</text>
+    <polygon id="kav-H6" class="kavling" data-unit="H6" data-blok="H" points="784.7,445.0 819.5,456.6 812.9,476.4 778.1,464.8"><title>H6</title></polygon>
+    <text x="798.8" y="460.7" text-anchor="middle" dominant-baseline="central">H6</text>
+    <polygon id="kav-H7" class="kavling" data-unit="H7" data-blok="H" points="776.7,468.0 811.8,479.7 805.2,499.5 770.1,487.8"><title>H7</title></polygon>
+    <text x="791.0" y="483.8" text-anchor="middle" dominant-baseline="central">H7</text>
+    <polygon id="kav-H8" class="kavling" data-unit="H8" data-blok="H" points="769.0,491.1 804.1,502.8 797.5,522.6 762.4,510.9"><title>H8</title></polygon>
+    <text x="783.3" y="506.9" text-anchor="middle" dominant-baseline="central">H8</text>
+    <polygon id="kav-H9" class="kavling" data-unit="H9" data-blok="H" points="688.9,528.4 709.3,535.2 696.2,574.5 675.8,567.7"><title>H9</title></polygon>
+    <text x="692.6" y="551.5" text-anchor="middle" dominant-baseline="central">H9</text>
+    <polygon id="kav-H10" class="kavling" data-unit="H10" data-blok="H" points="712.2,535.5 732.6,542.3 719.7,581.0 699.3,574.2"><title>H10</title></polygon>
+    <text x="716.0" y="558.3" text-anchor="middle" dominant-baseline="central">H10</text>
+    <polygon id="kav-H11" class="kavling" data-unit="H11" data-blok="H" points="735.4,542.9 755.8,549.7 743.2,587.5 722.8,580.7"><title>H11</title></polygon>
+    <text x="739.3" y="565.2" text-anchor="middle" dominant-baseline="central">H11</text>
+    <polygon id="kav-H12" class="kavling" data-unit="H12" data-blok="H" points="758.8,549.7 779.2,556.5 766.7,594.0 746.3,587.2"><title>H12</title></polygon>
+    <text x="762.8" y="571.9" text-anchor="middle" dominant-baseline="central">H12</text>
+    <polygon id="kav-H13" class="kavling" data-unit="H13" data-blok="H" points="782.0,557.1 802.1,563.8 789.9,600.4 769.8,593.7"><title>H13</title></polygon>
+    <text x="786.0" y="578.8" text-anchor="middle" dominant-baseline="central">H13</text>
+  </g>
+  <g id="fasilitas">
+    <polygon id="fas-MASJID" class="fasilitas" points="430.0,198.1 503.5,222.6 489.2,265.5 415.7,241.0"><title>Masjid — 240 m²</title></polygon>
+    <text x="459.6" y="231.8" text-anchor="middle" dominant-baseline="central">Masjid</text>
+  </g>
+</svg>

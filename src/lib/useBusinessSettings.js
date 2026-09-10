@@ -33,3 +33,36 @@ export function useBusinessSettings(category) {
 
   return values;
 }
+
+/**
+ * Kategori yang berbentuk kunci→teks, bukan daftar nilai.
+ *
+ * Dipakai template WhatsApp (migrasi 014), yang butuh penanda tahap milik tiap
+ * kalimat. Mengembalikan objek `{ [label]: value }` supaya pemanggil bisa
+ * mengambil satu baris langsung tanpa mencari di dalam array.
+ *
+ * Sebelum migrasi 014 dijalankan, kolom `label` belum ada dan kuerinya gagal —
+ * hasilnya objek kosong, dan pemanggil jatuh ke kalimat bawaannya sendiri.
+ */
+export function useBusinessSettingsMap(category) {
+  const [map, setMap] = useState({});
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("business_settings")
+      .select("label, value")
+      .eq("category", category)
+      .not("label", "is", null)
+      .order("sort_order")
+      .then(({ data, error }) => {
+        if (!active || error) return;
+        setMap(Object.fromEntries((data || []).map((r) => [r.label, r.value])));
+      });
+    return () => {
+      active = false;
+    };
+  }, [category]);
+
+  return map;
+}

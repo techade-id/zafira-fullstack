@@ -34,15 +34,26 @@ export function Highlight({ text, q }) {
   return <>{parts}</>;
 }
 
-export function ResultRow({ row, q, onPick }) {
+export function ResultRow({ row, q, onPick, aktif }) {
+  const ref = React.useRef(null);
+
+  // Hasil yang ditandai panah harus ikut tergulir ke dalam pandangan, kalau
+  // tidak navigasi keyboard berhenti terasa di baris kelima.
+  React.useEffect(() => {
+    if (aktif) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [aktif]);
+
   return (
     <button
+      ref={ref}
+      role="option"
+      aria-selected={Boolean(aktif)}
       onClick={() => onPick(row)}
       style={{
         display: "block",
         width: "100%",
         textAlign: "left",
-        background: "none",
+        background: aktif ? "#F4F6FA" : "none",
         border: "none",
         borderRadius: 10,
         padding: "9px 10px",
@@ -50,7 +61,7 @@ export function ResultRow({ row, q, onPick }) {
         font: "inherit",
       }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "#F4F6FA")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = aktif ? "#F4F6FA" : "none")}
     >
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_DARK }}>
@@ -71,10 +82,26 @@ export function ResultRow({ row, q, onPick }) {
   );
 }
 
+/**
+ * Alamat tujuan sebuah hasil pencarian.
+ *
+ * `search_notes` mengembalikan rute per modul, dan sebelumnya semuanya dibuka
+ * dengan pola `?cari=&sorot=` — padahal hanya ProspekPage yang pernah membaca
+ * parameter itu. Hasil Konsumen dan Progres KPR mendarat di daftar polos: tidak
+ * tersaring, tidak tersorot, tidak terbuka. Konsumen kini punya halaman
+ * sendiri, jadi tautannya langsung ke sana.
+ */
+export function targetUrl(row, q) {
+  if (row.rute === "/konsumen") return `/konsumen/${row.record_id}`;
+  return `${row.rute}?cari=${encodeURIComponent(q)}&sorot=${row.record_id}`;
+}
+
 export default function GlobalSearch({ onNavigate }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [sorot, setSorot] = useState(-1);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
   const navigate = useNavigate();
   const { results, loading, error } = useNotesSearch(q, { limit: 20, enabled: open });
 
@@ -86,26 +113,68 @@ export default function GlobalSearch({ onNavigate }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // ⌘K / Ctrl+K — pintasan yang sudah jadi kebiasaan di mana-mana, dan
+  // pencarian adalah kontrol yang paling sering dipakai di aplikasi ini.
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+        setOpen(true);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Daftar rata untuk navigasi panah; tampilannya tetap berkelompok per modul.
+  const groups = groupByModule(results);
+  const rata = groups.flatMap((g) => g.rows);
+
+  useEffect(() => {
+    setSorot(-1);
+  }, [q]);
+
   function pick(row) {
     setOpen(false);
     onNavigate && onNavigate();
-    navigate(`${row.rute}?cari=${encodeURIComponent(q)}&sorot=${row.record_id}`);
+    navigate(targetUrl(row, q));
   }
 
   function onKeyDown(e) {
     if (e.key === "Escape") {
       setOpen(false);
       e.currentTarget.blur();
+      return;
     }
-    if (e.key === "Enter" && q.trim().length >= MIN_QUERY) {
-      setOpen(false);
-      onNavigate && onNavigate();
-      navigate(`/cari?q=${encodeURIComponent(q.trim())}`);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSorot((v) => Math.min(rata.length - 1, v + 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSorot((v) => Math.max(-1, v - 1));
+      return;
+    }
+    if (e.key === "Enter") {
+      // Panah menandai satu hasil → buka hasil itu. Tanpa itu, Enter berarti
+      // "lihat semua", yang lebih berguna daripada menebak hasil pertama.
+      if (sorot >= 0 && rata[sorot]) {
+        pick(rata[sorot]);
+        return;
+      }
+      if (q.trim().length >= MIN_QUERY) {
+        setOpen(false);
+        onNavigate && onNavigate();
+        navigate(`/cari?q=${encodeURIComponent(q.trim())}`);
+      }
     }
   }
 
-  const groups = groupByModule(results);
   const tooShort = q.trim().length > 0 && q.trim().length < MIN_QUERY;
+  let indeks = -1;
 
   return (
     <div ref={boxRef} style={{ position: "relative", width: "100%" }}>
@@ -121,6 +190,7 @@ export default function GlobalSearch({ onNavigate }) {
         }}
       >
         <input
+          ref={inputRef}
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -130,8 +200,19 @@ export default function GlobalSearch({ onNavigate }) {
           onKeyDown={onKeyDown}
           placeholder="Cari catatan, prospek, komplain…"
           aria-label="Cari catatan"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="hasil-cari"
           style={{ flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: 13, background: "transparent", color: TEXT_DARK }}
         />
+        {!q && (
+          <kbd
+            aria-hidden="true"
+            style={{ fontSize: 10.5, color: TEXT_MID, border: `1px solid ${BORDER}`, borderRadius: 5, padding: "2px 6px", fontFamily: "inherit", flexShrink: 0 }}
+          >
+            ⌘K
+          </kbd>
+        )}
         {q && (
           <button
             onClick={() => {
@@ -163,6 +244,8 @@ export default function GlobalSearch({ onNavigate }) {
 
       {open && q.trim().length > 0 && (
         <div
+          id="hasil-cari"
+          role="listbox"
           style={{
             position: "absolute",
             top: "calc(100% + 8px)",
@@ -199,9 +282,18 @@ export default function GlobalSearch({ onNavigate }) {
               >
                 {g.modul}
               </div>
-              {g.rows.map((row, i) => (
-                <ResultRow key={`${row.modul}-${row.record_id}-${i}`} row={row} q={q} onPick={pick} />
-              ))}
+              {g.rows.map((row, i) => {
+                indeks += 1;
+                return (
+                  <ResultRow
+                    key={`${row.modul}-${row.record_id}-${i}`}
+                    row={row}
+                    q={q}
+                    onPick={pick}
+                    aktif={indeks === sorot}
+                  />
+                );
+              })}
             </div>
           ))}
 

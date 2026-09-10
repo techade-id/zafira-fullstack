@@ -25,6 +25,21 @@ input:focus, select:focus, textarea:focus {
   border-color: #0F2A5C !important;
 }
 
+/* Cincin fokus yang benar-benar terlihat.
+   Sebelumnya satu-satunya penanda fokus adalah perubahan warna tepi pada
+   input — tombol, tautan, dan baris tabel tidak menunjukkan apa pun, sehingga
+   navigasi keyboard berjalan buta. :focus-visible dipakai agar cincinnya tidak
+   muncul pada klik tetikus. */
+:focus-visible {
+  outline: 2px solid #E2571F;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.app-sidebar :focus-visible {
+  outline-color: #ffffff;
+}
+
 /* ---------- App shell (sidebar + topbar) ---------- */
 
 /* Sidebar geometry lives here (not inline) so the mobile media query can
@@ -123,9 +138,14 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media (max-width: 560px) {
-  /* Notification and avatar chips are dropped for room — search is not, it is
-     the most-used control on a phone. */
-  .topbar-actions .icon-btn:not(.search-toggle) {
+  /* Avatar dilepas untuk memberi ruang. Pencarian dan lonceng tidak: keduanya
+     justru paling dibutuhkan di ponsel — Sales membuka aplikasi ini di
+     lapangan untuk melihat apa yang harus dikerjakan hari ini. */
+  .topbar-actions .icon-btn:not(.search-toggle):not(.notif-btn) {
+    display: none !important;
+  }
+
+  .topbar-actions .avatar-chip {
     display: none !important;
   }
 }
@@ -199,6 +219,106 @@ input:focus, select:focus, textarea:focus {
   .eval-form-grid,
   .transfer-form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Tabel data ---------- */
+
+.dt-row-klik:hover {
+  background: #F8FAFD;
+}
+
+/* Baris yang dituju sebuah tautan dalam (pencarian global, lonceng).
+   Sorotan memudar sendiri: ia menjawab "yang mana" saat tiba, lalu berhenti
+   bersaing dengan isi tabel. */
+.dt-row-sorot > td {
+  background: #FDECE4;
+  animation: dt-sorot 4s ease-out forwards;
+}
+
+.dt-row-sorot > td:first-child {
+  box-shadow: inset 3px 0 0 #E2571F;
+}
+
+@keyframes dt-sorot {
+  0%, 45% { background: #FDECE4; }
+  100% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-row-sorot > td {
+    animation: none;
+    background: #FDECE4;
+  }
+}
+
+/* Mode kartu di ponsel.
+   Tabel delapan kolom dengan white-space: nowrap memaksa gulir menyamping, dan
+   Sales justru paling sering membuka aplikasi ini dari HP di lapangan. Di bawah
+   700px tiap baris dilipat menjadi kartu: label kolom diambil dari
+   data-label yang sudah ditulis DataTable pada setiap sel. */
+@media (max-width: 700px) {
+  .dt-scroll {
+    overflow-x: visible;
+  }
+
+  .dt-table thead {
+    /* clip, bukan display:none — judul kolom tetap terbaca pembaca layar. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .dt-table,
+  .dt-table tbody,
+  .dt-table tr,
+  .dt-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .dt-table tr {
+    border: 1px solid #E3E8F0;
+    border-radius: 14px;
+    padding: 6px 12px;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .dt-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 8px 0 !important;
+    border-bottom: 1px solid #F1F4F9 !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+
+  .dt-table tr td:last-child {
+    border-bottom: none !important;
+  }
+
+  .dt-table td::before {
+    content: attr(data-label);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #64748B;
+    flex-shrink: 0;
+  }
+
+  /* Sel tanpa judul kolom (kolom aksi) tidak perlu label kosong di kiri. */
+  .dt-table td[data-label=""]::before {
+    content: none;
+  }
+
+  .dt-table td[data-label=""] {
+    justify-content: flex-end;
+    padding-top: 10px !important;
   }
 }
 

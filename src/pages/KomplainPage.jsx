@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { MessageSquareWarning } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings } from "../lib/useBusinessSettings";
@@ -32,6 +34,7 @@ function warrantyStatus(row) {
 }
 
 export default function KomplainPage() {
+  const [params] = useSearchParams();
   const [complaints, setComplaints] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [units, setUnits] = useState([]);
@@ -267,7 +270,18 @@ export default function KomplainPage() {
       <Card>
         <DataTable
           loading={loading}
-          emptyLabel="Belum ada komplain."
+          sortable
+          searchable
+          searchPlaceholder="Cari komplain — konsumen, unit, detail…"
+          // Datang dari pencarian global: kata kunci diteruskan ke saringan
+          // daftar. Sebelumnya hasil Komplain mendarat di daftar polos.
+          initialSearch={params.get("cari") || ""}
+          highlightId={params.get("sorot") || undefined}
+          searchExtra={(r) => [r.customers?.name, r.units?.unit_code, r.contractors?.name, r.description, r.jenis_komplain].filter(Boolean).join(" ")}
+          pageSize={25}
+          emptyIcon={MessageSquareWarning}
+          emptyLabel="Belum ada komplain"
+          emptyHint="Komplain aftersales yang masuk akan tercatat di sini beserta status garansinya."
           columns={[
             { key: "tanggal_komplain", label: "Tanggal", render: (r) => fmt(r.tanggal_komplain) },
             { key: "target", label: "Konsumen / Unit", render: (r) => r.customers?.name || r.units?.unit_code || "-" },

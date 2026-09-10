@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../context/AuthContext";
+import { roleOf } from "../lib/permissions";
+import FokusHariIni from "../components/FokusHariIni";
 import {
   Card,
   SectionTitle,
@@ -120,7 +123,27 @@ function FunnelStrip({ stages, total }) {
   );
 }
 
+/**
+ * Kartu laporan yang relevan per peran.
+ *
+ * Sebelumnya ketujuh peran melihat sepuluh kartu yang sama. Sales tidak
+ * mengurus antrean Finance, dan Finance tidak mengurus durasi tahap KPR —
+ * menampilkan keduanya kepada semua orang membuat layar pertama jadi panjang
+ * tanpa menambah satu pun keputusan yang bisa diambil.
+ */
+const KARTU_PERAN = {
+  sales: { finance: false, kprDurasi: false, berkas: false, agen: true },
+  admin_marketing: { finance: true, kprDurasi: true, berkas: true, agen: true },
+  finance: { finance: true, kprDurasi: false, berkas: false, agen: false },
+  tim_lapangan: { finance: false, kprDurasi: false, berkas: false, agen: false },
+};
+
+const SEMUA_KARTU = { finance: true, kprDurasi: true, berkas: true, agen: true };
+
 export default function DashboardPage() {
+  const { profile } = useAuth();
+  const kartu = KARTU_PERAN[roleOf(profile)] || SEMUA_KARTU;
+
   // Aggregates come from the dashboard_stats() RPC so they're computed in
   // Postgres — counting rows in the browser silently capped at 1000.
   const [stats, setStats] = useState(null);
@@ -200,6 +223,9 @@ export default function DashboardPage() {
           </div>
         </Card>
       )}
+
+      {/* Pekerjaan lebih dulu, laporan menyusul. */}
+      <FokusHariIni />
 
       <Card style={{ padding: 14 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -294,6 +320,7 @@ export default function DashboardPage() {
           <BarChart data={weekData} highlightIndex={highlightIndex} />
         </Card>
 
+        {kartu.finance && (
         <Card>
           <SectionTitle title="Antrean Finance" />
           {!finance ? (
@@ -326,8 +353,10 @@ export default function DashboardPage() {
             </div>
           )}
         </Card>
+        )}
       </div>
 
+      {kartu.kprDurasi && (
       <Card>
         <SectionTitle title="Rata-rata Durasi per Tahap KPR" action={<span style={{ fontSize: 12, color: TEXT_MID }}>dalam hari</span>} />
         <div className="rg-4">
@@ -342,7 +371,9 @@ export default function DashboardPage() {
           ))}
         </div>
       </Card>
+      )}
 
+      {kartu.berkas && (
       <div className="chart-row">
         <Card>
           <SectionTitle
@@ -393,6 +424,7 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+      )}
 
       <Card>
         <SectionTitle
@@ -451,6 +483,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {kartu.agen && (
       <div className="rg-2">
         <Card>
           <SectionTitle title="Performa per Agen" />
@@ -483,6 +516,7 @@ export default function DashboardPage() {
           />
         </Card>
       </div>
+      )}
     </div>
   );
 }

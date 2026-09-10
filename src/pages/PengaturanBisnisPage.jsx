@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, ReadOnlyBanner } from "../components/ui";
+import { useToast } from "../context/ToastContext";
+import { TEMPLATE_BAWAAN, isiPenanda } from "../lib/waTemplates";
+import { labelTahap } from "../lib/format";
+import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, POSITIVE, ReadOnlyBanner } from "../components/ui";
+
+/** Urutan tahap pada panel template WhatsApp — mengikuti alur funnel. */
+const TAHAP_WA = ["leads", "cold", "warm", "hot", "booking", "kpr", "akad", "aftersales"];
 
 const CATEGORIES = [
   { key: "lead_source", label: "Sumber Informasi Leads", hint: "Label lama; sumber baru dipilih relasional di halaman Prospek" },
@@ -16,6 +22,7 @@ const CATEGORIES = [
 ];
 
 export default function PengaturanBisnisPage() {
+  const toast = useToast();
   const [settings, setSettings] = useState([]);
   const [appSettings, setAppSettings] = useState({});
   const [holidays, setHolidays] = useState([]);
@@ -137,6 +144,46 @@ export default function PengaturanBisnisPage() {
     fetchAll();
   }
 
+  /**
+   * Menyimpan satu template WhatsApp.
+   *
+   * Baris ditulis dengan `label` terisi, sehingga masuk ke indeks unik
+   * (category, label) dari migrasi 014 — satu template per tahap.
+   */
+  async function saveTemplate(tahap, teks) {
+    const nilai = (teks || "").trim();
+    const adaBaris = settings.find((s) => s.category === "wa_template" && s.label === tahap);
+
+    if (!nilai) {
+      // Dikosongkan berarti kembali ke kalimat bawaan aplikasi, bukan tidak ada
+      // pesan sama sekali — aksi WhatsApp tidak boleh berhenti bekerja.
+      if (adaBaris) {
+        const { error: e } = await supabase.from("business_settings").delete().eq("id", adaBaris.id);
+        if (e) return toast.gagal(e.message);
+        toast.info(`Template ${labelTahap(tahap)} dikembalikan ke kalimat bawaan.`);
+        fetchAll();
+      }
+      return;
+    }
+
+    if (adaBaris && adaBaris.value === nilai) return;
+
+    const { error: e } = adaBaris
+      ? await supabase.from("business_settings").update({ value: nilai }).eq("id", adaBaris.id)
+      : await supabase
+          .from("business_settings")
+          .insert({ category: "wa_template", label: tahap, value: nilai, sort_order: TAHAP_WA.indexOf(tahap) + 1 });
+
+    if (e) {
+      // Sebelum migrasi 014, kolom `label` belum ada.
+      const belumMigrasi = /column .*label|schema cache/i.test(e.message || "");
+      toast.gagal(belumMigrasi ? "Jalankan migration_014_wa_templates.sql terlebih dahulu." : e.message);
+      return;
+    }
+    toast.sukses(`Template ${labelTahap(tahap)} tersimpan.`);
+    fetchAll();
+  }
+
   return (
     <div>
       <PageTitle title="Pengaturan Bisnis" subtitle="Daftar pilihan, sumber leads relasional, kalender kerja, dan parameter penilaian" />
@@ -229,6 +276,57 @@ export default function PengaturanBisnisPage() {
           ]}
           rows={holidays}
         />
+      </Card>
+
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle
+          title="Template Pesan WhatsApp"
+          action={<span style={{ fontSize: 12, color: TEXT_MID }}>{TAHAP_WA.length} tahap</span>}
+        />
+        <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 14, lineHeight: 1.6 }}>
+          Kalimat pembuka yang terisi otomatis saat tombol WhatsApp ditekan, berbeda per tahap prospek. Kosongkan sebuah
+          kolom untuk mengembalikannya ke kalimat bawaan.
+          <br />
+          Penanda yang dikenali:{" "}
+          {["{nama}", "{agen}", "{unit}"].map((p) => (
+            <code key={p} style={{ background: PRIMARY_SOFT, color: PRIMARY, padding: "1px 6px", borderRadius: 5, marginRight: 5, fontSize: 11 }}>
+              {p}
+            </code>
+          ))}
+        </div>
+
+        <div className="rg-2" style={{ rowGap: 16 }}>
+          {TAHAP_WA.map((tahap) => {
+            const baris = settings.find((s) => s.category === "wa_template" && s.label === tahap);
+            const nilai = baris?.value ?? TEMPLATE_BAWAAN[tahap] ?? "";
+            const kustom = Boolean(baris);
+            return (
+              <div key={tahap} style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: TEXT_DARK }}>{labelTahap(tahap)}</span>
+                  {kustom ? (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: POSITIVE, background: "#E4F2E8", padding: "2px 7px", borderRadius: 999 }}>
+                      DISESUAIKAN
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 10.5, color: TEXT_MID }}>bawaan</span>
+                  )}
+                </div>
+                <textarea
+                  defaultValue={nilai}
+                  onBlur={(e) => saveTemplate(tahap, e.target.value)}
+                  aria-label={`Template WhatsApp tahap ${labelTahap(tahap)}`}
+                  style={{ ...inputStyle, width: "100%", minHeight: 84, resize: "vertical", fontFamily: "inherit", lineHeight: 1.55 }}
+                />
+                {/* Pratinjau: penanda yang salah ketik baru ketahuan setelah
+                    pesan terkirim, dan saat itu sudah terlambat. */}
+                <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 5, lineHeight: 1.5, fontStyle: "italic" }}>
+                  {isiPenanda(nilai, { nama: "Budi", agen: "Sales A", unit: "A-01" })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </Card>
 
       <Card style={{ marginBottom: 18 }}>

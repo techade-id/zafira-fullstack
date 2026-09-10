@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useNotesSearch, groupByModule, MIN_QUERY } from "../lib/useNotesSearch";
-import { Highlight } from "../components/GlobalSearch";
+import { Highlight, targetUrl } from "../components/GlobalSearch";
 import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, NEGATIVE } from "../components/ui";
 
 export default function PencarianPage() {
@@ -108,7 +108,7 @@ export default function PencarianPage() {
               label: "",
               render: (row) => (
                 <button
-                  onClick={() => navigate(`${row.rute}?cari=${encodeURIComponent(initial)}&sorot=${row.record_id}`)}
+                  onClick={() => navigate(targetUrl(row, initial))}
                   style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_DARK, borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
                 >
                   Buka

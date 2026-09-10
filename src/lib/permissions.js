@@ -84,6 +84,9 @@ const WRITE_MATRIX = {
   task: ["admin", "pengawas", "admin_marketing", "tim_lapangan"],
   // Deletions are narrower than edits — these mirror the FOR DELETE policies.
   customer_delete: ["admin"],
+  // lead_activities_delete (migrasi 008) berbunyi is_admin(): riwayat komunikasi
+  // adalah jejak audit, jadi penulisnya sendiri pun tidak boleh menghapusnya.
+  followup_delete: ["admin"],
   payment_delete: ["admin", "finance"],
   document_delete: ["admin", "admin_marketing"],
   cancellation_delete: ["admin"],
@@ -182,6 +185,16 @@ export function allowedRoutes(profile) {
   return ROUTES_BY_ROLE[roleOf(profile)] || ROUTES_BY_ROLE.sales;
 }
 
+/**
+ * Rute bersarang ikut terbawa oleh induknya.
+ *
+ * Perbandingan persis tidak cukup sejak ada halaman detail: `/konsumen/<id>`
+ * tidak pernah cocok dengan daftar di atas, sehingga RoleRoute melempar setiap
+ * orang kembali ke dashboard — termasuk yang memang berhak. "/" dikecualikan
+ * karena awalannya cocok dengan segalanya.
+ */
 export function canVisit(profile, path) {
-  return allowedRoutes(profile).includes(path);
+  const allowed = allowedRoutes(profile);
+  if (allowed.includes(path)) return true;
+  return allowed.some((route) => route !== "/" && path.startsWith(`${route}/`));
 }
