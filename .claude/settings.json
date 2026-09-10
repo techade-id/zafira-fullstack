@@ -19,7 +19,20 @@
       "Bash(psql -q -v ON_ERROR_STOP=1 -d zafira_migration_check -f supabase/migration_007_notes_search.sql)",
       "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='11111111-1111-1111-1111-111111111111'; select modul, judul, rute, record_id is not null as punya_id, cuplikan from search_notes\\('BPHTB'\\);\")",
       "Bash(psql -q -d zafira_check -f /private/tmp/claude-501/-Users-macbookpro-Documents-2026-zafira/9387bdfb-1c65-432d-97eb-01d33d63a521/scratchpad/regression.sql)",
-      "Bash(dropdb --if-exists zafira_check)"
+      "Bash(dropdb --if-exists zafira_check)",
+      "Bash(./supabase/tests/run.sh)",
+      "Bash(set +e)",
+      "Bash(set -e)",
+      "Bash(echo \"npm run test:db exit=$?\")",
+      "Bash(echo \" exit=$?\")",
+      "Bash(python3 -c ' *)",
+      "Bash(sort -u -t'\"' -k2)",
+      "Bash(sed -n '/create table field_projects/,/^\\);/p;/create table field_reports/,/^\\);/p' supabase/schema.sql)",
+      "Bash(awk '{print \"  \"$1\" \"$2}')",
+      "Bash(sed -n '/UJI YANG GAGAL/,/RINGKASAN/p' /tmp/l.log)",
+      "Bash(sed -n '/UJI YANG GAGAL/,/^\\(0 rows\\)/p' /tmp/l2.log)",
+      "Bash(sed -n '/UJI YANG GAGAL/,/rows\\)/p' /tmp/mm.log)",
+      "Bash(sed -n '/UJI YANG GAGAL/,/rows\\)/p' /tmp/mn.log)"
     ]
   }
 }

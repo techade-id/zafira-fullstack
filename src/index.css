@@ -201,3 +201,13 @@ input:focus, select:focus, textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Monitoring Lapangan (mobile-first) ---------- */
+
+/* Dua kolom bahkan di layar sempit: pasangan tanggal/progres dan
+   sebelum/sesudah memang selalu dibaca berdampingan. */
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}

@@ -23,6 +23,7 @@ import {
   X,
   Asterisk,
   ScrollText,
+  HardHat as HardHatIcon,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { allowedRoutes, roleLabel } from "../lib/permissions";
@@ -52,6 +53,7 @@ const navSections = [
       { to: "/siteplan", icon: Map, label: "Siteplan Digital" },
       { to: "/kontraktor", icon: HardHat, label: "Kontraktor" },
       { to: "/rencana-proyek", icon: ClipboardList, label: "Rencana Proyek" },
+      { to: "/lapangan", icon: HardHatIcon, label: "Monitoring Lapangan" },
       { to: "/komplain", icon: MessageSquareWarning, label: "Komplain" },
     ],
   },
@@ -65,7 +67,7 @@ const navSections = [
   {
     title: "Pengaturan",
     items: [
-      { to: "/data-agen", icon: UserCog, label: "Data Agen" },
+      { to: "/data-agen", icon: UserCog, label: "Pengguna" },
       { to: "/pengaturan-bisnis", icon: Settings, label: "Pengaturan Bisnis" },
       { to: "/log-aktivitas", icon: ScrollText, label: "Log Aktivitas" },
     ],

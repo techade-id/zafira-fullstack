@@ -28,7 +28,13 @@ where n.nspname = 'public'
     'customer_locked', 'unlock_customer', 'guard_payment_verification',
     'apply_booking_handover', 'log_activity',
     -- migration_009
-    'lead_stage_rank', 'promote_lead', 'sync_lead_stage_from_kpr', 'sync_lead_stage_from_lock'
+    'lead_stage_rank', 'promote_lead', 'sync_lead_stage_from_kpr', 'sync_lead_stage_from_lock',
+    -- migration_010
+    'lead_stage_bucket', 'campaign_performance',
+    -- migration_011
+    'me', 'is_aktif', 'approve_user', 'deactivate_user',
+    -- migration_012
+    'on_field_project', 'sync_field_progress'
   )
 
 union all
@@ -43,7 +49,7 @@ from (values ('leads'), ('lead_activities'), ('customers'), ('customer_kpr'), ('
 left join pg_tables t on t.schemaname = 'public' and t.tablename = v.name
 
 union all
--- Kolom yang ditambahkan migration_008/009. Kalau HILANG, migrasinya belum jalan.
+-- Kolom yang ditambahkan migration_008 sampai 012. Kalau HILANG, migrasinya belum jalan.
 select 'KOLOM BARU', v.tbl || '.' || v.col,
        case when c.column_name is null then 'HILANG' else 'ada' end
 from (values ('customers', 'locked_at'), ('customers', 'handover_state'),
@@ -51,7 +57,9 @@ from (values ('customers', 'locked_at'), ('customers', 'handover_state'),
              ('lead_activities', 'hasil'), ('activity_logs', 'changes'),
              ('leads', 'source_type'), ('leads', 'campaign_id'),
              ('leads', 'partner_id'), ('leads', 'username_sosmed'),
-             ('payments', 'proof_url')) v(tbl, col)
+             ('payments', 'proof_url'),
+             ('ads_analytics', 'campaign_id'),
+             ('field_reports', 'reporter_id')) v(tbl, col)
 left join information_schema.columns c
   on c.table_schema = 'public' and c.table_name = v.tbl and c.column_name = v.col
 
@@ -66,6 +74,16 @@ from pg_enum e join pg_type ty on ty.oid = e.enumtypid where ty.typname = 'lead_
 union all
 select 'ROLE TERPAKAI', p.role::text, count(*)::text
 from profiles p group by p.role
+
+union all
+-- Sejak migration_011 akun nonaktif tidak punya peran efektif sama sekali.
+-- Kalau jumlah di bawah bukan nol, ada orang yang tidak bisa masuk.
+select 'AKUN NONAKTIF', count(*)::text, 'menunggu persetujuan admin'
+from profiles where not is_active
+
+union all
+select 'PENGATURAN', a.key, a.value
+from app_settings a where a.key = 'domain_email_diizinkan'
 
 union all
 -- Indeks trigram adalah syarat pencarian Notes tetap cepat di puluhan ribu baris.
@@ -92,6 +110,10 @@ select 'ISI DATA', x.nama, x.jml::text from (
   union all select 'complaints', count(*) from complaints
   union all select 'ads_analytics', count(*) from ads_analytics
   union all select 'activity_logs', count(*) from activity_logs
+  union all select 'field_projects', count(*) from field_projects
+  union all select 'field_reports', count(*) from field_reports
+  union all select 'ads_campaigns', count(*) from ads_campaigns
+  union all select 'partners', count(*) from partners
   union all select 'profiles', count(*) from profiles
 ) x
 

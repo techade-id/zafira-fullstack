@@ -4,6 +4,7 @@ import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute, { RoleRoute } from "./routes/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
+import DaftarPage from "./pages/DaftarPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProspekPage from "./pages/ProspekPage";
 import PembayaranPage from "./pages/PembayaranPage";
@@ -22,6 +23,7 @@ import DataAgenPage from "./pages/DataAgenPage";
 import PengaturanBisnisPage from "./pages/PengaturanBisnisPage";
 import PencarianPage from "./pages/PencarianPage";
 import LogAktivitasPage from "./pages/LogAktivitasPage";
+import LapanganPage from "./pages/LapanganPage";
 
 export default function App() {
   return (
@@ -29,6 +31,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/daftar" element={<DaftarPage />} />
 
           <Route
             path="/"
@@ -48,6 +51,7 @@ export default function App() {
               ["siteplan", <SiteplanPage />],
               ["kontraktor", <KontraktorPage />],
               ["rencana-proyek", <RencanaProyekPage />],
+              ["lapangan", <LapanganPage />],
               ["komplain", <KomplainPage />],
               ["laporan", <LaporanPage />],
               ["iklan", <IklanPage />],

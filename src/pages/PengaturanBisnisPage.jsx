@@ -169,6 +169,20 @@ export default function PengaturanBisnisPage() {
               style={inputStyle}
             />
           </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>
+              Domain email yang boleh mendaftar (pisahkan dengan koma, kosongkan untuk mengizinkan semua)
+            </div>
+            <input
+              defaultValue={appSettings.domain_email_diizinkan || ""}
+              onBlur={(e) => saveAppSetting("domain_email_diizinkan", e.target.value)}
+              placeholder="zafiraproperty.id"
+              style={{ ...inputStyle, width: "100%" }}
+            />
+            <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 4 }}>
+              Ditegakkan di database, bukan di formulir — pendaftaran dari domain lain ditolak sebelum akunnya terbuat.
+            </div>
+          </div>
           <div>
             <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Pengurang nilai per bobot komplain</div>
             <input

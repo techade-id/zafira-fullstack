@@ -187,6 +187,7 @@ export default function ProyekPage() {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <EditButton label="Ubah Proyek" onClick={() => startEditProject(activeProject)} />
                 <DeleteButton
+                  subject="project_delete"
                   label="Hapus Proyek"
                   itemName={activeProject.name}
                   warning={`Seluruh ${projectUnits.length} unit di proyek ini ikut terhapus permanen, termasuk posisinya pada Siteplan Digital.`}
@@ -255,6 +256,7 @@ export default function ProyekPage() {
                   <RowActions>
                     <EditButton onClick={() => startEditUnit(row)} />
                     <DeleteButton
+                      subject="project"
                       itemName={`Unit ${row.unit_code}`}
                       warning="Posisi unit pada Siteplan Digital ikut hilang. Konsumen dan komplain yang terkait tetap ada, hanya kehilangan kaitan unitnya."
                       onDelete={() => supabase.from("units").delete().eq("id", row.id)}

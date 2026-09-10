@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Asterisk } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { PRIMARY, PRIMARY_SOFT, ACCENT, PAGE_BG, BORDER, TEXT_DARK, TEXT_MID } from "../components/ui";
@@ -133,6 +133,13 @@ export default function LoginPage() {
             {loading ? "Memproses..." : "Masuk"}
           </button>
           <div style={{ color: "#C2413B", fontSize: 12, marginTop: 10, minHeight: 14 }}>{error}</div>
+
+          <div style={{ fontSize: 13, color: TEXT_MID, marginTop: 4 }}>
+            Belum punya akun?{" "}
+            <Link to="/daftar" style={{ color: PRIMARY, fontWeight: 600, textDecoration: "none" }}>
+              Daftar
+            </Link>
+          </div>
         </div>
       </div>
     </div>

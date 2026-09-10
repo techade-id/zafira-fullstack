@@ -1,11 +1,12 @@
 /**
- * Frontend mirror of the RLS policies in migration_008_roles_sod.sql.
+ * Frontend mirror of the RLS policies in migrations 008, 011 and 012.
  *
  * The database is the authority — every rule here is also enforced server-side.
  * This module exists so a user is never shown a control that is certain to be
  * rejected: a read-only Supervisor should not see a "Hapus" button at all.
  *
- * When a policy changes in migration_008, change the matching entry here too.
+ * When a policy changes in any of those migrations, change the matching entry
+ * here too — `supabase/tests/` checks the database side, not this mirror.
  */
 
 /** Retired role names still present in the enum, mapped to their replacement. */
@@ -56,7 +57,7 @@ export function isReadOnly(profile) {
 }
 
 /**
- * Who may write what. Mirrors the WITH CHECK clauses in migration_008.
+ * Who may write what. Mirrors the WITH CHECK clauses in the migrations.
  * Pengawas keeps configuration authority (REVISI §2.1) while staying read-only
  * over the transaction cycle (PRD §3.1).
  */
@@ -67,7 +68,6 @@ const WRITE_MATRIX = {
   document: ["admin", "admin_marketing", "sales"],
   payment: ["admin", "finance", "admin_marketing", "sales"],
   payment_verify: ["admin", "finance"],
-  receipt: ["admin", "finance"],
   cancellation: ["admin", "admin_marketing", "finance", "sales"],
   followup: ["admin", "sales", "admin_marketing", "finance"],
   config: ["admin", "pengawas"],
@@ -75,14 +75,20 @@ const WRITE_MATRIX = {
   project: ["admin", "pengawas", "admin_marketing"],
   contractor: ["admin", "pengawas", "admin_marketing"],
   ads: ["admin", "pengawas", "admin_marketing"],
-  field: ["admin", "pengawas", "admin_marketing", "tim_lapangan"],
+  // Pengawas mengaudit, tidak mengerjakan unit — cocokkan dengan
+  // field_reports_write pada migration_012.
+  field: ["admin", "admin_marketing", "tim_lapangan"],
   complaint: ["admin", "pengawas", "admin_marketing", "sales", "finance", "tim_lapangan"],
   agent_role: ["admin"],
+  // Rencana kerja: project_tasks_write juga mengizinkan tim lapangan.
+  task: ["admin", "pengawas", "admin_marketing", "tim_lapangan"],
   // Deletions are narrower than edits — these mirror the FOR DELETE policies.
   customer_delete: ["admin"],
   payment_delete: ["admin", "finance"],
   document_delete: ["admin", "admin_marketing"],
   cancellation_delete: ["admin"],
+  complaint_delete: ["admin", "admin_marketing"],
+  project_delete: ["admin", "pengawas"],
 };
 
 export function canWrite(profile, subject) {
@@ -136,6 +142,7 @@ const ALL_ROUTES = [
   "/siteplan",
   "/kontraktor",
   "/rencana-proyek",
+  "/lapangan",
   "/komplain",
   "/laporan",
   "/iklan",
@@ -161,13 +168,14 @@ const ROUTES_BY_ROLE = {
     "/siteplan",
     "/kontraktor",
     "/rencana-proyek",
+    "/lapangan",
     "/komplain",
     "/laporan",
     "/iklan",
     "/cari",
   ],
   finance: ["/", "/konsumen", "/pembayaran", "/pembatalan", "/laporan", "/cari"],
-  tim_lapangan: ["/", "/rencana-proyek", "/komplain", "/siteplan", "/cari"],
+  tim_lapangan: ["/", "/lapangan", "/rencana-proyek", "/komplain", "/siteplan", "/cari"],
 };
 
 export function allowedRoutes(profile) {

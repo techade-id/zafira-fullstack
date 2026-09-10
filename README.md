@@ -53,6 +53,16 @@ Booking Fee Handover Hard-Lock, an audit trail, and the PRD sales pipeline
    - **`migration_009_pipeline.sql`** — the seven-stage funnel with automatic
      promotion, `ads_campaigns` + `partners` for relational lead sources, the
      social-media username fields, and an updated `dashboard_stats()`.
+   - **`migration_012_lapangan.sql`** — activates the field module: the reporter
+     is stamped from the session, a crew shares one report history per unit,
+     and unit progress/status follow the latest report. Also widens notes search
+     to cover field-report notes.
+   - **`migration_011_user_management.sql`** — makes `is_active` actually mean
+     something. Until this migration it was guarded but never read by a single
+     policy, so deactivating an agent did nothing at all. It also adds
+     self-signup landing in a pending state, an email-domain allowlist enforced
+     in the database, and `approve_user()` / `deactivate_user()` with an audit
+     trail.
    - **`migration_010_dashboard_and_ads.sql`** — `lead_stage_bucket()` so every
      aggregate reports the seven PRD stages regardless of which legacy enum
      value a row still carries; the funnel, handover and Finance-queue figures
@@ -79,8 +89,12 @@ Booking Fee Handover Hard-Lock, an audit trail, and the PRD sales pipeline
    defaulting to the `sales_agent` role. Promote yourself to `admin` by running
    in the SQL Editor:
    ```sql
-   update profiles set role = 'admin' where id = 'YOUR-USER-UUID';
+   update profiles set role = 'admin', is_active = true where id = 'YOUR-USER-UUID';
    ```
+   `is_active` matters from `migration_011` onwards: every new account — including
+   ones created from the Supabase dashboard — lands **inactive** and pending
+   approval, and an inactive account has no role at all. Miss it and the first
+   admin cannot approve anyone, including themselves.
 
 ## 2. Domain (zafiraproperty.id)
 
@@ -99,14 +113,50 @@ part of this repo:
    password-reset and confirmation links keep pointing at the old
    `*.vercel.app` address.
 
-## 3. Run locally
+## 3. Database test suite
+
+The RLS policies, the Segregation of Duties triggers and the Handover Hard-Lock
+are enforced in Postgres, which means no amount of reading the React code tells
+you whether they still hold. This suite checks them directly:
+
+```bash
+npm run test:db          # or ./supabase/tests/run.sh
+```
+
+It builds a throwaway local database, applies `schema.sql` plus every migration
+in order, seeds fixtures, and runs 125 assertions across seven areas: the role
+matrix, Segregation of Duties and the Hard-Lock, funnel automation, notes search
+(including cross-agent isolation), the dashboard/ads aggregates, the account
+lifecycle, and the field module. It exits
+non-zero when anything fails, so it is usable from CI.
+
+Requirements: a local Postgres (`brew install postgresql && brew services start
+postgresql`). It never touches a Supabase project — `auth.uid()` is replaced by a
+session variable so a test can act as a given user, and everything else runs
+against the real migration files.
+
+`KEEP_DB=1 npm run test:db` leaves the database in place to investigate a
+failure; `TEST_DB=other_name` changes its name.
+
+**The suite has been mutation-tested**: disabling the payment guard, loosening
+the Hard-Lock, allowing funnel stages to move backwards, and switching
+`search_notes` to SECURITY DEFINER each make it fail. A suite that cannot fail
+is worse than no suite, so re-check that property whenever you add to it.
+
+## 4. Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 4. Deploy to Vercel
+## 5. Deploy
+
+`DEPLOY.md` is the ordered runbook for putting this on a real Supabase project:
+migration order, the bootstrap step that is easiest to miss, and a UI walkthrough
+where each step depends on the one before it.
+
+## 6. Deploy to Vercel
 
 ```bash
 npx vercel
@@ -140,9 +190,14 @@ matching your `.env`.
   linked customer + construction progress.
 - **Kontraktor**: contractor CRUD plus 1–5 star evaluations per unit, with
   sort/filter by average score.
-- **Monitoring Lapangan**: `field_projects` progress tracking (%, status,
-  contractor) plus `field_reports` (kendala/solusi, before/after photo
-  upload) per unit.
+- **Monitoring Lapangan**: a mobile-first page where the field team files a
+  daily report per unit — progress, kendala, solusi, and before/after photos
+  taken straight from the phone camera. Unit progress and status are derived
+  from the latest report rather than typed twice, so the siteplan in the office
+  can never show a stale figure. Installable to the home screen; the manifest
+  ships with the app. Until `migration_012` these two tables had no write UI at
+  all: they existed in the schema, with a storage bucket and policies, and
+  nothing ever wrote to them.
 - **Komplain**: complaint CRUD with category/priority, PIC assignment,
   status, and photo upload.
 - **Laporan**: aggregate stat cards and breakdowns across prospek/konsumen/
@@ -158,6 +213,11 @@ matching your `.env`.
   finds their own records.
 - **Follow Up**: chronological communication log per lead and per customer
   (time, actor, note, outcome). Stays open to Sales after the Hard-Lock.
+- **Pengguna**: people sign up themselves at `/daftar`, land inactive with no
+  access, and appear in an approval queue where an admin assigns their role in
+  one action. Deactivating someone genuinely revokes access — including to the
+  records they own. Which domains may register is set in Pengaturan Bisnis and
+  enforced by the database, not the form.
 - **Log Aktivitas**: audit trail for Admin and Pengawas, with a per-column
   before/after diff and date/module filters.
 - **Reminder**: prospects with a scheduled follow-up date, sorted by days
@@ -187,11 +247,8 @@ page and the dashboard.
 
 ## Not yet built
 
-- **Mobile PWA for the field team** (separate app, per the original
-  quotation scope) — `field_projects`/`field_reports` already back it.
-- **Signup / user invite flow** — new users are still created manually in the
-  Supabase dashboard and promoted to a role via SQL.
-- **Automated tests**.
+- **Frontend tests** — the database rules are covered (see §3), the React
+  components are not.
 
 ## Roles
 

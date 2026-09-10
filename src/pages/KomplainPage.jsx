@@ -341,6 +341,7 @@ export default function KomplainPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(row)} />
                   <DeleteButton
+                    subject="complaint_delete"
                     itemName={row.category || row.description}
                     onDelete={() => supabase.from("complaints").delete().eq("id", row.id)}
                     onDone={fetchAll}

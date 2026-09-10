@@ -330,6 +330,7 @@ export default function RencanaProyekPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(r)} />
                   <DeleteButton
+                    subject="task"
                     itemName={r.task_name}
                     warning="Seluruh evaluasi tahap untuk task ini ikut terhapus."
                     onDelete={() => supabase.from("project_tasks").delete().eq("id", r.id)}

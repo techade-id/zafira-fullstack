@@ -18,6 +18,9 @@
 
 update profiles p
    set role = v.role::user_role,
+       -- Sejak migration_011 akun baru masuk NONAKTIF menunggu persetujuan.
+       -- Skrip ini adalah jalur bootstrap: ia mengaktifkan sekaligus.
+       is_active = true,
        full_name = coalesce(nullif(p.full_name, ''), v.nama),
        divisi = v.divisi
 from (values
@@ -36,6 +39,7 @@ where p.id = u.id;
 select
   v.email,
   coalesce(p.role::text, '❌ user belum dibuat di Authentication') as role_sekarang,
+  coalesce(p.is_active::text, '-') as aktif,
   v.role as role_seharusnya
 from (values
   ('admin@zafiraproperty.id',      'admin'),

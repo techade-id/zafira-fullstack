@@ -156,6 +156,7 @@ export default function TargetPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(row)} />
                   <DeleteButton
+                    subject="target"
                     itemName={`Target ${row.profiles?.full_name || "Umum"}`}
                     onDelete={() => supabase.from("sales_targets").delete().eq("id", row.id)}
                     onDone={fetchAll}

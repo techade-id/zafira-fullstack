@@ -12,6 +12,135 @@
 > sepuluh modul. Yang belum dilakukan adalah menjalankan migrasi pada proyek
 > Supabase sungguhan dan menelusuri UI-nya di browser.
 
+## Lanjutan — Monitoring Lapangan (10 September 2026)
+
+**Temuan: `field_projects` dan `field_reports` selama ini menganggur.** Keduanya
+ada di `schema.sql` sejak awal, lengkap dengan bucket `field-report-photos`
+beserta policy-nya, tetapi tidak ada satu halaman pun yang menulis ke sana —
+hanya SiteplanPage yang membaca satu baris untuk menampilkan progres di modal.
+README mengklaim modul ini "already working"; klaim itu sudah dikoreksi.
+
+Ditemukan pula **dua model konstruksi yang berjalan paralel**:
+`field_projects`/`field_reports` (progres per unit, kendala, foto) dan
+`project_tasks`/`task_evaluations` (deadline hari kerja, garansi, evaluasi
+kontraktor — punya RencanaProyekPage tetapi tanpa foto). Keputusan yang diambil:
+keduanya dipertahankan dengan pembagian yang jelas — `project_tasks` untuk
+perencanaan kantor, `field_reports` untuk pelaporan harian lapangan. Keduanya
+bertemu di unit yang sama.
+
+Diputuskan pula bentuknya: **tampilan mobile di dalam aplikasi yang sama**, bukan
+PWA terpisah. Manifest sudah ada sejak Fase 1, dan berbagi login, RLS, matriks
+peran, serta suite uji jauh lebih murah daripada menduplikasi seluruh lapisan
+izin ke repo kedua yang sejak hari pertama bisa berbeda diam-diam.
+
+`supabase/migration_012_lapangan.sql` melengkapi bagian yang hilang:
+
+- **Pelapor terisi dari sesi** (`reporter_id` default `auth.uid()`), bukan dari
+  frontend — pola yang sama dengan bug `assigned_to` pada leads.
+- **Satu tim, satu riwayat.** Sebelumnya anggota hanya bisa membaca laporan yang
+  ia tulis sendiri, sehingga rekan satu unit akan melaporkan ulang kendala yang
+  kemarin sudah dicatat.
+- **Progres dan status ditarik dari laporan terakhir**, diurutkan menurut
+  tanggal laporan — bukan waktu input, supaya laporan susulan untuk kemarin
+  tidak menimpa kondisi hari ini. Satu sumber angka, jadi siteplan kantor tidak
+  bisa menampilkan nilai basi.
+- **Pencarian catatan** diperluas ke catatan bebas laporan lapangan.
+
+### Bug yang ditangkap suite
+
+Memberi `reporter_id` sebuah default membuat predikat `reporter_id = me()` pada
+policy tulis menjadi **selalu benar untuk siapa pun yang aktif**: cukup
+menyisipkan baris tanpa menyebut kolom itu. Supervisor dan Pengawas yang
+read-only pun bisa menulis laporan lapangan. Hak tulis kini ditentukan oleh
+penugasan pada proyeknya, bukan oleh kolom yang diisi sendiri oleh database.
+Uji mutasi mengembalikan predikat itu dan kedua uji peran langsung merah.
+
+Suite kini **125 uji**, bertambah 24 untuk modul lapangan.
+
+---
+
+## Lanjutan — manajemen pengguna (10 September 2026)
+
+**Temuan utama: `is_active` selama ini hiasan.** Kolomnya dijaga sejak awal —
+hanya admin/pengawas yang boleh mengubahnya — tetapi tidak pernah dibaca oleh
+satu policy pun, tidak oleh helper peran, dan tidak saat login. Tombol
+"nonaktifkan agen" di halaman Data Agen tidak melakukan apa-apa: pengguna yang
+dinonaktifkan tetap memegang seluruh hak role-nya.
+
+Ditutup oleh **`supabase/migration_011_user_management.sql`** dari dua arah,
+karena hanya menutup satu arah tidak cukup:
+
+- **Jalur peran** — `current_role_name()` kini hanya mengembalikan peran bila
+  akunnya aktif. Karena seluruh helper (`is_admin()`, `can_write_finance()`,
+  dan seterusnya) bermuara ke sana, satu perubahan menutup semuanya sekaligus.
+- **Jalur kepemilikan** — policy seperti `assigned_to = auth.uid()` tidak
+  melewati helper peran sama sekali, jadi akun nonaktif tetap bisa menyentuh
+  barisnya sendiri. Diperkenalkan `me()`, yang mengembalikan identitas hanya
+  bila akunnya aktif; NULL tidak pernah sama dengan apa pun, sehingga tidak ada
+  baris yang cocok. Seluruh policy kepemilikan ditulis ulang memakainya.
+
+Uji mutasi membuktikan kedua arah itu memang perlu: melumpuhkan pemeriksaan di
+`me()` saja sudah membuat Sales nonaktif kembali membaca 5 prospek, 1 konsumen,
+dan menemukan hasil pencarian.
+
+Di atas fondasi itu, alur akun jadi aman tanpa perlu `service_role` di browser:
+
+- **Pendaftaran mandiri** di `/daftar`. Akun baru masuk nonaktif tanpa akses
+  apa pun dan muncul di antrean "Menunggu Persetujuan" pada halaman Pengguna,
+  tempat admin menetapkan peran sekaligus mengaktifkan dalam satu tindakan.
+- **Batas domain email** ditegakkan trigger `handle_new_user`, bukan di
+  formulir — pendaftaran dari domain lain ditolak sebelum akunnya terbuat.
+  Diatur di Pengaturan Bisnis; kosong berarti semua domain diizinkan.
+- **`approve_user()` / `deactivate_user()`** sebagai RPC, bukan UPDATE langsung,
+  supaya peran dan status aktif selalu berubah dalam satu transaksi dan selalu
+  meninggalkan jejak audit. Admin tidak dapat menonaktifkan dirinya sendiri —
+  admin terakhir yang melakukannya akan mengunci semua orang keluar.
+- **Layar "Menunggu Persetujuan"** menggantikan aplikasi kosong yang tampak
+  rusak bagi akun yang belum aktif.
+
+Satu jebakan yang perlu diingat: trigger baru membuat **setiap** akun baru
+nonaktif, termasuk yang dibuat lewat Supabase Dashboard. Bootstrap admin pertama
+karena itu harus menyetel `is_active = true` sekaligus — `seed_test_users.sql`
+dan README sudah disesuaikan.
+
+Suite kini **101 uji**, bertambah 23 untuk siklus hidup akun.
+
+---
+
+## Lanjutan — suite pengujian database (10 September 2026)
+
+Aturan paling berisiko di proyek ini — RLS, Segregation of Duties, dan
+Handover Hard-Lock — ditegakkan di Postgres lewat policy dan trigger. Tidak ada
+satu baris kode React pun yang bisa memberi tahu apakah aturan itu masih
+berlaku, dan sebelumnya tidak ada test sama sekali. Kini ada
+**`supabase/tests/`**, dijalankan dengan `npm run test:db`.
+
+Suite membangun database sekali pakai, memasang `schema.sql` beserta seluruh
+migrasi berurutan, mengisi data uji, lalu menjalankan **78 pemeriksaan** pada
+lima area: matriks peran, SoD dan Hard-Lock, otomasi funnel, pencarian catatan
+(termasuk isolasi antar agen), serta agregat dashboard dan iklan. Ia keluar
+dengan status bukan-nol saat ada yang gagal, sehingga bisa dipakai di CI.
+
+Yang membuatnya bisa dipercaya: **suite ini diuji-mutasi**. Empat aturan
+dilanggar satu per satu — penjagaan verifikasi pembayaran dilumpuhkan,
+Hard-Lock dilonggarkan, tahap funnel diizinkan mundur, dan `search_notes`
+diubah menjadi SECURITY DEFINER — dan keempatnya tertangkap dengan exit 1
+(11, 6, 9, dan 7 uji gagal berturut-turut). Suite yang tidak pernah bisa gagal
+lebih berbahaya daripada tidak ada suite, jadi sifat ini perlu diperiksa ulang
+setiap kali ada penambahan.
+
+Uji mutasi itu juga menemukan cacat pada runner-nya sendiri: langkah ringkasan
+tidak memasang `ON_ERROR_STOP`, sehingga kegagalan tetap keluar dengan status 0
+dan CI akan menganggapnya lulus. Sudah diperbaiki.
+
+Tiga uji gagal pada putaran pertama, dan ketiganya salah pada ujinya sendiri,
+bukan pada kodenya — termasuk satu yang mengira RLS akan melempar error padahal
+ia menolak diam-diam dengan nol baris. Perbedaan itu sekarang diuji eksplisit:
+mengubah role orang lain terhalang RLS (nol baris), mengangkat diri sendiri
+terhalang trigger (melempar error).
+
+---
+
 ## Lanjutan — menutup celah fase 1-4 (10 September 2026)
 
 Tiga hal yang dijanjikan rencana ini tetapi belum dikerjakan pada putaran pertama,

@@ -138,6 +138,7 @@ export default function PembatalanPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(row)} />
                   <DeleteButton
+                    subject="cancellation_delete"
                     itemName={`Pembatalan ${row.customers?.name || ""}`.trim()}
                     warning="Status konsumen tidak otomatis kembali aktif. Ubah manual di halaman Konsumen bila perlu."
                     onDelete={() => supabase.from("cancellations").delete().eq("id", row.id)}

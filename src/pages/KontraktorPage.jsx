@@ -195,6 +195,7 @@ export default function KontraktorPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(r)} />
                   <DeleteButton
+                    subject="contractor"
                     itemName={r.contractor_name}
                     warning="Kontraktor yang masih punya task di Rencana Proyek tidak bisa dihapus, agar riwayat pekerjaannya tidak hilang."
                     onDelete={() => supabase.from("contractors").delete().eq("id", r.contractor_id)}

@@ -90,6 +90,7 @@ export default function ReminderPage() {
               label: "",
               render: (row) => (
                 <DeleteButton
+                  subject="lead"
                   label="Hapus jadwal"
                   confirmLabel="Hapus jadwal"
                   itemName={`Jadwal follow-up ${row.name}`}
