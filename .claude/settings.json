@@ -17,7 +17,9 @@
       "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='11111111-1111-1111-1111-111111111111'; select count\\(*\\) as sales_lihat_log from activity_logs;\")",
       "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='66666666-6666-6666-6666-666666666666'; select entity_type, action, jsonb_pretty\\(changes\\) from activity_logs where entity_type='customers' and action='update' limit 1;\")",
       "Bash(psql -q -v ON_ERROR_STOP=1 -d zafira_migration_check -f supabase/migration_007_notes_search.sql)",
-      "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='11111111-1111-1111-1111-111111111111'; select modul, judul, rute, record_id is not null as punya_id, cuplikan from search_notes\\('BPHTB'\\);\")"
+      "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='11111111-1111-1111-1111-111111111111'; select modul, judul, rute, record_id is not null as punya_id, cuplikan from search_notes\\('BPHTB'\\);\")",
+      "Bash(psql -q -d zafira_check -f /private/tmp/claude-501/-Users-macbookpro-Documents-2026-zafira/9387bdfb-1c65-432d-97eb-01d33d63a521/scratchpad/regression.sql)",
+      "Bash(dropdb --if-exists zafira_check)"
     ]
   }
 }

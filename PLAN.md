@@ -12,6 +12,36 @@
 > sepuluh modul. Yang belum dilakukan adalah menjalankan migrasi pada proyek
 > Supabase sungguhan dan menelusuri UI-nya di browser.
 
+## Lanjutan — menutup celah fase 1-4 (10 September 2026)
+
+Tiga hal yang dijanjikan rencana ini tetapi belum dikerjakan pada putaran pertama,
+kini selesai lewat **`supabase/migration_010_dashboard_and_ads.sql`**:
+
+- **Digital Ads memakai `ads_campaigns`.** Sebelumnya halaman itu masih menyimpan
+  nama campaign sebagai teks bebas, sehingga kolom `ads_analytics.campaign_id`
+  yang dibuat migrasi 009 menganggur. Sekarang belanja iklan dicatat terhadap
+  campaign terdaftar, dan `campaign_performance()` menghitung biaya per lead dan
+  per deal dari prospek yang benar-benar bertanda campaign itu — bukan dari kolom
+  `leads_generated` yang diketik tangan. Belanja yang belum terkait campaign
+  ditandai terpisah agar tidak diam-diam menggeser rata-rata.
+- **Dashboard mengenal funnel baru.** Kartu funnel tujuh tahap dengan konversi
+  antar tahap, ringkasan berapa konsumen sudah diserahkan ke Admin Marketing, dan
+  antrean verifikasi Finance. Donat "Sebaran Status Prospek" dihapus karena
+  funnel menyampaikan hal yang sama sekaligus urutannya — mengurutkan ulang
+  menurut besaran justru menghilangkan informasi yang dicari.
+- **`lead_stage_bucket()`** memetakan nilai enum lama (`dihubungi`, `appointment`,
+  `deal`, `closing`) ke tujuh tahap PRD, sehingga agregat tetap benar untuk baris
+  yang belum tersentuh migrasi. Ini sekaligus memperbaiki `appointment_count`
+  yang setelah migrasi 009 selalu nol.
+
+Diverifikasi ulang di Postgres lokal: rantai migrasi 002→010 bersih, biaya per
+lead cocok dengan hitungan manual, dan seluruh aturan fase 2 masih berlaku —
+Sales tetap tidak bisa memverifikasi pembayaran, konsumen terkunci tetap tidak
+bisa diubah, Supervisor tetap read-only, dan agregat baru ikut tersaring RLS
+(Sales B melihat 0 lead pada campaign milik Sales A).
+
+---
+
 ## Context
 
 CRM ini dibangun dari scope quotation lama ("Griya Zafira") dan sudah berjalan: 16 halaman React + Vite, Supabase (6 migrasi), RLS di ~28 policy. Notula rapat (`REVISI.md`) dan PRD final (`PRD.md`) menetapkan arah baru yang **belum tercermin sama sekali** di kode:

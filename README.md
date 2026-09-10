@@ -53,6 +53,11 @@ Booking Fee Handover Hard-Lock, an audit trail, and the PRD sales pipeline
    - **`migration_009_pipeline.sql`** — the seven-stage funnel with automatic
      promotion, `ads_campaigns` + `partners` for relational lead sources, the
      social-media username fields, and an updated `dashboard_stats()`.
+   - **`migration_010_dashboard_and_ads.sql`** — `lead_stage_bucket()` so every
+     aggregate reports the seven PRD stages regardless of which legacy enum
+     value a row still carries; the funnel, handover and Finance-queue figures
+     on the dashboard; and `campaign_performance()`, which derives cost per lead
+     and cost per deal from leads actually tagged to a campaign.
 
    Re-run `supabase/storage.sql` after 008: it creates the `payment-receipts`
    bucket and re-points every storage policy at the new access helpers.
@@ -114,7 +119,9 @@ matching your `.env`.
 
 - **Auth**: real Supabase email/password login, session persistence, role read
   from `profiles`.
-- **Dashboard**: live counts (prospek, konsumen, unit tersedia, komplain aktif)
+- **Dashboard**: the seven-stage funnel with stage-to-stage conversion, how many
+  customers have been handed over to Admin Marketing, the Finance verification
+  queue, and live counts (prospek, konsumen, unit tersedia, komplain aktif)
   pulled from Supabase.
 - **Prospek (Leads)**: full CRUD — add lead, change status inline, list with
   live data.
@@ -140,8 +147,10 @@ matching your `.env`.
   status, and photo upload.
 - **Laporan**: aggregate stat cards and breakdowns across prospek/konsumen/
   proyek/komplain, with one-click Excel export (`xlsx`).
-- **Digital Ads**: `ads_analytics` CRUD with spend/leads-per-platform bars
-  and a blended cost-per-lead figure.
+- **Digital Ads**: ad spend recorded against a registered `ads_campaigns` row,
+  with cost per lead and cost per deal computed from the prospects actually
+  tagged to that campaign rather than a figure typed in by hand. Spend not yet
+  linked to a campaign is called out so it cannot quietly skew the average.
 - **Pencarian Catatan**: one search box in the header covering lead notes,
   follow-up history, customer names, KPR kendala, payment notes, complaints,
   field reports, cancellations and contractors — partial match anywhere in the
