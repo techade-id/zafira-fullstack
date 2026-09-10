@@ -7,6 +7,7 @@ import {
   Building2,
   Map,
   Wallet,
+  FolderOpen,
   XCircle,
   HardHat,
   ClipboardList,
@@ -22,9 +23,15 @@ import {
   Menu,
   X,
   Asterisk,
+  ScrollText,
+  HardHat as HardHatIcon,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { PRIMARY, PRIMARY_SOFT, PAGE_BG, SURFACE, BORDER, TEXT_DARK, TEXT_MID } from "./ui";
+import { allowedRoutes, roleLabel } from "../lib/permissions";
+import GlobalSearch from "./GlobalSearch";
+import NotifBell from "./NotifBell";
+import TambahProspekCepat from "./TambahProspekCepat";
+import { PRIMARY, PRIMARY_DARK, ACCENT, PAGE_BG, SURFACE, BORDER, TEXT_DARK, TEXT_MID, ON_PRIMARY, ON_PRIMARY_FAINT } from "./ui";
 
 const navSections = [
   {
@@ -34,8 +41,9 @@ const navSections = [
   {
     title: "Penjualan",
     items: [
-      { to: "/prospek", icon: Target, label: "Prospek" },
+      { to: "/prospek", icon: Target, label: "Leads" },
       { to: "/konsumen", icon: Users, label: "Konsumen" },
+      { to: "/pemberkasan", icon: FolderOpen, label: "Papan Berkas" },
       { to: "/pembayaran", icon: Wallet, label: "Pembayaran" },
       { to: "/pembatalan", icon: XCircle, label: "Pembatalan" },
       { to: "/reminder", icon: Bell, label: "Reminder" },
@@ -49,6 +57,7 @@ const navSections = [
       { to: "/siteplan", icon: Map, label: "Siteplan Digital" },
       { to: "/kontraktor", icon: HardHat, label: "Kontraktor" },
       { to: "/rencana-proyek", icon: ClipboardList, label: "Rencana Proyek" },
+      { to: "/lapangan", icon: HardHatIcon, label: "Monitoring Lapangan" },
       { to: "/komplain", icon: MessageSquareWarning, label: "Komplain" },
     ],
   },
@@ -62,11 +71,20 @@ const navSections = [
   {
     title: "Pengaturan",
     items: [
-      { to: "/data-agen", icon: UserCog, label: "Data Agen" },
+      { to: "/data-agen", icon: UserCog, label: "Pengguna" },
       { to: "/pengaturan-bisnis", icon: Settings, label: "Pengaturan Bisnis" },
+      { to: "/log-aktivitas", icon: ScrollText, label: "Log Aktivitas" },
     ],
   },
 ];
+
+/** Drops menu items the signed-in role has no route for (permissions.js). */
+function visibleSections(profile) {
+  const allowed = allowedRoutes(profile);
+  return navSections
+    .map((section) => ({ ...section, items: section.items.filter((item) => allowed.includes(item.to)) }))
+    .filter((section) => section.items.length > 0);
+}
 
 function NavItem({ to, icon: Icon, label, end, onClick }) {
   return (
@@ -76,32 +94,50 @@ function NavItem({ to, icon: Icon, label, end, onClick }) {
       onClick={onClick}
       className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
       style={({ isActive }) => ({
+        position: "relative",
         display: "flex",
         alignItems: "center",
         gap: 11,
         padding: "10px 13px",
-        borderRadius: 13,
+        borderRadius: 11,
         fontSize: 13.5,
         textDecoration: "none",
-        color: isActive ? "#fff" : TEXT_MID,
+        color: isActive ? "#fff" : ON_PRIMARY,
         fontWeight: isActive ? 600 : 500,
-        background: isActive ? PRIMARY : "transparent",
+        background: isActive ? "rgba(255,255,255,0.10)" : "transparent",
         marginBottom: 2,
-        transition: "background 0.15s ease",
+        transition: "background 0.15s ease, color 0.15s ease",
       })}
     >
-      <Icon size={17} />
-      <span>{label}</span>
+      {({ isActive }) => (
+        <>
+          {/* Deep-orange rail marks the active page — PRD §2.1 gives the accent
+              to active progress, and it survives greyscale printing. */}
+          <span
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 9,
+              bottom: 9,
+              width: 3,
+              borderRadius: 3,
+              background: isActive ? ACCENT : "transparent",
+            }}
+          />
+          <Icon size={17} />
+          <span>{label}</span>
+        </>
+      )}
     </NavLink>
   );
 }
 
-function IconButton({ icon: Icon, onClick, title }) {
+function IconButton({ icon: Icon, onClick, title, className }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className="icon-btn"
+      className={`icon-btn${className ? ` ${className}` : ""}`}
       style={{
         width: 42,
         height: 42,
@@ -124,6 +160,7 @@ function IconButton({ icon: Icon, onClick, title }) {
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const firstName = (profile?.full_name || "").split(" ")[0] || "...";
 
@@ -136,8 +173,7 @@ export default function AppLayout() {
         style={{
           width: 244,
           flexShrink: 0,
-          background: SURFACE,
-          border: `1px solid ${BORDER}`,
+          background: PRIMARY_DARK,
           padding: "20px 12px",
           display: "flex",
           flexDirection: "column",
@@ -151,8 +187,8 @@ export default function AppLayout() {
                 width: 34,
                 height: 34,
                 borderRadius: 11,
-                background: PRIMARY_SOFT,
-                color: PRIMARY,
+                background: "rgba(255,255,255,0.10)",
+                color: ACCENT,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -161,19 +197,19 @@ export default function AppLayout() {
             >
               <Asterisk size={20} />
             </div>
-            <span style={{ fontWeight: 700, fontSize: 14.5, letterSpacing: "-0.01em" }}>Griya Zafira</span>
+            <span style={{ fontWeight: 700, fontSize: 14.5, letterSpacing: "-0.01em", color: "#fff" }}>Zafira Property</span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="menu-toggle"
-            style={{ background: "none", border: "none", color: TEXT_MID, cursor: "pointer", padding: 4 }}
+            style={{ background: "none", border: "none", color: ON_PRIMARY, cursor: "pointer", padding: 4 }}
           >
             <X size={18} />
           </button>
         </div>
 
         <div style={{ flex: 1 }}>
-          {navSections.map((section, i) => (
+          {visibleSections(profile).map((section, i) => (
             <div key={i}>
               {section.title && (
                 <div
@@ -181,7 +217,7 @@ export default function AppLayout() {
                     fontSize: 10.5,
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
-                    color: TEXT_MID,
+                    color: ON_PRIMARY_FAINT,
                     padding: "16px 13px 7px",
                     fontWeight: 600,
                   }}
@@ -204,12 +240,12 @@ export default function AppLayout() {
             gap: 11,
             padding: "10px 13px",
             marginTop: 14,
-            borderRadius: 13,
+            borderRadius: 11,
             fontSize: 13.5,
             fontWeight: 500,
-            color: TEXT_MID,
+            color: ON_PRIMARY,
             background: "none",
-            border: `1px solid ${BORDER}`,
+            border: "1px solid rgba(255,255,255,0.18)",
             cursor: "pointer",
             width: "100%",
           }}
@@ -243,49 +279,32 @@ export default function AppLayout() {
             <div className="topbar-greeting" style={{ minWidth: 0 }}>
               <h1 style={{ fontSize: 21, margin: 0, letterSpacing: "-0.02em" }}>Halo, {firstName}!</h1>
               <p style={{ fontSize: 13, color: TEXT_MID, margin: "3px 0 0" }}>
-                Pantau prospek, konsumen, dan progres proyek Anda
+                {profile?.role ? `Masuk sebagai ${roleLabel(profile.role)}` : "Pantau prospek, konsumen, dan progres proyek Anda"}
               </p>
             </div>
           </div>
 
           <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <div
-              className="topbar-search"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                background: SURFACE,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 999,
-                padding: "5px 5px 5px 18px",
-                fontSize: 13,
-                color: TEXT_MID,
-                width: 280,
-              }}
-            >
-              <span style={{ flex: 1 }}>Cari catatan</span>
-              <span
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: TEXT_DARK,
-                  color: "#fff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Search size={15} />
-              </span>
+            <div className="topbar-search" style={{ width: 320 }}>
+              <GlobalSearch />
             </div>
 
-            <IconButton icon={Bell} title="Notifikasi" />
+            {/* Under 980px the inline box is hidden; searching stays reachable
+                through this toggle instead of disappearing. */}
+            <IconButton
+              icon={Search}
+              className="search-toggle"
+              title="Cari catatan"
+              onClick={() => setMobileSearchOpen((v) => !v)}
+            />
+
+            <TambahProspekCepat />
+
+            <NotifBell />
 
             <div
-              title={profile?.full_name || ""}
+              className="avatar-chip"
+              title={`${profile?.full_name || ""}${profile?.role ? ` — ${roleLabel(profile.role)}` : ""}`}
               style={{
                 width: 42,
                 height: 42,
@@ -304,6 +323,12 @@ export default function AppLayout() {
             </div>
           </div>
         </div>
+
+        {mobileSearchOpen && (
+          <div className="mobile-search" style={{ padding: "0 14px 14px" }}>
+            <GlobalSearch onNavigate={() => setMobileSearchOpen(false)} />
+          </div>
+        )}
 
         <div className="app-content" style={{ padding: "0 26px 26px" }}>
           <Outlet />

@@ -1,19 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../context/AuthContext";
+import { roleOf } from "../lib/permissions";
+import FokusHariIni from "../components/FokusHariIni";
 import {
   Card,
   SectionTitle,
   DataTable,
   StatCard,
   BarChart,
-  DonutChart,
   ListRow,
   TEXT_MID,
+  TEXT_DARK,
   PRIMARY,
   PRIMARY_SOFT,
+  ACCENT_SOFT,
+  ACCENT_DARK,
+  NEGATIVE,
   BORDER,
 } from "../components/ui";
-import { Users, Handshake, TrendingUp, Home, Wallet, MessageSquareWarning, FolderCheck } from "lucide-react";
+import { Users, Handshake, TrendingUp, Home, Wallet, MessageSquareWarning, FolderCheck, Lock } from "lucide-react";
 
 const DAY_LABELS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -58,7 +64,86 @@ function roundDays(v) {
   return v == null ? null : Math.round(Number(v));
 }
 
+function rupiah(n) {
+  return `Rp${Number(n || 0).toLocaleString("id-ID")}`;
+}
+
+/**
+ * Funnel PRD §4.2 — tujuh tahap dalam urutan tetap.
+ *
+ * Sengaja memakai batang berurutan, bukan donat: yang ingin dilihat adalah di
+ * tahap mana prospek berhenti, dan itu hilang begitu tahapnya diurut ulang
+ * menurut besaran. Cancel dipisah karena bukan bagian dari alur maju.
+ */
+function FunnelStrip({ stages, total }) {
+  const flow = stages.filter((s) => s.stage !== "cancel");
+  const cancel = stages.find((s) => s.stage === "cancel");
+  const max = Math.max(1, ...flow.map((s) => s.value));
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {flow.map((s, i) => {
+          const prev = i > 0 ? flow[i - 1].value : null;
+          const conv = prev ? (s.value / prev) * 100 : null;
+          return (
+            <div key={s.stage}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, marginBottom: 5, gap: 10 }}>
+                <span style={{ fontWeight: 600, color: TEXT_DARK }}>{s.label}</span>
+                <span style={{ color: TEXT_MID, whiteSpace: "nowrap" }}>
+                  <b style={{ color: TEXT_DARK, fontSize: 13.5 }}>{s.value}</b>
+                  {total > 0 && <> · {((s.value / total) * 100).toFixed(0)}% dari total</>}
+                  {conv != null && (
+                    <> · <span style={{ color: conv < 40 ? ACCENT_DARK : TEXT_MID }}>{conv.toFixed(0)}% lanjut</span></>
+                  )}
+                </span>
+              </div>
+              <div style={{ background: PRIMARY_SOFT, borderRadius: 999, height: 10, overflow: "hidden" }}>
+                <div
+                  style={{
+                    background: PRIMARY,
+                    height: "100%",
+                    width: `${Math.max(s.value > 0 ? 2 : 0, (s.value / max) * 100)}%`,
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {cancel && cancel.value > 0 && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: 12.5, color: TEXT_MID }}>
+          <b style={{ color: NEGATIVE }}>{cancel.value}</b> prospek dibatalkan
+          {total > 0 && <> · {((cancel.value / total) * 100).toFixed(0)}% dari total</>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Kartu laporan yang relevan per peran.
+ *
+ * Sebelumnya ketujuh peran melihat sepuluh kartu yang sama. Sales tidak
+ * mengurus antrean Finance, dan Finance tidak mengurus durasi tahap KPR —
+ * menampilkan keduanya kepada semua orang membuat layar pertama jadi panjang
+ * tanpa menambah satu pun keputusan yang bisa diambil.
+ */
+const KARTU_PERAN = {
+  sales: { finance: false, kprDurasi: false, berkas: false, agen: true },
+  admin_marketing: { finance: true, kprDurasi: true, berkas: true, agen: true },
+  finance: { finance: true, kprDurasi: false, berkas: false, agen: false },
+  tim_lapangan: { finance: false, kprDurasi: false, berkas: false, agen: false },
+};
+
+const SEMUA_KARTU = { finance: true, kprDurasi: true, berkas: true, agen: true };
+
 export default function DashboardPage() {
+  const { profile } = useAuth();
+  const kartu = KARTU_PERAN[roleOf(profile)] || SEMUA_KARTU;
+
   // Aggregates come from the dashboard_stats() RPC so they're computed in
   // Postgres — counting rows in the browser silently capped at 1000.
   const [stats, setStats] = useState(null);
@@ -93,7 +178,11 @@ export default function DashboardPage() {
   const apptToDeal = appointmentCount + dealCount ? (dealCount / (appointmentCount + dealCount)) * 100 : 0;
 
   const weekData = (s.by_day || []).map((d) => ({ label: dayLabel(d.day), value: Number(d.value) }));
-  const donutData = (s.by_status || []).map((d) => ({ label: d.label, value: Number(d.value) }));
+
+  // Ditambahkan migration_010; sebelum migrasi itu jalan, kartunya tidak dirender.
+  const funnel = (s.funnel || []).map((f) => ({ ...f, value: Number(f.value) }));
+  const handover = s.handover || null;
+  const finance = s.finance || null;
 
   const d = s.kpr_durations || {};
   const stageDurations = [
@@ -127,12 +216,16 @@ export default function DashboardPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {error && (
-        <Card style={{ borderColor: "#e6c9c9" }}>
-          <div style={{ fontSize: 13, color: "#c25b5b" }}>
-            Gagal memuat ringkasan: {error}. Pastikan <code>migration_005_roles_and_dashboard.sql</code> sudah dijalankan di Supabase.
+        <Card style={{ borderColor: "#F2D3D1" }}>
+          <div style={{ fontSize: 13, color: "#C2413B" }}>
+            Gagal memuat ringkasan: {error}. Pastikan migrasi Supabase sudah dijalankan sampai{" "}
+            <code>migration_010_dashboard_and_ads.sql</code>.
           </div>
         </Card>
       )}
+
+      {/* Pekerjaan lebih dulu, laporan menyusul. */}
+      <FokusHariIni />
 
       <Card style={{ padding: 14 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -175,26 +268,95 @@ export default function DashboardPage() {
         />
         <StatCard
           icon={Handshake}
-          label="Total Deal"
+          label="Booking ke Atas"
           value={dealCount}
           trend={trendOf(dealsThisMonth, s.deals_prev_month || 0)}
           sub={`${dealsThisMonth} bulan ini`}
         />
-        <StatCard icon={TrendingUp} label="Closing Rate" value={`${closingRate.toFixed(1)}%`} sub={`${apptToDeal.toFixed(0)}% dari appointment`} />
+        <StatCard icon={TrendingUp} label="Closing Rate" value={`${closingRate.toFixed(1)}%`} sub={`${apptToDeal.toFixed(0)}% dari Hot Lead`} />
         <StatCard icon={Home} label="Unit Tersedia" value={unitsAvailable} sub={unitsTotal ? `dari ${unitsTotal} unit` : "belum ada unit"} />
       </div>
+
+      {funnel.length > 0 && (
+        <Card>
+          <SectionTitle
+            title="Funnel Penjualan"
+            action={
+              <span style={{ fontSize: 12, color: TEXT_MID }}>
+                New Lead → Warm → Hot → Booking → KPR → Akad → Aftersales
+              </span>
+            }
+          />
+          <FunnelStrip stages={funnel} total={totalLeads} />
+
+          {handover && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                marginTop: 16,
+                padding: "11px 14px",
+                background: ACCENT_SOFT,
+                borderRadius: 12,
+                fontSize: 12.5,
+                color: ACCENT_DARK,
+                lineHeight: 1.5,
+              }}
+            >
+              <Lock size={15} style={{ flexShrink: 0 }} />
+              <span>
+                <b>{handover.terkunci}</b> konsumen sudah diserahkan ke Admin Marketing (kuitansi Booking Fee tervalidasi) ·{" "}
+                <b>{handover.sales}</b> masih dipegang Sales
+              </span>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="chart-row">
         <Card>
           <SectionTitle title="Prospek Masuk" action={<span style={{ fontSize: 12, color: TEXT_MID }}>7 hari terakhir</span>} />
           <BarChart data={weekData} highlightIndex={highlightIndex} />
         </Card>
+
+        {kartu.finance && (
         <Card>
-          <SectionTitle title="Sebaran Status Prospek" />
-          <DonutChart data={donutData} centerValue={totalLeads} centerLabel="prospek" />
+          <SectionTitle title="Antrean Finance" />
+          {!finance ? (
+            <div style={{ fontSize: 13, color: TEXT_MID }}>
+              Jalankan <code>migration_010_dashboard_and_ads.sql</code> untuk menampilkan ringkasan ini.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ padding: "14px 16px", background: Number(finance.menunggu_jumlah) > 0 ? ACCENT_SOFT : PRIMARY_SOFT, borderRadius: 14 }}>
+                <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 6 }}>Menunggu verifikasi</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: Number(finance.menunggu_jumlah) > 0 ? ACCENT_DARK : TEXT_DARK }}>
+                  {finance.menunggu_jumlah}
+                  <span style={{ fontSize: 13, fontWeight: 500, color: TEXT_MID }}> pembayaran</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: TEXT_MID, marginTop: 3 }}>{rupiah(finance.menunggu_nominal)}</div>
+              </div>
+
+              <div style={{ padding: "14px 16px", background: PRIMARY_SOFT, borderRadius: 14 }}>
+                <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 6 }}>Tervalidasi pada periode ini</div>
+                <div style={{ fontSize: 22, fontWeight: 700 }}>{rupiah(finance.terverifikasi_nominal)}</div>
+              </div>
+
+              {/* Setelah migration_008 ini seharusnya selalu nol; kalau tidak,
+                  itu baris lama yang lolos sebelum aturan kuitansi berlaku. */}
+              {Number(finance.tanpa_kuitansi) > 0 && (
+                <div style={{ fontSize: 12, color: NEGATIVE, lineHeight: 1.5 }}>
+                  {finance.tanpa_kuitansi} pembayaran berstatus tervalidasi tetapi tidak punya kuitansi — perlu dirapikan.
+                </div>
+              )}
+            </div>
+          )}
         </Card>
+        )}
       </div>
 
+      {kartu.kprDurasi && (
       <Card>
         <SectionTitle title="Rata-rata Durasi per Tahap KPR" action={<span style={{ fontSize: 12, color: TEXT_MID }}>dalam hari</span>} />
         <div className="rg-4">
@@ -209,7 +371,9 @@ export default function DashboardPage() {
           ))}
         </div>
       </Card>
+      )}
 
+      {kartu.berkas && (
       <div className="chart-row">
         <Card>
           <SectionTitle
@@ -236,7 +400,7 @@ export default function DashboardPage() {
                   ) : (
                     // Anything sitting past 60 days at the bank is the thing a
                     // supervisor actually wants to spot on this screen.
-                    <span style={{ fontWeight: 600, color: r.lama_hari > 60 ? "#c25b5b" : r.lama_hari > 30 ? "#b07d2b" : PRIMARY }}>
+                    <span style={{ fontWeight: 600, color: r.lama_hari > 60 ? "#C2413B" : r.lama_hari > 30 ? "#B45309" : PRIMARY }}>
                       {r.lama_hari} hari
                     </span>
                   ),
@@ -260,6 +424,7 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+      )}
 
       <Card>
         <SectionTitle
@@ -318,6 +483,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {kartu.agen && (
       <div className="rg-2">
         <Card>
           <SectionTitle title="Performa per Agen" />
@@ -350,6 +516,7 @@ export default function DashboardPage() {
           />
         </Card>
       </div>
+      )}
     </div>
   );
 }

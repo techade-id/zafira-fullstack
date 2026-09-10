@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { MessageSquareWarning } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings } from "../lib/useBusinessSettings";
@@ -32,6 +34,7 @@ function warrantyStatus(row) {
 }
 
 export default function KomplainPage() {
+  const [params] = useSearchParams();
   const [complaints, setComplaints] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [units, setUnits] = useState([]);
@@ -172,7 +175,7 @@ export default function KomplainPage() {
       <PageTitle
         title="Komplain"
         subtitle="Komplain pelanggan dengan status garansi, kontraktor penanggung jawab, dan progres perbaikan"
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Komplain Baru</PrimaryButton>}
+        action={<PrimaryButton subject="complaint" onClick={() => setShowForm((v) => !v)}>+ Komplain Baru</PrimaryButton>}
       />
 
       <div className="rg-3" style={{ marginBottom: 16 }}>
@@ -186,7 +189,7 @@ export default function KomplainPage() {
         </Card>
         <Card>
           <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 8 }}>Belum Selesai Perbaikan</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "#c25b5b" }}>{belumSelesai}</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#C2413B" }}>{belumSelesai}</div>
         </Card>
       </div>
 
@@ -250,9 +253,9 @@ export default function KomplainPage() {
           <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 10 }}>
             Masa garansi dan bobot nilai dihitung otomatis dari tanggal serah terima kunci dan jenis komplain.
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAdd} disabled={saving}>
+            <PrimaryButton subject="complaint" onClick={handleAdd} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Komplain"}
             </PrimaryButton>
             {editingId && (
@@ -267,7 +270,18 @@ export default function KomplainPage() {
       <Card>
         <DataTable
           loading={loading}
-          emptyLabel="Belum ada komplain."
+          sortable
+          searchable
+          searchPlaceholder="Cari komplain — konsumen, unit, detail…"
+          // Datang dari pencarian global: kata kunci diteruskan ke saringan
+          // daftar. Sebelumnya hasil Komplain mendarat di daftar polos.
+          initialSearch={params.get("cari") || ""}
+          highlightId={params.get("sorot") || undefined}
+          searchExtra={(r) => [r.customers?.name, r.units?.unit_code, r.contractors?.name, r.description, r.jenis_komplain].filter(Boolean).join(" ")}
+          pageSize={25}
+          emptyIcon={MessageSquareWarning}
+          emptyLabel="Belum ada komplain"
+          emptyHint="Komplain aftersales yang masuk akan tercatat di sini beserta status garansinya."
           columns={[
             { key: "tanggal_komplain", label: "Tanggal", render: (r) => fmt(r.tanggal_komplain) },
             { key: "target", label: "Konsumen / Unit", render: (r) => r.customers?.name || r.units?.unit_code || "-" },
@@ -284,7 +298,7 @@ export default function KomplainPage() {
               render: (r) => {
                 const w = warrantyStatus(r);
                 return (
-                  <span style={{ fontSize: 11, color: w.ok === null ? TEXT_MID : w.ok ? "#2f7d4f" : "#c25b5b", fontWeight: 600 }}>
+                  <span style={{ fontSize: 11, color: w.ok === null ? TEXT_MID : w.ok ? "#15803D" : "#C2413B", fontWeight: 600 }}>
                     {w.label}
                     {r.akhir_masa_garansi ? <span style={{ display: "block", color: TEXT_MID, fontWeight: 400 }}>s/d {fmt(r.akhir_masa_garansi)}</span> : null}
                   </span>
@@ -341,6 +355,7 @@ export default function KomplainPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(row)} />
                   <DeleteButton
+                    subject="complaint_delete"
                     itemName={row.category || row.description}
                     onDelete={() => supabase.from("complaints").delete().eq("id", row.id)}
                     onDone={fetchAll}

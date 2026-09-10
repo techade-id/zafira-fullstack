@@ -1,16 +1,86 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Target, PanelRight, History, ArrowUpDown, Pencil, ArrowRightLeft, Ban, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID } from "../components/ui";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { canWrite } from "../lib/permissions";
+import { tanggal, tanggalRelatif, labelTahap, rupiahInput, angkaDariRupiah } from "../lib/format";
+import FollowUpTimeline from "../components/FollowUpTimeline";
+import KontakAksi from "../components/KontakAksi";
+import KonversiBookingModal from "../components/KonversiBookingModal";
+import UbahTahapModal from "../components/UbahTahapModal";
+import PanelProspek, { ModalBatal, ModalAlih } from "../components/PanelProspek";
+import {
+  Card,
+  PageTitle,
+  PrimaryButton,
+  DataTable,
+  Badge,
+  BORDER,
+  TEXT_MID,
+  TEXT_DARK,
+  PRIMARY,
+  ACCENT,
+  ACCENT_DARK,
+  NEGATIVE,
+  RowActions,
+  MenuAksi,
+  ConfirmDialog,
+  PRIMARY_MUTED,
+  ReadOnlyBanner,
+  inputStyle,
+} from "../components/ui";
 
-const STATUS_OPTIONS = ["leads", "cold", "warm", "appointment", "deal", "cancel"];
+/**
+ * PRD §4.2 funnel. The first four stages are set by Sales; the rest are written
+ * by database triggers from the booking receipt, KPR dates and handover, so
+ * they render as read-only badges — letting someone pick them by hand would
+ * just undo what the trigger recorded a moment earlier.
+ */
+const MANUAL_STAGES = ["leads", "cold", "warm", "hot"];
+const AUTO_STAGES = ["booking", "kpr", "akad", "aftersales"];
+
+const STAGE_LABELS = {
+  leads: "New Lead",
+  cold: "Cold",
+  warm: "Warm Lead",
+  hot: "Hot Lead",
+  booking: "Booking",
+  kpr: "KPR",
+  akad: "Akad",
+  aftersales: "Aftersales",
+  cancel: "Cancel",
+  // Retired values that may still sit on old rows.
+  baru: "New Lead",
+  dihubungi: "Warm Lead",
+  appointment: "Hot Lead",
+  deal: "Booking",
+  closing: "Booking",
+};
+
+const SOURCE_TYPES = [
+  { value: "ads", label: "Ads" },
+  { value: "freelance", label: "Freelance / Kemitraan" },
+  { value: "organik", label: "Organik" },
+];
+
 const MARITAL_OPTIONS = ["Nikah", "Janda/Duda", "Single"];
 const PEKERJAAN_OPTIONS = ["Karyawan Swasta", "PNS/ASN", "Wirausaha"];
 
 const emptyForm = {
+  // PRD §4.1 minimal intake
   name: "",
   phone: "",
+  source_type: "",
+  campaign_id: "",
+  partner_id: "",
+  organik_kategori: "",
+  source: "",
+  // everything below is progressive
+  username_sosmed: "",
   usia: "",
   marital_status: "",
   pekerjaan: "",
@@ -20,7 +90,6 @@ const emptyForm = {
   kabupaten: "",
   kecamatan: "",
   kelurahan: "",
-  source: "",
   rencana_selanjutnya: "",
   kategori_rencana: "",
   tanggal_rencana: "",
@@ -28,52 +97,56 @@ const emptyForm = {
 };
 
 export default function ProspekPage() {
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [params] = useSearchParams();
+
   const [leads, setLeads] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [terkonversi, setTerkonversi] = useState(new Map());
   const [loading, setLoading] = useState(true);
+
   const [showForm, setShowForm] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-
-  function resetForm() {
-    setForm(emptyForm);
-    setEditingId(null);
-    setShowForm(false);
-    setError("");
-  }
-
-  function startEdit(row) {
-    setForm({
-      name: row.name ?? "",
-      phone: row.phone ?? "",
-      usia: row.usia ?? "",
-      marital_status: row.marital_status ?? "",
-      pekerjaan: row.pekerjaan ?? "",
-      perusahaan_tempat_kerja: row.perusahaan_tempat_kerja ?? "",
-      gaji: row.gaji ?? "",
-      domisili: row.domisili ?? "",
-      kabupaten: row.kabupaten ?? "",
-      kecamatan: row.kecamatan ?? "",
-      kelurahan: row.kelurahan ?? "",
-      source: row.source ?? "",
-      rencana_selanjutnya: row.rencana_selanjutnya ?? "",
-      kategori_rencana: row.kategori_rencana ?? "",
-      tanggal_rencana: row.tanggal_rencana ?? "",
-      notes: row.notes ?? "",
-    });
-    setEditingId(row.id);
-    setShowForm(true);
-    setError("");
-  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [openLeadId, setOpenLeadId] = useState(params.get("sorot") || null);
+  const [konversiLead, setKonversiLead] = useState(null);
+  const [tahapLead, setTahapLead] = useState(null);
+  const [panelLead, setPanelLead] = useState(null);
+  const [panelAksi, setPanelAksi] = useState(null);
+  const [hapusLead, setHapusLead] = useState(null);
+  const [hapusSibuk, setHapusSibuk] = useState(false);
+  const [hapusGalat, setHapusGalat] = useState("");
+
   const sources = useBusinessSettings("lead_source");
   const followupCategories = useBusinessSettings("followup_category");
+  const organikCategories = useBusinessSettings("organik_kategori");
+
+  const mayWrite = canWrite(profile, "lead");
 
   async function fetchLeads() {
     setLoading(true);
-    const { data, error } = await fetchAllRows(() => supabase.from("leads").select("*").order("created_at", { ascending: false }));
-    if (!error) setLeads(data);
+    const [{ data, error: leadError }, campaignRes, partnerRes, custRes] = await Promise.all([
+      fetchAllRows(() => supabase.from("leads").select("*").order("created_at", { ascending: false })),
+      supabase.from("ads_campaigns").select("id, name, platform").eq("is_active", true).order("name"),
+      supabase.from("partners").select("id, name, type").eq("is_active", true).order("name"),
+      // Prospek yang sudah punya konsumen tidak boleh ditawari konversi lagi —
+      // RPC-nya memang menolak, tetapi menawarkan tombol yang pasti gagal itu
+      // sendiri sudah salah.
+      supabase.from("customers").select("id, lead_id").not("lead_id", "is", null),
+    ]);
+    if (!leadError) setLeads(data);
+    // These two tables arrive with migration_009; until it runs the page still
+    // works, it just has no relational sources to offer.
+    setCampaigns(campaignRes.data || []);
+    setPartners(partnerRes.data || []);
+    setTerkonversi(new Map((custRes.data || []).map((c) => [c.lead_id, c.id])));
     setLoading(false);
   }
 
@@ -85,16 +158,40 @@ export default function ProspekPage() {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  async function handleAddLead() {
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+    setShowDetail(false);
+    setError("");
+  }
+
+  function startEdit(row) {
+    setForm(Object.fromEntries(Object.keys(emptyForm).map((k) => [k, row[k] ?? ""])));
+    setEditingId(row.id);
+    setShowForm(true);
+    // A record being corrected usually needs the full form, not the intake one.
+    setShowDetail(true);
+    setError("");
+  }
+
+  async function handleSave() {
     if (!form.name.trim()) {
-      setError("Nama wajib diisi.");
+      setError("Nama atau username wajib diisi.");
       return;
     }
     setSaving(true);
     setError("");
+
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
+      username_sosmed: form.username_sosmed.trim() || null,
+      source_type: form.source_type || null,
+      campaign_id: form.source_type === "ads" ? form.campaign_id || null : null,
+      partner_id: form.source_type === "freelance" ? form.partner_id || null : null,
+      organik_kategori: form.source_type === "organik" ? form.organik_kategori || null : null,
+      source: form.source || null,
       usia: form.usia ? Number(form.usia) : null,
       marital_status: form.marital_status || null,
       pekerjaan: form.pekerjaan || null,
@@ -104,98 +201,187 @@ export default function ProspekPage() {
       kabupaten: form.kabupaten.trim() || null,
       kecamatan: form.kecamatan.trim() || null,
       kelurahan: form.kelurahan.trim() || null,
-      source: form.source || null,
       rencana_selanjutnya: form.rencana_selanjutnya.trim() || null,
       kategori_rencana: form.kategori_rencana || null,
       tanggal_rencana: form.tanggal_rencana || null,
       notes: form.notes.trim() || null,
     };
-    // Status is only set on create — it is changed from the table afterwards,
-    // so editing must not reset a lead back to the first stage.
-    const { error } = editingId
+
+    // Status is set on create only — afterwards it moves through the funnel
+    // select or the database triggers, so editing must never reset a lead.
+    // assigned_to has to be stamped as well, otherwise RLS hides the row from
+    // the very person who just created it.
+    const { error: saveError } = editingId
       ? await supabase.from("leads").update(payload).eq("id", editingId)
-      : await supabase.from("leads").insert({ ...payload, status: "leads" });
+      : await supabase.from("leads").insert({ ...payload, status: "leads", assigned_to: profile?.id || null });
+
     setSaving(false);
-    if (error) {
-      setError(error.message);
+    if (saveError) {
+      setError(saveError.message);
+      toast.gagal(`Gagal menyimpan: ${saveError.message}`);
       return;
     }
+    toast.sukses(editingId ? "Perubahan tersimpan." : `${payload.name} ditambahkan sebagai prospek.`);
     resetForm();
     fetchLeads();
   }
 
-  async function updateStatus(leadId, status) {
-    await supabase.from("leads").update({ status }).eq("id", leadId);
-    fetchLeads();
+  function sourceLabel(row) {
+    if (row.source_type === "ads") {
+      const c = campaigns.find((x) => x.id === row.campaign_id);
+      return c ? `Ads · ${c.name}` : "Ads";
+    }
+    if (row.source_type === "freelance") {
+      const p = partners.find((x) => x.id === row.partner_id);
+      return p ? `Mitra · ${p.name}` : "Freelance";
+    }
+    if (row.source_type === "organik") {
+      return row.organik_kategori ? `Organik · ${row.organik_kategori}` : "Organik";
+    }
+    return row.source || "-";
   }
+
+  const openLead = leads.find((l) => l.id === openLeadId) || null;
 
   return (
     <div>
       <PageTitle
         title="Prospek"
         subtitle={`${leads.length} prospek tercatat`}
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Prospek Baru</PrimaryButton>}
+        action={
+          <PrimaryButton subject="lead" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+            {showForm ? "Tutup" : "+ Prospek Baru"}
+          </PrimaryButton>
+        }
       />
+
+      <ReadOnlyBanner />
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#79837a", marginBottom: 8 }}>Data Diri</div>
-          <div className="rg-3" style={{ marginBottom: 14 }}>
-            <input placeholder="Nama *" value={form.name} onChange={(e) => set("name", e.target.value)} style={inputStyle} />
+          {/* PRD §4.1: three fields to capture a lead. Everything else waits
+              until there is something worth qualifying. */}
+          <div style={{ fontSize: 12, fontWeight: 600, color: TEXT_MID, marginBottom: 8 }}>Data Awal</div>
+          <div className="rg-3" style={{ marginBottom: 12 }}>
+            <input placeholder="Nama / Username *" value={form.name} onChange={(e) => set("name", e.target.value)} style={inputStyle} />
             <input placeholder="Nomor Telepon" value={form.phone} onChange={(e) => set("phone", e.target.value)} style={inputStyle} />
-            <input placeholder="Usia" type="number" value={form.usia} onChange={(e) => set("usia", e.target.value)} style={inputStyle} />
-            <select value={form.marital_status} onChange={(e) => set("marital_status", e.target.value)} style={inputStyle}>
-              <option value="">Status Pernikahan</option>
-              {MARITAL_OPTIONS.map((o) => (
-                <option key={o} value={o}>{o}</option>
+            <select value={form.source_type} onChange={(e) => set("source_type", e.target.value)} style={inputStyle}>
+              <option value="">Sumber Leads</option>
+              {SOURCE_TYPES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
               ))}
             </select>
-            <select value={form.pekerjaan} onChange={(e) => set("pekerjaan", e.target.value)} style={inputStyle}>
-              <option value="">Pekerjaan</option>
-              {PEKERJAAN_OPTIONS.map((o) => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
-            <input placeholder="Perusahaan Tempat Kerja" value={form.perusahaan_tempat_kerja} onChange={(e) => set("perusahaan_tempat_kerja", e.target.value)} style={inputStyle} />
-            <input placeholder="Gaji (Rp)" type="number" value={form.gaji} onChange={(e) => set("gaji", e.target.value)} style={inputStyle} />
           </div>
 
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#79837a", marginBottom: 8 }}>Domisili</div>
-          <div className="rg-4" style={{ marginBottom: 14 }}>
-            <input placeholder="Domisili" value={form.domisili} onChange={(e) => set("domisili", e.target.value)} style={inputStyle} />
-            <input placeholder="Kabupaten/Kota" value={form.kabupaten} onChange={(e) => set("kabupaten", e.target.value)} style={inputStyle} />
-            <input placeholder="Kecamatan" value={form.kecamatan} onChange={(e) => set("kecamatan", e.target.value)} style={inputStyle} />
-            <input placeholder="Kelurahan/Desa" value={form.kelurahan} onChange={(e) => set("kelurahan", e.target.value)} style={inputStyle} />
-          </div>
+          {form.source_type && (
+            <div className="rg-3" style={{ marginBottom: 12 }}>
+              {form.source_type === "ads" && (
+                <select value={form.campaign_id} onChange={(e) => set("campaign_id", e.target.value)} style={inputStyle}>
+                  <option value="">Pilih Campaign</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.platform} — {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {form.source_type === "freelance" && (
+                <select value={form.partner_id} onChange={(e) => set("partner_id", e.target.value)} style={inputStyle}>
+                  <option value="">Pilih Mitra / Freelance</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.type})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {form.source_type === "organik" && (
+                <select value={form.organik_kategori} onChange={(e) => set("organik_kategori", e.target.value)} style={inputStyle}>
+                  <option value="">Kategori Organik</option>
+                  {withCurrentValue(organikCategories, form.organik_kategori).map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#79837a", marginBottom: 8 }}>Sumber & Rencana</div>
-          <div className="rg-4" style={{ marginBottom: 12 }}>
-            <select value={form.source} onChange={(e) => set("source", e.target.value)} style={inputStyle}>
-              <option value="">Sumber Informasi Leads</option>
-              {withCurrentValue(sources, form.source).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <select value={form.kategori_rencana} onChange={(e) => set("kategori_rencana", e.target.value)} style={inputStyle}>
-              <option value="">Kategori Rencana</option>
-              {withCurrentValue(followupCategories, form.kategori_rencana).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <input placeholder="Rencana Selanjutnya" value={form.rencana_selanjutnya} onChange={(e) => set("rencana_selanjutnya", e.target.value)} style={inputStyle} />
-            <input type="date" value={form.tanggal_rencana} onChange={(e) => set("tanggal_rencana", e.target.value)} style={inputStyle} title="Tanggal rencana selanjutnya" />
-            <input placeholder="Catatan" value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...inputStyle, gridColumn: "1 / -1" }} />
-          </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddLead} disabled={saving}>
+          <button
+            onClick={() => setShowDetail((v) => !v)}
+            style={{ border: "none", background: "none", color: PRIMARY, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "4px 0", marginBottom: showDetail ? 12 : 0 }}
+          >
+            {showDetail ? "− Sembunyikan data lengkap" : "+ Lengkapi data prospek (opsional)"}
+          </button>
+
+          {showDetail && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 600, color: TEXT_MID, marginBottom: 8 }}>Data Diri</div>
+              <div className="rg-3" style={{ marginBottom: 14 }}>
+                <input placeholder="Username Sosial Media" value={form.username_sosmed} onChange={(e) => set("username_sosmed", e.target.value)} style={inputStyle} />
+                <input placeholder="Usia" type="number" value={form.usia} onChange={(e) => set("usia", e.target.value)} style={inputStyle} />
+                <select value={form.marital_status} onChange={(e) => set("marital_status", e.target.value)} style={inputStyle}>
+                  <option value="">Status Pernikahan</option>
+                  {MARITAL_OPTIONS.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
+                <select value={form.pekerjaan} onChange={(e) => set("pekerjaan", e.target.value)} style={inputStyle}>
+                  <option value="">Pekerjaan</option>
+                  {PEKERJAAN_OPTIONS.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
+                <input placeholder="Perusahaan Tempat Kerja" value={form.perusahaan_tempat_kerja} onChange={(e) => set("perusahaan_tempat_kerja", e.target.value)} style={inputStyle} />
+                <input placeholder="Gaji (Rp)" type="number" value={form.gaji} onChange={(e) => set("gaji", e.target.value)} style={inputStyle} />
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 600, color: TEXT_MID, marginBottom: 8 }}>Domisili</div>
+              <div className="rg-4" style={{ marginBottom: 14 }}>
+                <input placeholder="Domisili" value={form.domisili} onChange={(e) => set("domisili", e.target.value)} style={inputStyle} />
+                <input placeholder="Kabupaten/Kota" value={form.kabupaten} onChange={(e) => set("kabupaten", e.target.value)} style={inputStyle} />
+                <input placeholder="Kecamatan" value={form.kecamatan} onChange={(e) => set("kecamatan", e.target.value)} style={inputStyle} />
+                <input placeholder="Kelurahan/Desa" value={form.kelurahan} onChange={(e) => set("kelurahan", e.target.value)} style={inputStyle} />
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 600, color: TEXT_MID, marginBottom: 8 }}>Rencana &amp; Catatan</div>
+              <div className="rg-4" style={{ marginBottom: 12 }}>
+                <select value={form.kategori_rencana} onChange={(e) => set("kategori_rencana", e.target.value)} style={inputStyle}>
+                  <option value="">Kategori Rencana</option>
+                  {withCurrentValue(followupCategories, form.kategori_rencana).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <input placeholder="Rencana Selanjutnya" value={form.rencana_selanjutnya} onChange={(e) => set("rencana_selanjutnya", e.target.value)} style={inputStyle} />
+                <input type="date" value={form.tanggal_rencana} onChange={(e) => set("tanggal_rencana", e.target.value)} style={inputStyle} title="Tanggal rencana selanjutnya" />
+                <select value={form.source} onChange={(e) => set("source", e.target.value)} style={inputStyle} title="Label sumber versi lama, dipertahankan agar laporan historis tetap cocok">
+                  <option value="">Sumber (label lama)</option>
+                  {withCurrentValue(sources, form.source).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <textarea
+                  placeholder="Catatan — seluruh teks ini dapat ditemukan lewat kotak pencarian di header"
+                  value={form.notes}
+                  onChange={(e) => set("notes", e.target.value)}
+                  style={{ ...inputStyle, gridColumn: "1 / -1", minHeight: 60, resize: "vertical", fontFamily: "inherit" }}
+                />
+              </div>
+            </>
+          )}
+
+          {error && <div style={{ color: "#C2413B", fontSize: 12, margin: "10px 0" }}>{error}</div>}
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+            <PrimaryButton subject="lead" onClick={handleSave} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Prospek"}
             </PrimaryButton>
-            {editingId && (
-              <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Batal
-              </button>
-            )}
+            <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Batal
+            </button>
           </div>
         </Card>
       )}
@@ -203,58 +389,242 @@ export default function ProspekPage() {
       <Card>
         <DataTable
           loading={loading}
-          columns={[
-            { key: "name", label: "Nama" },
-            { key: "phone", label: "Telepon", render: (row) => row.phone || "-" },
-            { key: "pekerjaan", label: "Pekerjaan", render: (row) => row.pekerjaan || "-" },
-            { key: "domisili", label: "Domisili", render: (row) => row.kecamatan || row.domisili || "-" },
-            { key: "source", label: "Sumber", render: (row) => row.source || "-" },
-            { key: "kategori_rencana", label: "Rencana", render: (row) => row.kategori_rencana || "-" },
+          sortable
+          searchable
+          searchPlaceholder="Saring daftar — nama, telepon, catatan…"
+          searchExtra={(row) => [row.notes, row.username_sosmed, row.domisili, row.kecamatan, row.rencana_selanjutnya].filter(Boolean).join(" ")}
+          // Datang dari hasil pencarian global: kata kuncinya diteruskan ke
+          // saringan daftar, supaya baris yang dicari langsung terlihat.
+          initialSearch={params.get("cari") || ""}
+          highlightId={params.get("sorot") || undefined}
+          onRowClick={(row) => setPanelLead(row)}
+          pageSize={25}
+          defaultSort={{ key: "created_at", arah: "desc" }}
+          emptyIcon={Target}
+          emptyLabel="Belum ada prospek"
+          emptyHint="Cukup tiga hal untuk memulai: nama, nomor telepon, dan dari mana prospek ini datang."
+          filters={[
             {
               key: "status",
-              label: "Status",
+              label: "Semua tahap",
+              options: [...MANUAL_STAGES, ...AUTO_STAGES, "cancel"].map((s) => ({ value: s, label: STAGE_LABELS[s] })),
+            },
+          ]}
+          columns={[
+            { key: "name", label: "Nama / Username" },
+            {
+              key: "phone",
+              label: "Kontak",
+              sortable: false,
               render: (row) => (
-                <select
-                  value={STATUS_OPTIONS.includes(row.status) ? row.status : "leads"}
-                  onChange={(e) => updateStatus(row.id, e.target.value)}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12, textTransform: "capitalize" }}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <KontakAksi phone={row.phone} nama={row.name} tahap={row.status} leadId={row.id} onCatat={fetchLeads} />
               ),
             },
-            { key: "created_at", label: "Dibuat", render: (row) => new Date(row.created_at).toLocaleDateString("id-ID") },
+            { key: "source", label: "Sumber", sortValue: sourceLabel, render: sourceLabel },
+            { key: "domisili", label: "Domisili", sortValue: (row) => row.kecamatan || row.domisili, render: (row) => row.kecamatan || row.domisili || "-" },
+            {
+              key: "status",
+              label: "Tahap",
+              // Tahap Booking ke atas ditulis trigger dari kuitansi dan tanggal
+              // KPR; membiarkannya dipilih tangan hanya akan membatalkan apa
+              // yang baru saja dicatat sistem.
+              render: (row) =>
+                AUTO_STAGES.includes(row.status) || !mayWrite ? (
+                  <Badge value={row.status} label={STAGE_LABELS[row.status] || labelTahap(row.status)} />
+                ) : (
+                  <button
+                    onClick={() => setTahapLead(row)}
+                    title="Ubah tahap dan jadwalkan follow-up berikutnya"
+                    style={gayaTahap(row.status)}
+                  >
+                    {STAGE_LABELS[row.status] || labelTahap(row.status)} ▾
+                  </button>
+                ),
+            },
+            {
+              key: "tanggal_rencana",
+              label: "Follow Up",
+              render: (row) =>
+                row.tanggal_rencana ? (
+                  <span
+                    title={row.rencana_selanjutnya || ""}
+                    style={{ fontSize: 12, fontWeight: 600, color: warnaJadwal(row.tanggal_rencana), whiteSpace: "nowrap" }}
+                  >
+                    {tanggalRelatif(row.tanggal_rencana)}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 12, color: TEXT_MID }}>belum dijadwalkan</span>
+                ),
+            },
+            { key: "created_at", label: "Dibuat", render: (row) => tanggal(row.created_at) },
             {
               key: "aksi",
               label: "",
-              render: (row) => (
-                <RowActions>
-                  <EditButton onClick={() => startEdit(row)} />
-                  <DeleteButton
-                    itemName={row.name}
-                    warning="Riwayat aktivitas prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
-                    onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
-                    onDone={fetchLeads}
-                  />
-                </RowActions>
-              ),
+              sortable: false,
+              // Satu aksi utama di baris, sisanya turun ke menu. Empat tombol
+              // per baris berarti enam puluh tombol pada satu layar, dan mata
+              // berhenti bisa menemukan mana yang utama — sementara "Hapus"
+              // berdiri sebobot "Ubah", padahal ia permanen.
+              render: (row) => {
+                const sudah = terkonversi.get(row.id);
+                const dibatalkan = row.status === "cancel";
+                const bisaKonversi = mayWrite && !sudah && !dibatalkan;
+                return (
+                  <RowActions>
+                    {sudah ? (
+                      <button onClick={() => navigate(`/konsumen/${sudah}`)} style={{ ...gayaKecil, color: PRIMARY, borderColor: PRIMARY_MUTED }}>
+                        Lihat Konsumen
+                      </button>
+                    ) : bisaKonversi ? (
+                      <button onClick={() => setKonversiLead(row)} style={gayaKonversi} title="Buat konsumen, reserve unit, dan catat booking fee sekaligus">
+                        + Booking
+                      </button>
+                    ) : (
+                      <button onClick={() => setPanelLead(row)} style={gayaKecil}>
+                        Buka
+                      </button>
+                    )}
+                    <MenuAksi
+                      items={[
+                        { label: "Buka panel", ikon: PanelRight, onClick: () => setPanelLead(row) },
+                        { label: "Riwayat follow-up", ikon: History, onClick: () => setOpenLeadId(openLeadId === row.id ? null : row.id) },
+                        mayWrite && !dibatalkan && { label: "Ubah tahap", ikon: ArrowUpDown, onClick: () => setTahapLead(row) },
+                        mayWrite && { label: "Ubah data", ikon: Pencil, onClick: () => startEdit(row) },
+                        mayWrite && !dibatalkan && { label: "Alihkan ke agen lain", ikon: ArrowRightLeft, onClick: () => setPanelAksi({ lead: row, aksi: "alih" }) },
+                        mayWrite && !dibatalkan && { label: "Batalkan prospek", ikon: Ban, onClick: () => setPanelAksi({ lead: row, aksi: "batal" }), pisah: true, rusak: true },
+                        mayWrite && { label: "Hapus permanen", ikon: Trash2, onClick: () => setHapusLead(row), rusak: true },
+                      ]}
+                    />
+                  </RowActions>
+                );
+              },
             },
           ]}
           rows={leads}
         />
       </Card>
+
+      {openLead && <FollowUpTimeline leadId={openLead.id} title={`Riwayat Follow Up — ${openLead.name}`} />}
+
+      <KonversiBookingModal
+        lead={konversiLead}
+        open={Boolean(konversiLead)}
+        onClose={() => setKonversiLead(null)}
+        onSelesai={fetchLeads}
+      />
+
+      <UbahTahapModal
+        lead={tahapLead}
+        open={Boolean(tahapLead)}
+        onClose={() => setTahapLead(null)}
+        onSelesai={() => {
+          fetchLeads();
+          setPanelLead((v) => (v ? { ...v } : v));
+        }}
+      />
+
+      <PanelProspek
+        lead={panelLead}
+        open={Boolean(panelLead)}
+        onClose={() => setPanelLead(null)}
+        onSelesai={fetchLeads}
+        konsumenId={panelLead ? terkonversi.get(panelLead.id) : null}
+        sumberLabel={panelLead ? sourceLabel(panelLead) : ""}
+        onKonversi={() => setKonversiLead(panelLead)}
+        onUbahTahap={() => setTahapLead(panelLead)}
+        onUbahData={() => {
+          startEdit(panelLead);
+          setPanelLead(null);
+        }}
+      />
+
+      {/* Aksi dari menu baris memanggil modal yang sama dengan yang dipakai
+          panel, langsung pada operasinya — tanpa memaksa membuka panel dulu. */}
+      <ModalBatal
+        open={panelAksi?.aksi === "batal"}
+        lead={panelAksi?.lead || null}
+        onClose={() => setPanelAksi(null)}
+        onSelesai={fetchLeads}
+      />
+      <ModalAlih
+        open={panelAksi?.aksi === "alih"}
+        lead={panelAksi?.lead || null}
+        onClose={() => setPanelAksi(null)}
+        onSelesai={fetchLeads}
+      />
+
+      <ConfirmDialog
+        open={Boolean(hapusLead)}
+        title="Hapus prospek ini?"
+        message={hapusLead ? `\u201c${hapusLead.name}\u201d akan dihapus permanen dan tidak bisa dikembalikan.` : ""}
+        warning="Riwayat follow-up prospek ini ikut terhapus. Untuk menutup prospek tanpa kehilangan jejaknya, pakai Batalkan Prospek — alasannya akan tercatat."
+        busy={hapusSibuk}
+        error={hapusGalat}
+        onCancel={() => {
+          if (!hapusSibuk) {
+            setHapusLead(null);
+            setHapusGalat("");
+          }
+        }}
+        onConfirm={async () => {
+          setHapusSibuk(true);
+          const { error: e } = await supabase.from("leads").delete().eq("id", hapusLead.id);
+          setHapusSibuk(false);
+          if (e) {
+            setHapusGalat(e.message);
+            return;
+          }
+          setHapusLead(null);
+          setPanelLead(null);
+          toast.sukses("Prospek dihapus.");
+          fetchLeads();
+        }}
+      />
     </div>
   );
 }
 
-const inputStyle = {
-  padding: "10px 12px",
+/** Jadwal yang lewat harus terbaca sebagai utang pekerjaan, bukan sekadar tanggal. */
+function warnaJadwal(tgl) {
+  const d = new Date(`${tgl}T00:00:00`);
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+  const selisih = Math.round((d - hariIni) / 86400000);
+  if (selisih < 0) return NEGATIVE;
+  if (selisih <= 2) return ACCENT_DARK;
+  return TEXT_DARK;
+}
+
+function gayaTahap(status) {
+  const panas = status === "hot";
+  return {
+    border: `1px solid ${panas ? ACCENT : BORDER}`,
+    background: "#fff",
+    color: panas ? ACCENT_DARK : TEXT_DARK,
+    borderRadius: 999,
+    padding: "5px 11px",
+    fontSize: 11.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+}
+
+const gayaKecil = {
   border: `1px solid ${BORDER}`,
-  borderRadius: 12,
-  fontSize: 13,
-  outline: "none",
+  background: "#fff",
+  color: TEXT_DARK,
+  borderRadius: 9,
+  padding: "5px 11px",
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const gayaKonversi = {
+  ...gayaKecil,
+  border: "none",
+  background: ACCENT,
+  color: "#fff",
 };

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Asterisk } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { PRIMARY, PRIMARY_SOFT, PAGE_BG, BORDER, TEXT_DARK, TEXT_MID } from "../components/ui";
+import { PRIMARY, PRIMARY_SOFT, ACCENT, PAGE_BG, BORDER, TEXT_DARK, TEXT_MID } from "../components/ui";
 
 export default function LoginPage() {
   const { signIn } = useAuth();
@@ -70,7 +70,7 @@ export default function LoginPage() {
         >
           <Asterisk size={30} />
         </div>
-        <h1 style={{ fontSize: 21, marginBottom: 6, color: TEXT_DARK, letterSpacing: "-0.02em" }}>Griya Zafira CRM</h1>
+        <h1 style={{ fontSize: 21, marginBottom: 6, color: TEXT_DARK, letterSpacing: "-0.02em" }}>Zafira Property</h1>
         <p style={{ color: TEXT_MID, fontSize: 13, marginBottom: 24 }}>Masuk untuk melanjutkan ke Dashboard</p>
 
         <div>
@@ -120,7 +120,7 @@ export default function LoginPage() {
             style={{
               width: "100%",
               padding: 13,
-              background: PRIMARY,
+              background: ACCENT,
               color: "#fff",
               border: "none",
               borderRadius: 999,
@@ -132,7 +132,14 @@ export default function LoginPage() {
           >
             {loading ? "Memproses..." : "Masuk"}
           </button>
-          <div style={{ color: "#c25b5b", fontSize: 12, marginTop: 10, minHeight: 14 }}>{error}</div>
+          <div style={{ color: "#C2413B", fontSize: 12, marginTop: 10, minHeight: 14 }}>{error}</div>
+
+          <div style={{ fontSize: 13, color: TEXT_MID, marginTop: 4 }}>
+            Belum punya akun?{" "}
+            <Link to="/daftar" style={{ color: PRIMARY, fontWeight: 600, textDecoration: "none" }}>
+              Daftar
+            </Link>
+          </div>
         </div>
       </div>
     </div>

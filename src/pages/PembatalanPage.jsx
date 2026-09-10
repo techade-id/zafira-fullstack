@@ -80,7 +80,7 @@ export default function PembatalanPage() {
       <PageTitle
         title="Pembatalan"
         subtitle={`${cancellations.length} riwayat pembatalan`}
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Catat Pembatalan</PrimaryButton>}
+        action={<PrimaryButton subject="cancellation" onClick={() => setShowForm((v) => !v)}>+ Catat Pembatalan</PrimaryButton>}
       />
 
       {showForm && (
@@ -107,9 +107,9 @@ export default function PembatalanPage() {
               style={{ ...inputStyle, gridColumn: "1 / -1", minHeight: 70, resize: "vertical", fontFamily: "inherit" }}
             />
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddCancellation} disabled={saving}>
+            <PrimaryButton subject="cancellation" onClick={handleAddCancellation} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Pembatalan"}
             </PrimaryButton>
             {editingId && (
@@ -138,6 +138,7 @@ export default function PembatalanPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(row)} />
                   <DeleteButton
+                    subject="cancellation_delete"
                     itemName={`Pembatalan ${row.customers?.name || ""}`.trim()}
                     warning="Status konsumen tidak otomatis kembali aktif. Ubah manual di halaman Konsumen bila perlu."
                     onDelete={() => supabase.from("cancellations").delete().eq("id", row.id)}

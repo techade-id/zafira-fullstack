@@ -1,0 +1,17 @@
+{
+  "name": "Zafira Property",
+  "short_name": "Zafira Property",
+  "description": "Sistem CRM Zafira Property — penjualan, administrasi KPR, keuangan, dan aftersales.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F6FA",
+  "theme_color": "#0A1D42",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

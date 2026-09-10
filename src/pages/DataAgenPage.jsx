@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID } from "../components/ui";
-
-const ROLE_OPTIONS = ["admin", "manager", "supervisor", "marketing", "administrasi", "sales_agent", "tim_lapangan"];
+import { useAuth } from "../context/AuthContext";
+import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, canWrite, roleOf } from "../lib/permissions";
+import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, ACCENT_DARK, NEGATIVE, ReadOnlyBanner } from "../components/ui";
 
 export default function DataAgenPage() {
+  const { profile } = useAuth();
+  const canSetRole = canWrite(profile, "agent_role");
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // antrean persetujuan
+  const [pendingRole, setPendingRole] = useState({});
+  const [busy, setBusy] = useState("");
 
   // transfer state
   const [customers, setCustomers] = useState([]);
@@ -36,9 +42,38 @@ export default function DataAgenPage() {
     fetchAll();
   }, []);
 
+  // Akun yang belum pernah disetujui: terdaftar tetapi belum aktif.
+  const pending = agents.filter((a) => a.is_active === false);
+
   async function updateAgent(id, patch) {
     const { error } = await supabase.from("profiles").update(patch).eq("id", id);
     if (error) setError(error.message);
+    fetchAll();
+  }
+
+  /**
+   * Persetujuan dan penonaktifan lewat RPC, bukan UPDATE langsung: peran dan
+   * status aktif harus berubah dalam satu transaksi, dan keduanya wajib
+   * meninggalkan jejak audit beserta alasannya.
+   */
+  async function approve(id) {
+    const role = pendingRole[id] || "sales";
+    setBusy(id);
+    setError("");
+    const { error: rpcError } = await supabase.rpc("approve_user", { p_user_id: id, p_role: role });
+    setBusy("");
+    if (rpcError) return setError(rpcError.message);
+    fetchAll();
+  }
+
+  async function setActive(row, aktif) {
+    setBusy(row.id);
+    setError("");
+    const { error: rpcError } = aktif
+      ? await supabase.rpc("approve_user", { p_user_id: row.id, p_role: roleOf(row) || "sales" })
+      : await supabase.rpc("deactivate_user", { p_user_id: row.id, p_reason: "Dinonaktifkan dari halaman Pengguna" });
+    setBusy("");
+    if (rpcError) return setError(rpcError.message);
     fetchAll();
   }
 
@@ -67,11 +102,61 @@ export default function DataAgenPage() {
 
   return (
     <div>
-      <PageTitle title="Data Agen" subtitle="Kelola detail agen dan pemindahan konsumen antar agen" />
-      {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+      <PageTitle title="Pengguna & Agen" subtitle="Persetujuan akun, peran, detail agen, dan pemindahan konsumen" />
+
+      <ReadOnlyBanner />
+      {error && <div style={{ color: NEGATIVE, fontSize: 12, marginBottom: 10 }}>{error}</div>}
+
+      {pending.length > 0 && (
+        <Card style={{ marginBottom: 18, borderColor: "#F6CDB8" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+            Menunggu Persetujuan <span style={{ color: ACCENT_DARK }}>({pending.length})</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 12 }}>
+            Akun ini sudah mendaftar tetapi belum dapat mengakses apa pun. Tetapkan perannya untuk mengaktifkan.
+          </div>
+          <DataTable
+            emptyLabel="Tidak ada permintaan."
+            columns={[
+              { key: "full_name", label: "Nama" },
+              { key: "created_at", label: "Mendaftar", render: (r) => new Date(r.created_at).toLocaleDateString("id-ID") },
+              {
+                key: "role",
+                label: "Tetapkan Peran",
+                render: (r) => (
+                  <select
+                    value={pendingRole[r.id] || "sales"}
+                    onChange={(e) => setPendingRole((m) => ({ ...m, [r.id]: e.target.value }))}
+                    style={selectStyle}
+                    disabled={!canSetRole}
+                    title={ROLE_DESCRIPTIONS[pendingRole[r.id] || "sales"] || ""}
+                  >
+                    {ROLES.map((x) => (
+                      <option key={x} value={x}>{ROLE_LABELS[x]}</option>
+                    ))}
+                  </select>
+                ),
+              },
+              {
+                key: "aksi",
+                label: "",
+                render: (r) =>
+                  canSetRole ? (
+                    <PrimaryButton subject="agent_role" onClick={() => approve(r.id)} disabled={busy === r.id} style={{ padding: "8px 16px" }}>
+                      {busy === r.id ? "..." : "Setujui"}
+                    </PrimaryButton>
+                  ) : (
+                    <span style={{ fontSize: 11.5, color: TEXT_MID }}>Hanya admin</span>
+                  ),
+              },
+            ]}
+            rows={pending}
+          />
+        </Card>
+      )}
 
       <Card style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Daftar Agen</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Daftar Pengguna</div>
         <DataTable
           loading={loading}
           emptyLabel="Belum ada agen."
@@ -102,13 +187,27 @@ export default function DataAgenPage() {
             {
               key: "role",
               label: "Role",
-              render: (row) => (
-                <select value={row.role} onChange={(e) => updateAgent(row.id, { role: e.target.value })} style={selectStyle}>
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r} value={r}>{r.replace("_", " ")}</option>
-                  ))}
-                </select>
-              ),
+              // Changing a role is admin-only, enforced by the
+              // profiles_guard_privileged trigger as well as this.
+              render: (row) =>
+                canSetRole ? (
+                  <select
+                    value={roleOf(row)}
+                    onChange={(e) => updateAgent(row.id, { role: e.target.value })}
+                    style={selectStyle}
+                    title={ROLE_DESCRIPTIONS[roleOf(row)] || ""}
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_LABELS[r]}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span style={{ fontSize: 12.5 }} title={ROLE_DESCRIPTIONS[roleOf(row)] || ""}>
+                    {ROLE_LABELS[roleOf(row)] || row.role}
+                  </span>
+                ),
             },
             {
               key: "divisi",
@@ -128,7 +227,12 @@ export default function DataAgenPage() {
               key: "is_active",
               label: "Status",
               render: (row) => (
-                <button onClick={() => updateAgent(row.id, { is_active: !row.is_active })} style={{ border: "none", background: "none", cursor: "pointer" }}>
+                <button
+                  onClick={() => setActive(row, !row.is_active)}
+                  disabled={busy === row.id}
+                  title={row.is_active ? "Nonaktifkan pengguna" : "Aktifkan kembali"}
+                  style={{ border: "none", background: "none", cursor: busy === row.id ? "default" : "pointer" }}
+                >
                   <Badge value={row.is_active ? "aktif" : "batal"} />
                 </button>
               ),
@@ -150,12 +254,14 @@ export default function DataAgenPage() {
           </select>
           <select value={transfer.to_agent_id} onChange={(e) => setTransfer({ ...transfer, to_agent_id: e.target.value })} style={selectStyle}>
             <option value="">Agen Tujuan</option>
-            {agents.map((a) => (
+            {/* Memindahkan konsumen ke akun nonaktif akan membuatnya tidak
+                terpegang siapa pun, jadi hanya pengguna aktif yang ditawarkan. */}
+            {agents.filter((a) => a.is_active).map((a) => (
               <option key={a.id} value={a.id}>{a.full_name}</option>
             ))}
           </select>
           <input placeholder="Alasan (opsional)" value={transfer.reason} onChange={(e) => setTransfer({ ...transfer, reason: e.target.value })} style={selectStyle} />
-          <PrimaryButton onClick={handleTransfer} disabled={transferring}>
+          <PrimaryButton subject="customer" onClick={handleTransfer} disabled={transferring}>
             {transferring ? "..." : "Pindahkan"}
           </PrimaryButton>
         </div>

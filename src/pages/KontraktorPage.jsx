@@ -122,7 +122,7 @@ export default function KontraktorPage() {
       <PageTitle
         title="Evaluasi Kontraktor"
         subtitle="Nilai per tahap: kerapian, spesifikasi, ketepatan waktu — dikurangi bobot komplain"
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Kontraktor</PrimaryButton>}
+        action={<PrimaryButton subject="contractor" onClick={() => setShowForm((v) => !v)}>+ Kontraktor</PrimaryButton>}
       />
 
       {showForm && (
@@ -133,9 +133,9 @@ export default function KontraktorPage() {
             <input placeholder="Spesialisasi" value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} style={inputStyle} />
             <input placeholder="Catatan" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddContractor} disabled={saving}>
+            <PrimaryButton subject="contractor" onClick={handleAddContractor} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Kontraktor"}
             </PrimaryButton>
             {editingId && (
@@ -195,6 +195,7 @@ export default function KontraktorPage() {
                 <RowActions>
                   <EditButton onClick={() => startEdit(r)} />
                   <DeleteButton
+                    subject="contractor"
                     itemName={r.contractor_name}
                     warning="Kontraktor yang masih punya task di Rencana Proyek tidak bisa dihapus, agar riwayat pekerjaannya tidak hilang."
                     onDelete={() => supabase.from("contractors").delete().eq("id", r.contractor_id)}

@@ -128,7 +128,7 @@ export default function ProyekPage() {
       <PageTitle
         title="Proyek"
         subtitle={`${projects.length} proyek terdaftar`}
-        action={<PrimaryButton onClick={() => setShowProjectForm((v) => !v)}>+ Proyek Baru</PrimaryButton>}
+        action={<PrimaryButton subject="project" onClick={() => setShowProjectForm((v) => !v)}>+ Proyek Baru</PrimaryButton>}
       />
 
       {showProjectForm && (
@@ -138,9 +138,9 @@ export default function ProyekPage() {
             <input placeholder="Lokasi" value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} style={inputStyle} />
             <input placeholder="Deskripsi singkat" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddProject} disabled={savingProject}>
+            <PrimaryButton subject="project" onClick={handleAddProject} disabled={savingProject}>
               {savingProject ? "Menyimpan..." : editingProjectId ? "Simpan Perubahan" : "Simpan Proyek"}
             </PrimaryButton>
             {editingProjectId && (
@@ -187,6 +187,7 @@ export default function ProyekPage() {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <EditButton label="Ubah Proyek" onClick={() => startEditProject(activeProject)} />
                 <DeleteButton
+                  subject="project_delete"
                   label="Hapus Proyek"
                   itemName={activeProject.name}
                   warning={`Seluruh ${projectUnits.length} unit di proyek ini ikut terhapus permanen, termasuk posisinya pada Siteplan Digital.`}
@@ -196,7 +197,7 @@ export default function ProyekPage() {
                     fetchAll();
                   }}
                 />
-                <PrimaryButton onClick={() => setShowUnitForm((v) => !v)}>+ Unit</PrimaryButton>
+                <PrimaryButton subject="project" onClick={() => setShowUnitForm((v) => !v)}>+ Unit</PrimaryButton>
               </div>
             }
           />
@@ -208,9 +209,9 @@ export default function ProyekPage() {
               <input placeholder="Tipe (mis. 36/72)" value={unitForm.type} onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })} style={inputStyle} />
               <input placeholder="Harga (Rp)" type="number" value={unitForm.price} onChange={(e) => setUnitForm({ ...unitForm, price: e.target.value })} style={inputStyle} />
               <div style={{ gridColumn: "1 / -1" }}>
-                {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
+                {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 8 }}>{error}</div>}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <PrimaryButton onClick={handleAddUnit} disabled={savingUnit}>
+                  <PrimaryButton subject="project" onClick={handleAddUnit} disabled={savingUnit}>
                     {savingUnit ? "Menyimpan..." : editingUnitId ? "Simpan Perubahan" : "Simpan Unit"}
                   </PrimaryButton>
                   {editingUnitId && (
@@ -255,6 +256,7 @@ export default function ProyekPage() {
                   <RowActions>
                     <EditButton onClick={() => startEditUnit(row)} />
                     <DeleteButton
+                      subject="project"
                       itemName={`Unit ${row.unit_code}`}
                       warning="Posisi unit pada Siteplan Digital ikut hilang. Konsumen dan komplain yang terkait tetap ada, hanya kehilangan kaitan unitnya."
                       onDelete={() => supabase.from("units").delete().eq("id", row.id)}

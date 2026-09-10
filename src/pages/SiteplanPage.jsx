@@ -1,13 +1,20 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getPublicUrl } from "../lib/storage";
-import { Card, PageTitle, PrimaryButton, Badge, TEXT_MID, BORDER, ORANGE, ORANGE_LIGHT } from "../components/ui";
+import SiteplanVektor from "../components/SiteplanVektor";
+import { SITEPLAN_KAVLING } from "../data/siteplanKaligangsa";
+import { Card, PageTitle, PrimaryButton, Badge, TEXT_MID, TEXT_DARK, BORDER, ORANGE, ORANGE_LIGHT } from "../components/ui";
 
+/** Kode kavling yang punya geometri vektor. */
+const KODE_VEKTOR = new Set(SITEPLAN_KAVLING.map((k) => k.kode.toUpperCase()));
+
+// Status pins: available reads as settled green, booking takes the deep-orange
+// accent (it is the state that needs action), sold is navy, cancelled is red.
 const PIN_COLORS = {
-  tersedia: "#4b6b4f",
-  booking: "#b07d2b",
-  terjual: "#3c6084",
-  batal: "#c25b5b",
+  tersedia: "#15803D",
+  booking: "#E2571F",
+  terjual: "#2B5CA8",
+  batal: "#C2413B",
 };
 
 export default function SiteplanPage() {
@@ -43,6 +50,17 @@ export default function SiteplanPage() {
   const projectUnits = units.filter((u) => u.project_id === activeProjectId);
   const placedUnits = projectUnits.filter((u) => u.pos_x != null && u.pos_y != null);
   const unplacedUnits = projectUnits.filter((u) => u.pos_x == null || u.pos_y == null);
+
+  /**
+   * Proyek yang kode unitnya cocok dengan geometri vektor memakai peta vektor;
+   * sisanya tetap memakai gambar + pin. Ambangnya longgar (80%) supaya satu
+   * dua unit tambahan di luar gambar kerja tidak membatalkan seluruh peta.
+   */
+  const pakaiVektor = useMemo(() => {
+    if (projectUnits.length === 0) return false;
+    const cocok = projectUnits.filter((u) => KODE_VEKTOR.has(String(u.unit_code || "").trim().toUpperCase())).length;
+    return cocok / projectUnits.length >= 0.8;
+  }, [projectUnits]);
 
   async function handleImageUpload(e) {
     const file = e.target.files?.[0];
@@ -116,7 +134,39 @@ export default function SiteplanPage() {
         </Card>
       )}
 
-      {activeProject && (
+      {/* Proyek dengan geometri vektor: kavlingnya sendiri yang diklik, dengan
+          batas persis seperti gambar kerja. Tidak ada pin yang perlu
+          ditempatkan tangan, dan tidak ada gambar yang perlu diunggah. */}
+      {activeProject && pakaiVektor && (
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 13, color: TEXT_MID }}>
+              Klik kavling untuk melihat konsumen dan progres pembangunannya.
+            </div>
+            <input
+              value={highlight}
+              onChange={(e) => setHighlight(e.target.value)}
+              placeholder="Cari unit (mis. A12)"
+              aria-label="Cari unit"
+              style={{ padding: "7px 12px", border: `1px solid ${BORDER}`, borderRadius: 999, fontSize: 12, outline: "none", width: 150 }}
+            />
+          </div>
+
+          <SiteplanVektor
+            units={projectUnits}
+            onPilih={(unit) => openUnit(unit)}
+            sorotan={highlight}
+            tinggi={520}
+          />
+
+          <div style={{ fontSize: 11.5, color: TEXT_MID, marginTop: 11, lineHeight: 1.5 }}>
+            Geometri {SITEPLAN_KAVLING.length} kavling diambil dari gambar kerja dan dihasilkan ulang oleh{" "}
+            <code style={{ fontSize: 11 }}>tools/siteplan_ke_vektor.py</code>.
+          </div>
+        </Card>
+      )}
+
+      {activeProject && !pakaiVektor && (
         <div className="siteplan-layout">
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
@@ -170,7 +220,7 @@ export default function SiteplanPage() {
                       padding: 0,
                       borderRadius: 4,
                       border: `1px solid ${highlight && u.unit_code.toLowerCase().includes(highlight.toLowerCase()) ? "#111" : "rgba(255,255,255,0.9)"}`,
-                      background: PIN_COLORS[u.status] || "#5f5e5a",
+                      background: PIN_COLORS[u.status] || "#64748B",
                       opacity: highlight && !u.unit_code.toLowerCase().includes(highlight.toLowerCase()) ? 0.25 : 0.9,
                       color: "#fff",
                       fontSize: 8,
