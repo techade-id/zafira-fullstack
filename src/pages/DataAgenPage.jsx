@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID } from "../components/ui";
-
-const ROLE_OPTIONS = ["admin", "manager", "supervisor", "marketing", "administrasi", "sales_agent", "tim_lapangan"];
+import { useAuth } from "../context/AuthContext";
+import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, canWrite, roleOf } from "../lib/permissions";
+import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, ReadOnlyBanner } from "../components/ui";
 
 export default function DataAgenPage() {
+  const { profile } = useAuth();
+  const canSetRole = canWrite(profile, "agent_role");
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,7 +70,9 @@ export default function DataAgenPage() {
   return (
     <div>
       <PageTitle title="Data Agen" subtitle="Kelola detail agen dan pemindahan konsumen antar agen" />
-      {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+
+      <ReadOnlyBanner />
+      {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
 
       <Card style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Daftar Agen</div>
@@ -102,13 +106,27 @@ export default function DataAgenPage() {
             {
               key: "role",
               label: "Role",
-              render: (row) => (
-                <select value={row.role} onChange={(e) => updateAgent(row.id, { role: e.target.value })} style={selectStyle}>
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r} value={r}>{r.replace("_", " ")}</option>
-                  ))}
-                </select>
-              ),
+              // Changing a role is admin-only, enforced by the
+              // profiles_guard_privileged trigger as well as this.
+              render: (row) =>
+                canSetRole ? (
+                  <select
+                    value={roleOf(row)}
+                    onChange={(e) => updateAgent(row.id, { role: e.target.value })}
+                    style={selectStyle}
+                    title={ROLE_DESCRIPTIONS[roleOf(row)] || ""}
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_LABELS[r]}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span style={{ fontSize: 12.5 }} title={ROLE_DESCRIPTIONS[roleOf(row)] || ""}>
+                    {ROLE_LABELS[roleOf(row)] || row.role}
+                  </span>
+                ),
             },
             {
               key: "divisi",
@@ -155,7 +173,7 @@ export default function DataAgenPage() {
             ))}
           </select>
           <input placeholder="Alasan (opsional)" value={transfer.reason} onChange={(e) => setTransfer({ ...transfer, reason: e.target.value })} style={selectStyle} />
-          <PrimaryButton onClick={handleTransfer} disabled={transferring}>
+          <PrimaryButton subject="customer" onClick={handleTransfer} disabled={transferring}>
             {transferring ? "..." : "Pindahkan"}
           </PrimaryButton>
         </div>

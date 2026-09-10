@@ -5,7 +5,7 @@
 html, body {
   margin: 0;
   overflow-x: hidden;
-  background: #eceee9;
+  background: #F4F6FA;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -22,7 +22,7 @@ input, select, textarea, button {
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: #4b6b4f !important;
+  border-color: #0F2A5C !important;
 }
 
 /* ---------- App shell (sidebar + topbar) ---------- */
@@ -46,12 +46,23 @@ input:focus, select:focus, textarea:focus {
   display: none;
 }
 
+/* The sidebar sits on navy, so hover states are lightened, not darkened. */
 .nav-item:hover {
-  background: #f3f5f1;
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
 }
 
 .nav-item.active:hover {
-  background: #4b6b4f;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Inline search is the desktop affordance; the toggle takes over below 980px. */
+.search-toggle {
+  display: none !important;
+}
+
+.mobile-search {
+  display: none;
 }
 
 @media (max-width: 980px) {
@@ -73,7 +84,7 @@ input:focus, select:focus, textarea:focus {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(20, 30, 22, 0.45);
+    background: rgba(10, 29, 66, 0.5);
     z-index: 30;
   }
 
@@ -84,6 +95,14 @@ input:focus, select:focus, textarea:focus {
   /* !important: these elements carry inline styles, which otherwise win. */
   .topbar-search {
     display: none !important;
+  }
+
+  .search-toggle {
+    display: flex !important;
+  }
+
+  .mobile-search {
+    display: block;
   }
 
   .app-content {
@@ -104,7 +123,9 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media (max-width: 560px) {
-  .topbar-actions .icon-btn {
+  /* Notification and avatar chips are dropped for room — search is not, it is
+     the most-used control on a phone. */
+  .topbar-actions .icon-btn:not(.search-toggle) {
     display: none !important;
   }
 }

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, BORDER, TEXT_MID } from "../components/ui";
+import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, ReadOnlyBanner } from "../components/ui";
 
 const CATEGORIES = [
-  { key: "lead_source", label: "Sumber Informasi Leads" },
+  { key: "lead_source", label: "Sumber Informasi Leads", hint: "Label lama; sumber baru dipilih relasional di halaman Prospek" },
+  { key: "organik_kategori", label: "Kategori Leads Organik", hint: "OTS, Event, Brosur — dipakai saat sumber leads Organik" },
+  { key: "hasil_followup", label: "Hasil Follow Up" },
   { key: "bank", label: "Nama Bank" },
   { key: "cancel_reason", label: "Alasan Pembatalan" },
   { key: "followup_category", label: "Kategori Rencana Selanjutnya" },
@@ -22,19 +24,71 @@ export default function PengaturanBisnisPage() {
   const [newHoliday, setNewHoliday] = useState({ tanggal: "", keterangan: "" });
   const [error, setError] = useState("");
 
+  // Relational lead sources (PRD §4.1). Without somewhere to create these, the
+  // Ads and Freelance dropdowns on Prospek would have nothing to offer.
+  const [campaigns, setCampaigns] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [newCampaign, setNewCampaign] = useState({ platform: "", name: "", code: "", budget: "" });
+  const [newPartner, setNewPartner] = useState({ name: "", type: "freelance", phone: "" });
+
   async function fetchAll() {
     setLoading(true);
-    const [{ data: bs }, { data: as }, { data: h }] = await Promise.all([
+    const [{ data: bs }, { data: as }, { data: h }, camp, part] = await Promise.all([
       supabase.from("business_settings").select("*").order("category").order("sort_order"),
       supabase.from("app_settings").select("*"),
       supabase.from("holidays").select("*").order("tanggal"),
+      supabase.from("ads_campaigns").select("*").order("created_at", { ascending: false }),
+      supabase.from("partners").select("*").order("name"),
     ]);
     setSettings(bs || []);
     const map = {};
     for (const r of as || []) map[r.key] = r.value;
     setAppSettings(map);
     setHolidays(h || []);
+    // Both arrive with migration_009; the page still renders before it runs.
+    setCampaigns(camp.data || []);
+    setPartners(part.data || []);
     setLoading(false);
+  }
+
+  async function addCampaign() {
+    if (!newCampaign.platform.trim() || !newCampaign.name.trim()) {
+      setError("Platform dan nama campaign wajib diisi.");
+      return;
+    }
+    const { error: e } = await supabase.from("ads_campaigns").insert({
+      platform: newCampaign.platform.trim(),
+      name: newCampaign.name.trim(),
+      code: newCampaign.code.trim() || null,
+      budget: newCampaign.budget ? Number(newCampaign.budget) : null,
+    });
+    if (e) return setError(e.message);
+    setNewCampaign({ platform: "", name: "", code: "", budget: "" });
+    setError("");
+    fetchAll();
+  }
+
+  async function addPartner() {
+    if (!newPartner.name.trim()) {
+      setError("Nama mitra wajib diisi.");
+      return;
+    }
+    const { error: e } = await supabase.from("partners").insert({
+      name: newPartner.name.trim(),
+      type: newPartner.type,
+      phone: newPartner.phone.trim() || null,
+    });
+    if (e) return setError(e.message);
+    setNewPartner({ name: "", type: "freelance", phone: "" });
+    setError("");
+    fetchAll();
+  }
+
+  /** Deactivating keeps history intact; deleting would orphan the leads. */
+  async function toggleActive(table, row) {
+    const { error: e } = await supabase.from(table).update({ is_active: !row.is_active }).eq("id", row.id);
+    if (e) return setError(e.message);
+    fetchAll();
   }
 
   useEffect(() => {
@@ -85,8 +139,10 @@ export default function PengaturanBisnisPage() {
 
   return (
     <div>
-      <PageTitle title="Pengaturan Bisnis" subtitle="Daftar pilihan, kalender kerja, dan parameter penilaian" />
-      {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+      <PageTitle title="Pengaturan Bisnis" subtitle="Daftar pilihan, sumber leads relasional, kalender kerja, dan parameter penilaian" />
+
+      <ReadOnlyBanner />
+      {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
 
       <Card style={{ marginBottom: 18 }}>
         <SectionTitle title="Kalender Kerja & Penilaian" />
@@ -139,7 +195,7 @@ export default function PengaturanBisnisPage() {
             onChange={(e) => setNewHoliday({ ...newHoliday, keterangan: e.target.value })}
             style={{ ...inputStyle, flex: 1, minWidth: 180 }}
           />
-          <PrimaryButton onClick={addHoliday}>Tambah</PrimaryButton>
+          <PrimaryButton subject="config" onClick={addHoliday}>Tambah</PrimaryButton>
         </div>
         <DataTable
           loading={loading}
@@ -151,13 +207,82 @@ export default function PengaturanBisnisPage() {
               key: "aksi",
               label: "",
               render: (r) => (
-                <button onClick={() => removeHoliday(r.tanggal)} style={{ border: "none", background: "none", color: "#c25b5b", cursor: "pointer", fontSize: 12 }}>
+                <button onClick={() => removeHoliday(r.tanggal)} style={{ border: "none", background: "none", color: "#C2413B", cursor: "pointer", fontSize: 12 }}>
                   Hapus
                 </button>
               ),
             },
           ]}
           rows={holidays}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle title="Ads Campaign" />
+        <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 12 }}>
+          Dikelola tim digital. Prospek bersumber Ads dikaitkan ke campaign di sini, sehingga biaya per lead dapat dihitung per campaign.
+        </div>
+        <div className="rg-4" style={{ marginBottom: 12 }}>
+          <input placeholder="Platform (Instagram, Meta Ads…)" value={newCampaign.platform} onChange={(e) => setNewCampaign({ ...newCampaign, platform: e.target.value })} style={inputStyle} />
+          <input placeholder="Nama Campaign" value={newCampaign.name} onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })} style={inputStyle} />
+          <input placeholder="Kode / UTM (opsional)" value={newCampaign.code} onChange={(e) => setNewCampaign({ ...newCampaign, code: e.target.value })} style={inputStyle} />
+          <input placeholder="Budget (Rp)" type="number" value={newCampaign.budget} onChange={(e) => setNewCampaign({ ...newCampaign, budget: e.target.value })} style={inputStyle} />
+        </div>
+        <PrimaryButton subject="ads" onClick={addCampaign} style={{ marginBottom: 14 }}>+ Tambah Campaign</PrimaryButton>
+        <DataTable
+          loading={loading}
+          emptyLabel="Belum ada campaign. Jalankan migration_009_pipeline.sql bila tabel belum dibuat."
+          columns={[
+            { key: "platform", label: "Platform" },
+            { key: "name", label: "Campaign" },
+            { key: "code", label: "Kode", render: (r) => r.code || "-" },
+            { key: "budget", label: "Budget", render: (r) => (r.budget ? `Rp${Number(r.budget).toLocaleString("id-ID")}` : "-") },
+            {
+              key: "is_active",
+              label: "Status",
+              render: (r) => (
+                <button onClick={() => toggleActive("ads_campaigns", r)} style={{ border: "none", background: "none", cursor: "pointer", padding: 0 }}>
+                  <Badge value={r.is_active ? "aktif" : "batal"} />
+                </button>
+              ),
+            },
+          ]}
+          rows={campaigns}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle title="Mitra & Freelance" />
+        <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 12 }}>
+          Basis data mitra untuk prospek bersumber Freelance / Kemitraan.
+        </div>
+        <div className="rg-4" style={{ marginBottom: 12 }}>
+          <input placeholder="Nama Mitra" value={newPartner.name} onChange={(e) => setNewPartner({ ...newPartner, name: e.target.value })} style={inputStyle} />
+          <select value={newPartner.type} onChange={(e) => setNewPartner({ ...newPartner, type: e.target.value })} style={inputStyle}>
+            <option value="freelance">Freelance</option>
+            <option value="kemitraan">Kemitraan</option>
+          </select>
+          <input placeholder="Telepon" value={newPartner.phone} onChange={(e) => setNewPartner({ ...newPartner, phone: e.target.value })} style={inputStyle} />
+          <PrimaryButton subject="config" onClick={addPartner}>+ Tambah Mitra</PrimaryButton>
+        </div>
+        <DataTable
+          loading={loading}
+          emptyLabel="Belum ada mitra terdaftar."
+          columns={[
+            { key: "name", label: "Nama" },
+            { key: "type", label: "Tipe", render: (r) => <span style={{ textTransform: "capitalize" }}>{r.type}</span> },
+            { key: "phone", label: "Telepon", render: (r) => r.phone || "-" },
+            {
+              key: "is_active",
+              label: "Status",
+              render: (r) => (
+                <button onClick={() => toggleActive("partners", r)} style={{ border: "none", background: "none", cursor: "pointer", padding: 0 }}>
+                  <Badge value={r.is_active ? "aktif" : "batal"} />
+                </button>
+              ),
+            },
+          ]}
+          rows={partners}
         />
       </Card>
 
@@ -184,7 +309,7 @@ export default function PengaturanBisnisPage() {
                         style={{ flex: 1, marginRight: 10, border: "1px solid transparent", borderRadius: 8, padding: "4px 8px", fontSize: 13, outline: "none", background: "transparent" }}
                         onFocus={(e) => (e.target.style.border = `1px solid ${BORDER}`)}
                       />
-                      <button onClick={() => removeValue(item.id)} style={{ border: "none", background: "none", color: "#c25b5b", cursor: "pointer", fontSize: 12 }}>
+                      <button onClick={() => removeValue(item.id)} style={{ border: "none", background: "none", color: "#C2413B", cursor: "pointer", fontSize: 12 }}>
                         Hapus
                       </button>
                     </div>
@@ -198,7 +323,7 @@ export default function PengaturanBisnisPage() {
                     onKeyDown={(e) => e.key === "Enter" && addValue(cat.key)}
                     style={{ ...inputStyle, flex: 1 }}
                   />
-                  <PrimaryButton onClick={() => addValue(cat.key)} style={{ padding: "9px 15px" }}>
+                  <PrimaryButton subject="config" onClick={() => addValue(cat.key)} style={{ padding: "9px 15px" }}>
                     Tambah
                   </PrimaryButton>
                 </div>

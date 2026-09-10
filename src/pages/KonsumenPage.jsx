@@ -4,7 +4,9 @@ import { fetchAllRows } from "../lib/fetchAllRows";
 import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
-import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, DeleteButton, EditButton, RowActions } from "../components/ui";
+import { canEditCustomer, canEditBerkas, isLocked, lockReason, roleOf } from "../lib/permissions";
+import FollowUpTimeline from "../components/FollowUpTimeline";
+import { Card, PageTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, ACCENT_DARK, DeleteButton, EditButton, RowActions, ReadOnlyBanner, LockBanner } from "../components/ui";
 
 const CUSTOMER_STATUS_OPTIONS = ["proses", "aktif", "selesai", "batal"];
 const DOC_TYPES = ["KTP", "KK", "NPWP", "Slip Gaji", "Akad"];
@@ -47,7 +49,7 @@ export default function KonsumenPage() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const emptyForm = { name: "", phone: "", email: "", ktp_number: "", address: "", unit_id: "", lead_id: "" };
+  const emptyForm = { name: "", phone: "", email: "", username_sosmed: "", ktp_number: "", address: "", unit_id: "", lead_id: "" };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
 
@@ -63,6 +65,7 @@ export default function KonsumenPage() {
       name: row.name || "",
       phone: row.phone || "",
       email: row.email || "",
+      username_sosmed: row.username_sosmed || "",
       ktp_number: row.ktp_number || "",
       address: row.address || "",
       unit_id: row.unit_id || "",
@@ -130,6 +133,7 @@ export default function KonsumenPage() {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
+      username_sosmed: form.username_sosmed.trim() || null,
       ktp_number: form.ktp_number.trim() || null,
       address: form.address.trim() || null,
       unit_id: form.unit_id || null,
@@ -204,11 +208,6 @@ export default function KonsumenPage() {
     setDocuments(data || []);
   }
 
-  async function fetchDocumentsFor(customerId) {
-    const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", customerId).order("uploaded_at", { ascending: false });
-    setDocuments(data || []);
-  }
-
   async function updateDocStatus(docId, status) {
     await supabase.from("customer_documents").update({ status }).eq("id", docId);
     const { data } = await supabase.from("customer_documents").select("*").eq("customer_id", selectedCustomerId).order("uploaded_at", { ascending: false });
@@ -220,11 +219,20 @@ export default function KonsumenPage() {
     if (url) window.open(url, "_blank");
   }
 
+  // Handover Hard-Lock (PRD §3.2). Once Finance has verified the Booking Fee
+  // receipt the customer belongs to Admin Marketing; Sales keeps read access.
+  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId) || null;
+  const berkasEditable = canEditBerkas(profile, selectedCustomer);
+  const lockedForMe = selectedCustomer && isLocked(selectedCustomer) && roleOf(profile) === "sales";
+
   function renderKprInput(field) {
     const value = kpr?.[field.key] ?? "";
+    const locked = !berkasEditable;
+    const style = locked ? { ...inputStyle, background: "#F4F6FA", color: TEXT_MID } : inputStyle;
+
     if (field.type === "bank") {
       return (
-        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle}>
+        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={style} disabled={locked}>
           <option value="">Pilih Bank</option>
           {withCurrentValue(banks, value).map((b) => (
             <option key={b} value={b}>{b}</option>
@@ -234,7 +242,7 @@ export default function KonsumenPage() {
     }
     if (field.type === "progres") {
       return (
-        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle}>
+        <select value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={style} disabled={locked}>
           <option value="">Pilih Progres</option>
           {withCurrentValue(progresBerkasOptions, value).map((p) => (
             <option key={p} value={p}>{p}</option>
@@ -242,7 +250,7 @@ export default function KonsumenPage() {
         </select>
       );
     }
-    return <input type={field.type} value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={inputStyle} />;
+    return <input type={field.type} value={value} onChange={(e) => setKprField(field.key, e.target.value)} style={style} disabled={locked} />;
   }
 
   const durations = kpr
@@ -259,8 +267,10 @@ export default function KonsumenPage() {
       <PageTitle
         title="Konsumen"
         subtitle={`${customers.length} konsumen tercatat`}
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Konsumen Baru</PrimaryButton>}
+        action={<PrimaryButton subject="customer" onClick={() => setShowForm((v) => !v)}>+ Konsumen Baru</PrimaryButton>}
       />
+
+      <ReadOnlyBanner />
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
@@ -268,6 +278,7 @@ export default function KonsumenPage() {
             <input placeholder="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
             <input placeholder="Telepon" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
             <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
+            <input placeholder="Username Sosial Media" value={form.username_sosmed} onChange={(e) => setForm({ ...form, username_sosmed: e.target.value })} style={inputStyle} />
             <input placeholder="No. KTP" value={form.ktp_number} onChange={(e) => setForm({ ...form, ktp_number: e.target.value })} style={inputStyle} />
             <input placeholder="Alamat" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} />
             <select value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} style={inputStyle}>
@@ -287,9 +298,9 @@ export default function KonsumenPage() {
               ))}
             </select>
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddCustomer} disabled={saving}>
+            <PrimaryButton subject="customer" onClick={handleAddCustomer} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Konsumen"}
             </PrimaryButton>
             {editingId && (
@@ -312,19 +323,34 @@ export default function KonsumenPage() {
             {
               key: "status",
               label: "Status",
-              render: (row) => (
-                <select
-                  value={row.status}
-                  onChange={(e) => updateStatus(row.id, e.target.value)}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
-                >
-                  {CUSTOMER_STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              ),
+              render: (row) =>
+                canEditCustomer(profile, row) ? (
+                  <select
+                    value={row.status}
+                    onChange={(e) => updateStatus(row.id, e.target.value)}
+                    style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
+                  >
+                    {CUSTOMER_STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Badge value={row.status} />
+                ),
+            },
+            {
+              key: "handover",
+              label: "Tanggung Jawab",
+              render: (row) =>
+                isLocked(row) ? (
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: ACCENT_DARK, whiteSpace: "nowrap" }} title={lockReason(row)}>
+                    🔒 Admin Marketing
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11.5, color: TEXT_MID }}>Sales</span>
+                ),
             },
             {
               key: "kpr",
@@ -340,8 +366,9 @@ export default function KonsumenPage() {
               label: "",
               render: (row) => (
                 <RowActions>
-                  <EditButton onClick={() => startEdit(row)} />
+                  {canEditCustomer(profile, row) && <EditButton subject="customer" onClick={() => startEdit(row)} />}
                   <DeleteButton
+                    subject="customer_delete"
                     itemName={row.name}
                     warning="Progres KPR, dokumen, riwayat pembayaran dan pembatalan milik konsumen ini ikut terhapus permanen. Komplain yang sudah ada tetap tersimpan tanpa kaitan konsumen."
                     onDelete={() => supabase.from("customers").delete().eq("id", row.id)}
@@ -365,6 +392,9 @@ export default function KonsumenPage() {
       {selectedCustomerId && kpr && (
         <Card style={{ marginTop: 18 }}>
           <PageTitle title="Progres KPR" subtitle="Booking → DP → Bank → SP3K → Akad → Serah Terima Kunci → BPHTB → SHM" />
+
+          {lockedForMe && <LockBanner message={lockReason(selectedCustomer)} />}
+
           <div className="rg-3" style={{ marginBottom: 14 }}>
             {KPR_FIELDS.map((field) => (
               <div key={field.key}>
@@ -374,11 +404,21 @@ export default function KonsumenPage() {
             ))}
             <div style={{ gridColumn: "1 / -1" }}>
               <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Kendala atau Catatan</div>
-              <textarea value={kpr.kendala ?? ""} onChange={(e) => setKprField("kendala", e.target.value)} style={{ ...inputStyle, width: "100%", minHeight: 56, resize: "vertical", fontFamily: "inherit" }} />
+              <textarea
+                value={kpr.kendala ?? ""}
+                onChange={(e) => setKprField("kendala", e.target.value)}
+                disabled={!berkasEditable}
+                style={{ ...inputStyle, width: "100%", minHeight: 56, resize: "vertical", fontFamily: "inherit", background: berkasEditable ? undefined : "#F4F6FA" }}
+              />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Alamat KTP</div>
-              <input value={kpr.alamat_ktp ?? ""} onChange={(e) => setKprField("alamat_ktp", e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+              <input
+                value={kpr.alamat_ktp ?? ""}
+                onChange={(e) => setKprField("alamat_ktp", e.target.value)}
+                disabled={!berkasEditable}
+                style={{ ...inputStyle, width: "100%", background: berkasEditable ? undefined : "#F4F6FA" }}
+              />
             </div>
           </div>
 
@@ -389,23 +429,27 @@ export default function KonsumenPage() {
             {durations.serah != null && <span>Persiapan serah terima: <b>{durations.serah} hari</b></span>}
           </div>
 
-          <PrimaryButton onClick={saveKpr} disabled={kprSaving}>
-            {kprSaving ? "Menyimpan..." : "Simpan Progres KPR"}
-          </PrimaryButton>
+          {berkasEditable && (
+            <PrimaryButton subject="kpr" onClick={saveKpr} disabled={kprSaving}>
+              {kprSaving ? "Menyimpan..." : "Simpan Progres KPR"}
+            </PrimaryButton>
+          )}
 
           <div style={{ marginTop: 22, borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Dokumen Administrasi</div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-              <select value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle}>
-                {DOC_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-              <input type="file" onChange={(e) => setDocFile(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
-              <PrimaryButton onClick={handleUploadDoc} disabled={uploadingDoc || !docFile}>
-                {uploadingDoc ? "Mengunggah..." : "Unggah"}
-              </PrimaryButton>
-            </div>
+            {berkasEditable && (
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+                <select value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle}>
+                  {DOC_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <input type="file" onChange={(e) => setDocFile(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
+                <PrimaryButton subject="document" onClick={handleUploadDoc} disabled={uploadingDoc || !docFile}>
+                  {uploadingDoc ? "Mengunggah..." : "Unggah"}
+                </PrimaryButton>
+              </div>
+            )}
             <DataTable
               emptyLabel="Belum ada dokumen diunggah."
               columns={[
@@ -415,19 +459,25 @@ export default function KonsumenPage() {
                 {
                   key: "status",
                   label: "Status",
-                  render: (row) => (
-                    <select value={row.status} onChange={(e) => updateDocStatus(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}>
-                      {DOC_STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  ),
+                  // Verifying a document is a pemberkasan act — Sales sees the
+                  // outcome, Admin Marketing decides it.
+                  render: (row) =>
+                    berkasEditable ? (
+                      <select value={row.status} onChange={(e) => updateDocStatus(row.id, e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}>
+                        {DOC_STATUS_OPTIONS.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Badge value={row.status} />
+                    ),
                 },
                 {
                   key: "aksi",
                   label: "",
                   render: (row) => (
                     <DeleteButton
+                      subject="document_delete"
                       itemName={row.doc_type}
                       onDelete={() => supabase.from("customer_documents").delete().eq("id", row.id)}
                       onDone={() => fetchDocumentsFor(selectedCustomerId)}
@@ -439,6 +489,12 @@ export default function KonsumenPage() {
             />
           </div>
         </Card>
+      )}
+
+      {/* Stays writable for Sales even after the Hard-Lock — the relationship
+          continues past booking, only the paperwork changes hands. */}
+      {selectedCustomer && (
+        <FollowUpTimeline customerId={selectedCustomer.id} title={`Riwayat Follow Up — ${selectedCustomer.name}`} />
       )}
     </div>
   );

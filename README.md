@@ -1,8 +1,12 @@
-# Griya Zafira CRM — Integrated Sales & Field Monitoring System
+# Zafira Property CRM
 
-React (Vite) + Supabase implementation of the Techade.id quotation scope, plus the
-extra features requested: payment history, cancellation tracking, contractor
-evaluation, digital siteplan, ads analytics, and multi-project support.
+React (Vite) + Supabase. Covers the original quotation scope plus the changes
+agreed in `REVISI.md` and specified in `PRD.md`: Navy/Deep Orange brand palette,
+global Notes search, the five-role access matrix with Segregation of Duties, the
+Booking Fee Handover Hard-Lock, an audit trail, and the PRD sales pipeline
+(relational lead sources, seven-stage funnel, follow-up tracking).
+
+`PLAN.md` records the full plan these changes were built from.
 
 ## 1. Set up Supabase
 
@@ -34,6 +38,26 @@ evaluation, digital siteplan, ads analytics, and multi-project support.
    `supabase/migration_006_delete_behaviour.sql` is needed for the delete
    buttons: without it Postgres refuses to delete a prospek that became a
    konsumen, or a konsumen that has a komplain.
+
+   Then run the three migrations that implement REVISI.md and PRD.md, **in
+   order**:
+
+   - **`migration_007_notes_search.sql`** — enables `pg_trgm`, adds the GIN
+     trigram indexes, and creates `search_notes()`. Until it runs, the search
+     box in the header returns an error.
+   - **`migration_008_roles_sod.sql`** — adds the five PRD roles and maps the
+     old ones, splits every RLS policy into separate SELECT/INSERT/UPDATE/DELETE
+     rules (so read-only roles are actually read-only), stops Sales verifying
+     their own payments, adds the Handover Hard-Lock, and starts filling
+     `activity_logs`.
+   - **`migration_009_pipeline.sql`** — the seven-stage funnel with automatic
+     promotion, `ads_campaigns` + `partners` for relational lead sources, the
+     social-media username fields, and an updated `dashboard_stats()`.
+
+   Re-run `supabase/storage.sql` after 008: it creates the `payment-receipts`
+   bucket and re-points every storage policy at the new access helpers.
+
+   Run `supabase/check_setup.sql` afterwards to confirm all of it landed.
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
    `complaint-photos`) and their RLS policies, needed by Siteplan Digital,
@@ -118,6 +142,15 @@ matching your `.env`.
   proyek/komplain, with one-click Excel export (`xlsx`).
 - **Digital Ads**: `ads_analytics` CRUD with spend/leads-per-platform bars
   and a blended cost-per-lead figure.
+- **Pencarian Catatan**: one search box in the header covering lead notes,
+  follow-up history, customer names, KPR kendala, payment notes, complaints,
+  field reports, cancellations and contractors — partial match anywhere in the
+  text, backed by trigram indexes and filtered by RLS so an agent only ever
+  finds their own records.
+- **Follow Up**: chronological communication log per lead and per customer
+  (time, actor, note, outcome). Stays open to Sales after the Hard-Lock.
+- **Log Aktivitas**: audit trail for Admin and Pengawas, with a per-column
+  before/after diff and date/module filters.
 - **Reminder**: prospects with a scheduled follow-up date, sorted by days
   remaining (overdue / today / upcoming).
 - **Penetapan Target**: per-agent, per-period sales targets (total prospek,
@@ -156,14 +189,39 @@ page and the dashboard.
 | Role | Reach |
 |---|---|
 | `admin` | everything, and the only role that can change another user's role |
-| `manager` / `supervisor` | everything except changing roles |
-| `administrasi` | pemberkasan — every customer's documents, KPR progress and payments, but no writes to the sales pipeline |
-| `marketing` / `sales_agent` | only the leads and customers assigned to them |
+| `sales` | own leads and customers, up to the Booking Fee; locked out of a customer's profile and berkas once Finance verifies that receipt |
+| `admin_marketing` | pemberkasan — every customer's documents and KPR progress from Booking to Akad |
+| `finance` | the only role that can verify a payment or upload a kuitansi; verifying a Booking Fee receipt is what fires the Handover Hard-Lock |
+| `supervisor_marketing` | read-only across every operational module |
+| `pengawas` | read-only over the transaction cycle, plus the activity log and business configuration |
 | `tim_lapangan` | only the field projects/reports they are assigned to |
 
-The role lists live in two helper functions, `is_full_access()` and
-`is_berkas_access()` (see `migration_005_roles_and_dashboard.sql`), which every
-policy calls — so changing who counts as manager-level is a single edit rather
-than a sweep through ~28 policies.
-# zafira-fullstack
+Retired names (`manager`, `supervisor`, `marketing`, `administrasi`,
+`sales_agent`) stay in the enum because Postgres cannot drop enum values, but
+`migration_008` moves every profile off them.
 
+Access rules live in one set of helper functions — `is_admin()`,
+`can_view_all()`, `can_write_sales()`, `can_write_berkas()`,
+`can_write_finance()`, `can_manage_config()` — which every policy calls, so
+changing who counts as what is a single edit rather than a sweep through ~28
+policies. `src/lib/permissions.js` mirrors the same matrix in the frontend so a
+user is never shown a button the database will reject.
+
+## Segregation of Duties
+
+The rules that are enforced by triggers rather than RLS, because RLS cannot
+restrict individual columns:
+
+- `guard_payment_verification()` — only Finance may change a payment's `status`,
+  `verified_by` or `proof_url`. Anyone else recording a payment gets it forced
+  to `menunggu`.
+- `apply_booking_handover()` — a verified `booking` payment carrying a receipt
+  stamps `customers.locked_at`, hands the record to Admin Marketing, and
+  promotes the lead to the Booking stage.
+- `guard_profile_privileged_columns()` — only admin changes a role.
+- `log_activity()` — writes a per-column diff to `activity_logs` for leads,
+  customers, KPR, documents, payments, cancellations, profiles and units.
+
+Unlocking a handed-over customer is deliberately not a page control; it is the
+admin-only `unlock_customer(customer_id, reason)` RPC, and it writes to the
+audit log.

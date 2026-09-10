@@ -1,11 +1,78 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
-import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID } from "../components/ui";
+import { uploadFile, getSignedUrl } from "../lib/storage";
+import { useAuth } from "../context/AuthContext";
+import { canWrite } from "../lib/permissions";
+import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID, ACCENT, ACCENT_DARK, NEGATIVE, ReadOnlyBanner } from "../components/ui";
 
 const PAYMENT_TYPES = ["booking", "dp", "dana_talangan", "termin", "pelunasan", "lainnya"];
 
+/**
+ * Finance-only verification (PRD §3.2, REVISI §2.2).
+ *
+ * Verifying means attaching the official receipt, so the file picker *is* the
+ * verify action — there is no way to mark a payment settled without one. For a
+ * Booking Fee this is what fires the Handover Hard-Lock in the database.
+ */
+function VerifyWithReceipt({ row, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handlePick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setError("");
+
+    const { path, error: upErr } = await uploadFile("payment-receipts", row.customer_id, file);
+    if (upErr) {
+      setError(upErr.message);
+      setBusy(false);
+      return;
+    }
+
+    const { error: dbErr } = await supabase
+      .from("payments")
+      .update({ status: "terverifikasi", proof_url: path })
+      .eq("id", row.id);
+
+    setBusy(false);
+    if (dbErr) {
+      setError(dbErr.message);
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <div>
+      <label
+        style={{
+          display: "inline-block",
+          border: `1px solid ${ACCENT}`,
+          background: "#fff",
+          color: ACCENT_DARK,
+          borderRadius: 9,
+          padding: "5px 11px",
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: busy ? "default" : "pointer",
+          whiteSpace: "nowrap",
+        }}
+        title="Unggah kuitansi resmi untuk memverifikasi pembayaran ini"
+      >
+        {busy ? "Mengunggah…" : "Verifikasi + Kuitansi"}
+        <input type="file" onChange={handlePick} disabled={busy} style={{ display: "none" }} />
+      </label>
+      {error && <div style={{ fontSize: 11, color: NEGATIVE, marginTop: 4, whiteSpace: "normal", maxWidth: 200 }}>{error}</div>}
+    </div>
+  );
+}
+
 export default function PembayaranPage() {
+  const { profile } = useAuth();
+  const canVerify = canWrite(profile, "payment_verify");
   const [payments, setPayments] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,9 +143,9 @@ export default function PembayaranPage() {
     fetchData();
   }
 
-  async function verifyPayment(id) {
-    await supabase.from("payments").update({ status: "terverifikasi" }).eq("id", id);
-    fetchData();
+  async function viewReceipt(path) {
+    const url = await getSignedUrl("payment-receipts", path);
+    if (url) window.open(url, "_blank");
   }
 
   return (
@@ -86,8 +153,16 @@ export default function PembayaranPage() {
       <PageTitle
         title="Riwayat Pembayaran"
         subtitle="Monitoring penagihan — booking, DP, dana talangan, termin, pelunasan"
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Catat Pembayaran</PrimaryButton>}
+        action={<PrimaryButton subject="payment" onClick={() => setShowForm((v) => !v)}>+ Catat Pembayaran</PrimaryButton>}
       />
+
+      <ReadOnlyBanner />
+
+      {!canVerify && (
+        <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 14, lineHeight: 1.5 }}>
+          Pemisahan wewenang: pembayaran boleh dicatat di sini, tetapi verifikasi dan unggah kuitansi resmi adalah wewenang Finance.
+        </div>
+      )}
 
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
@@ -110,9 +185,9 @@ export default function PembayaranPage() {
             <input placeholder="Nominal (Rp)" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
             <input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddPayment} disabled={saving}>
+            <PrimaryButton subject="payment" onClick={handleAddPayment} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Pembayaran"}
             </PrimaryButton>
             {editingId && (
@@ -136,16 +211,25 @@ export default function PembayaranPage() {
             {
               key: "status",
               label: "Status",
+              render: (row) => {
+                if (row.status === "terverifikasi") return <Badge value={row.status} />;
+                if (canVerify) return <VerifyWithReceipt row={row} onDone={fetchData} />;
+                return <Badge value="menunggu" />;
+              },
+            },
+            {
+              key: "proof_url",
+              label: "Kuitansi",
               render: (row) =>
-                row.status === "terverifikasi" ? (
-                  <Badge value={row.status} />
-                ) : (
+                row.proof_url ? (
                   <button
-                    onClick={() => verifyPayment(row.id)}
-                    style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 9, padding: "5px 11px", fontSize: 11, cursor: "pointer" }}
+                    onClick={() => viewReceipt(row.proof_url)}
+                    style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
                   >
-                    Verifikasi
+                    Lihat
                   </button>
+                ) : (
+                  <span style={{ color: TEXT_MID, fontSize: 12 }}>-</span>
                 ),
             },
             {
@@ -153,8 +237,11 @@ export default function PembayaranPage() {
               label: "",
               render: (row) => (
                 <RowActions>
-                  <EditButton onClick={() => startEdit(row)} />
+                  {/* A verified payment is an accounting record — editing it is
+                      Finance's call, not the agent who first keyed it in. */}
+                  {(row.status !== "terverifikasi" || canVerify) && <EditButton subject="payment" onClick={() => startEdit(row)} />}
                   <DeleteButton
+                    subject="payment_delete"
                     itemName={`${row.payment_type} ${row.customers?.name || ""}`.trim()}
                     onDelete={() => supabase.from("payments").delete().eq("id", row.id)}
                     onDone={fetchData}

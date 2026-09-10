@@ -193,7 +193,7 @@ export default function RencanaProyekPage() {
       <PageTitle
         title="Rencana Proyek"
         subtitle="Rencana dan realisasi pembangunan per task, dengan deadline hari kerja dan masa garansi"
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Task Baru</PrimaryButton>}
+        action={<PrimaryButton subject="field" onClick={() => setShowForm((v) => !v)}>+ Task Baru</PrimaryButton>}
       />
 
       <div className="rg-3" style={{ marginBottom: 16 }}>
@@ -207,7 +207,7 @@ export default function RencanaProyekPage() {
         </Card>
         <Card>
           <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 8 }}>Overtime</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "#c25b5b" }}>{overtimeTasks}</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#C2413B" }}>{overtimeTasks}</div>
         </Card>
       </div>
 
@@ -281,9 +281,9 @@ export default function RencanaProyekPage() {
           <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 10 }}>
             Rencana deadline dihitung otomatis dari tanggal mulai + working days, mengikuti pengaturan hari libur dan kalender libur.
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAdd} disabled={saving}>
+            <PrimaryButton subject="field" onClick={handleAdd} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Task"}
             </PrimaryButton>
             {editingId && (
@@ -436,8 +436,8 @@ export default function RencanaProyekPage() {
             </table>
           </div>
 
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-          <PrimaryButton onClick={saveDetail} disabled={detailSaving}>
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          <PrimaryButton subject="field" onClick={saveDetail} disabled={detailSaving}>
             {detailSaving ? "Menyimpan..." : "Simpan Perubahan"}
           </PrimaryButton>
         </Card>

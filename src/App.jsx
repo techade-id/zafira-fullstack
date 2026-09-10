@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
-import ProtectedRoute from "./routes/ProtectedRoute";
+import ProtectedRoute, { RoleRoute } from "./routes/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -20,6 +20,8 @@ import ReminderPage from "./pages/ReminderPage";
 import TargetPage from "./pages/TargetPage";
 import DataAgenPage from "./pages/DataAgenPage";
 import PengaturanBisnisPage from "./pages/PengaturanBisnisPage";
+import PencarianPage from "./pages/PencarianPage";
+import LogAktivitasPage from "./pages/LogAktivitasPage";
 
 export default function App() {
   return (
@@ -37,21 +39,27 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="prospek" element={<ProspekPage />} />
-            <Route path="pembayaran" element={<PembayaranPage />} />
-            <Route path="konsumen" element={<KonsumenPage />} />
-            <Route path="pembatalan" element={<PembatalanPage />} />
-            <Route path="proyek" element={<ProyekPage />} />
-            <Route path="siteplan" element={<SiteplanPage />} />
-            <Route path="kontraktor" element={<KontraktorPage />} />
-            <Route path="rencana-proyek" element={<RencanaProyekPage />} />
-            <Route path="komplain" element={<KomplainPage />} />
-            <Route path="laporan" element={<LaporanPage />} />
-            <Route path="iklan" element={<IklanPage />} />
-            <Route path="reminder" element={<ReminderPage />} />
-            <Route path="target" element={<TargetPage />} />
-            <Route path="data-agen" element={<DataAgenPage />} />
-            <Route path="pengaturan-bisnis" element={<PengaturanBisnisPage />} />
+            {[
+              ["prospek", <ProspekPage />],
+              ["pembayaran", <PembayaranPage />],
+              ["konsumen", <KonsumenPage />],
+              ["pembatalan", <PembatalanPage />],
+              ["proyek", <ProyekPage />],
+              ["siteplan", <SiteplanPage />],
+              ["kontraktor", <KontraktorPage />],
+              ["rencana-proyek", <RencanaProyekPage />],
+              ["komplain", <KomplainPage />],
+              ["laporan", <LaporanPage />],
+              ["iklan", <IklanPage />],
+              ["reminder", <ReminderPage />],
+              ["target", <TargetPage />],
+              ["data-agen", <DataAgenPage />],
+              ["pengaturan-bisnis", <PengaturanBisnisPage />],
+              ["log-aktivitas", <LogAktivitasPage />],
+              ["cari", <PencarianPage />],
+            ].map(([path, element]) => (
+              <Route key={path} path={path} element={<RoleRoute>{element}</RoleRoute>} />
+            ))}
           </Route>
         </Routes>
       </BrowserRouter>

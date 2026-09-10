@@ -3,11 +3,13 @@ import { supabase } from "../lib/supabaseClient";
 import { uploadFile, getPublicUrl } from "../lib/storage";
 import { Card, PageTitle, PrimaryButton, Badge, TEXT_MID, BORDER, ORANGE, ORANGE_LIGHT } from "../components/ui";
 
+// Status pins: available reads as settled green, booking takes the deep-orange
+// accent (it is the state that needs action), sold is navy, cancelled is red.
 const PIN_COLORS = {
-  tersedia: "#4b6b4f",
-  booking: "#b07d2b",
-  terjual: "#3c6084",
-  batal: "#c25b5b",
+  tersedia: "#15803D",
+  booking: "#E2571F",
+  terjual: "#2B5CA8",
+  batal: "#C2413B",
 };
 
 export default function SiteplanPage() {
@@ -170,7 +172,7 @@ export default function SiteplanPage() {
                       padding: 0,
                       borderRadius: 4,
                       border: `1px solid ${highlight && u.unit_code.toLowerCase().includes(highlight.toLowerCase()) ? "#111" : "rgba(255,255,255,0.9)"}`,
-                      background: PIN_COLORS[u.status] || "#5f5e5a",
+                      background: PIN_COLORS[u.status] || "#64748B",
                       opacity: highlight && !u.unit_code.toLowerCase().includes(highlight.toLowerCase()) ? 0.25 : 0.9,
                       color: "#fff",
                       fontSize: 8,

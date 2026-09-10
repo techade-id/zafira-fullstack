@@ -127,8 +127,8 @@ export default function DashboardPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {error && (
-        <Card style={{ borderColor: "#e6c9c9" }}>
-          <div style={{ fontSize: 13, color: "#c25b5b" }}>
+        <Card style={{ borderColor: "#F2D3D1" }}>
+          <div style={{ fontSize: 13, color: "#C2413B" }}>
             Gagal memuat ringkasan: {error}. Pastikan <code>migration_005_roles_and_dashboard.sql</code> sudah dijalankan di Supabase.
           </div>
         </Card>
@@ -236,7 +236,7 @@ export default function DashboardPage() {
                   ) : (
                     // Anything sitting past 60 days at the bank is the thing a
                     // supervisor actually wants to spot on this screen.
-                    <span style={{ fontWeight: 600, color: r.lama_hari > 60 ? "#c25b5b" : r.lama_hari > 30 ? "#b07d2b" : PRIMARY }}>
+                    <span style={{ fontWeight: 600, color: r.lama_hari > 60 ? "#C2413B" : r.lama_hari > 30 ? "#B45309" : PRIMARY }}>
                       {r.lama_hari} hari
                     </span>
                   ),

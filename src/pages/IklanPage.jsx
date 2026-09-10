@@ -95,7 +95,7 @@ export default function IklanPage() {
       <PageTitle
         title="Digital Ads"
         subtitle="Analisis performa iklan/konten digital yang menghasilkan prospek"
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Catat Performa</PrimaryButton>}
+        action={<PrimaryButton subject="ads" onClick={() => setShowForm((v) => !v)}>+ Catat Performa</PrimaryButton>}
       />
 
       {showForm && (
@@ -115,9 +115,9 @@ export default function IklanPage() {
             <input placeholder="Klik" type="number" value={form.clicks} onChange={(e) => setForm({ ...form, clicks: e.target.value })} style={inputStyle} />
             <input placeholder="Leads dihasilkan" type="number" value={form.leads_generated} onChange={(e) => setForm({ ...form, leads_generated: e.target.value })} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAddAd} disabled={saving}>
+            <PrimaryButton subject="ads" onClick={handleAddAd} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan"}
             </PrimaryButton>
             {editingId && (

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/validate_palette.js \"#2B5CA8,#E2571F,#0E8F8A,#7B5EA7,#C9922B,#5B7089\" --mode light)",
+      "Bash(node scripts/validate_palette.js \"#3B5C9F,#E2571F\" --mode light)",
+      "Bash(grep -n \"select\\(\\\\\"\\\\*, units\\\\|selectedCustomerId && kpr\\\\|const durations\\\\|<PrimaryButton onClick={saveKpr}\\\\|renderKprInput\\\\|EditButton onClick={\\(\\) => startEdit\\(row\\)}\\\\|DeleteButton\" src/pages/KonsumenPage.jsx)",
+      "Bash(pg_isready)",
+      "Bash(psql -l -t)",
+      "Bash(dropdb --if-exists zafira_migration_check)",
+      "Bash(createdb zafira_migration_check)",
+      "Bash(exit 1)",
+      "Bash(psql -q -v ON_ERROR_STOP=1 -d zafira_migration_check -f __TRACKED_VAR__/supabase_stub.sql)",
+      "Bash(psql -q -v ON_ERROR_STOP=1 -d zafira_migration_check -f supabase/schema.sql)",
+      "Bash(psql -q -v ON_ERROR_STOP=1 -d zafira_migration_check -f supabase/check_setup.sql)",
+      "Bash(psql -q -d zafira_migration_check -f /private/tmp/claude-501/-Users-macbookpro-Documents-2026-zafira/9387bdfb-1c65-432d-97eb-01d33d63a521/scratchpad/rbac_test.sql)",
+      "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='66666666-6666-6666-6666-666666666666'; select entity_type, action, count\\(*\\) from activity_logs group by 1,2 order by 1,2;\")",
+      "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='11111111-1111-1111-1111-111111111111'; select count\\(*\\) as sales_lihat_log from activity_logs;\")",
+      "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='66666666-6666-6666-6666-666666666666'; select entity_type, action, jsonb_pretty\\(changes\\) from activity_logs where entity_type='customers' and action='update' limit 1;\")",
+      "Bash(psql -q -v ON_ERROR_STOP=1 -d zafira_migration_check -f supabase/migration_007_notes_search.sql)",
+      "Bash(psql -q -d zafira_migration_check -c \"set role authenticated; set test.uid='11111111-1111-1111-1111-111111111111'; select modul, judul, rute, record_id is not null as punya_id, cuplikan from search_notes\\('BPHTB'\\);\")"
+    ]
+  }
+}

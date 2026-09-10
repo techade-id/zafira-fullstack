@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { Card, PageTitle, DataTable, Badge, TEXT_MID, PRIMARY, NEGATIVE, DeleteButton } from "../components/ui";
 
-const WARNING = "#b07d2b";
+// Due Date indicator — PRD §2.1 assigns deep orange to Urgent / Due Date.
+const WARNING = "#E2571F";
 
 function sisaHari(dateStr) {
   const today = new Date();

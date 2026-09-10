@@ -99,7 +99,7 @@ export default function TargetPage() {
       <PageTitle
         title="Penetapan Target"
         subtitle={`${targets.length} target tercatat`}
-        action={<PrimaryButton onClick={() => setShowForm((v) => !v)}>+ Target Baru</PrimaryButton>}
+        action={<PrimaryButton subject="target" onClick={() => setShowForm((v) => !v)}>+ Target Baru</PrimaryButton>}
       />
 
       {showForm && (
@@ -119,9 +119,9 @@ export default function TargetPage() {
             <input placeholder="Target Prospek / Hari" type="number" value={form.target_prospek_per_hari} onChange={(e) => set("target_prospek_per_hari", e.target.value)} style={inputStyle} />
             <input placeholder="Target Closing / Hari" type="number" value={form.target_closing_per_hari} onChange={(e) => set("target_closing_per_hari", e.target.value)} style={inputStyle} />
           </div>
-          {error && <div style={{ color: "#c25b5b", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <PrimaryButton onClick={handleAdd} disabled={saving}>
+            <PrimaryButton subject="target" onClick={handleAdd} disabled={saving}>
               {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Target"}
             </PrimaryButton>
             {editingId && (
