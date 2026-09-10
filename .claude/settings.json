@@ -57,7 +57,28 @@
       "Bash(./venv/bin/python seg6.py)",
       "Bash(./venv/bin/python buat_svg.py)",
       "Bash(./venv/bin/python final.py)",
-      "Bash(awk '{print $5, $9}')"
+      "Bash(awk '{print $5, $9}')",
+      "Bash(awk '{print $2}')",
+      "Bash(git status *)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira add supabase/migration_013_crm_flow.sql supabase/migration_014_wa_templates.sql supabase/tests/09_crm_flow.sql)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira diff --cached --name-only)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira status --short)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira add -v supabase/migration_013_crm_flow.sql)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira log --oneline -6)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira ls-files)",
+      "Bash(git -C /Users/macbookpro/Documents/2026/zafira show --stat --oneline 9dfc0f9)",
+      "Bash(/private/tmp/claude-501/-Users-macbookpro-Documents-2026-zafira/e06817e6-b2f7-4681-8c45-c49c6f82dac3/scratchpad/venv/bin/python tools/siteplan_ke_vektor.py)",
+      "Bash(perl -0pi -e 's/import \\\\{ CheckCircle2, CalendarClock, Bell \\\\} from \"lucide-react\";/import { Bell } from \"lucide-react\";/' src/pages/ReminderPage.jsx)",
+      "Bash(perl -0pi -e 's/\\(import \\\\{[^}]*?\\)NEGATIVE, \\([^}]*?\\\\} from \"\\\\.\\\\/ui\";\\)/$1$2/s' src/components/FokusHariIni.jsx)",
+      "Bash(TEST_DB=zafira_probe KEEP_DB=1 npm run test:db)",
+      "Bash(psql -d zafira_probe -c \"select bagian, label, detail from test.results where not lulus\")",
+      "Bash(dropdb --if-exists zafira_probe)",
+      "Bash(perl -0pi -e 's/import React, \\\\{ useCallback, useEffect, useState \\\\} from \"react\";/import React, { useCallback, useEffect, useMemo, useState } from \"react\";/' src/pages/KonsumenDetailPage.jsx)",
+      "Bash(perl -0pi -e 's|\\(import \\\\{ rupiah, tanggal, tanggalWaktu, durasiHari, labelTahap, labelJenisBayar \\\\} from \"../lib/format\";\\)|$1\\\\nimport { useSyaratBerkas, cocokkanBerkas } from \"../lib/useSyaratBerkas\";|' src/pages/KonsumenDetailPage.jsx)",
+      "Bash(perl -0pi -e 's|\\(<TabDokumen\\\\n\\\\s+dokumen=\\\\{dokumen\\\\}\\\\n\\\\s+customerId=\\\\{konsumen\\\\.id\\\\}\\)|$1\\\\n          bank={kpr?.nama_bank}|' src/pages/KonsumenDetailPage.jsx)",
+      "Bash(perl -0pi -e 's|import KonsumenDetailPage from \"./pages/KonsumenDetailPage\";|import KonsumenDetailPage from \"./pages/KonsumenDetailPage\";\\\\nimport PemberkasanPage from \"./pages/PemberkasanPage\";|' src/App.jsx)",
+      "Bash(perl -0pi -e 's|\\\\Q[\"konsumen\", <KonsumenPage />],\\\\E|[\"konsumen\", <KonsumenPage />],\\\\n              [\"pemberkasan\", <PemberkasanPage />],|' src/App.jsx)",
+      "Bash(psql -d zafira_probe -c \"select bagian, label, coalesce\\(detail,''\\) d from test.results where not lulus\")"
     ]
   }
 }

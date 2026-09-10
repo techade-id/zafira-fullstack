@@ -178,6 +178,8 @@ export const SITEPLAN_KAVLING = [
 
 export const SITEPLAN_FASILITAS = [
   { kode: "MASJID", label: "Masjid", luas: "240 m²", titik: "430.0,198.1 503.5,222.6 489.2,265.5 415.7,241.0", pusat: [459.6, 231.8] },
+  { kode: "T.7", label: "T.7", luas: "", titik: "463.6,137.3 504.4,150.9 492.7,186.0 451.9,172.4", pusat: [478.2, 161.7] },
+  { kode: "T.3", label: "T.3", luas: "", titik: "135.8,98.7 209.3,123.2 202.3,144.2 128.8,119.7", pusat: [169.1, 121.5] },
 ];
 
 export const SITEPLAN_BLOK = ["A", "B", "C", "D", "E", "F", "G", "H"];

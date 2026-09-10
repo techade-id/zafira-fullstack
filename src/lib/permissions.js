@@ -137,6 +137,7 @@ const ALL_ROUTES = [
   "/",
   "/prospek",
   "/konsumen",
+  "/pemberkasan",
   "/pembayaran",
   "/pembatalan",
   "/reminder",
@@ -164,6 +165,7 @@ const ROUTES_BY_ROLE = {
     "/",
     "/prospek",
     "/konsumen",
+    "/pemberkasan",
     "/pembayaran",
     "/pembatalan",
     "/reminder",
@@ -177,7 +179,7 @@ const ROUTES_BY_ROLE = {
     "/iklan",
     "/cari",
   ],
-  finance: ["/", "/konsumen", "/pembayaran", "/pembatalan", "/laporan", "/cari"],
+  finance: ["/", "/konsumen", "/pemberkasan", "/pembayaran", "/pembatalan", "/laporan", "/cari"],
   tim_lapangan: ["/", "/lapangan", "/rencana-proyek", "/komplain", "/siteplan", "/cari"],
 };
 

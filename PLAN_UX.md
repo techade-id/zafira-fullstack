@@ -831,7 +831,237 @@ python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy
 ### 11.5 Yang tidak disertakan
 
 Jaringan jalan dan area berarsir **tidak** ikut divektorkan — hanya kavling,
-Masjid, dan ruang kosong di antaranya. Celah antarblok terbaca sebagai jalan
-tanpa perlu menggambarnya, dan menyalin garis jalan berarti menelusuri kurva
-bebas yang justru dihindari di §11.1. Kotak fasilitas kecil (T.3–T.13, TPS,
-IPAL) juga belum disertakan.
+Masjid, dan dua kotak fasilitas. Celah antarblok terbaca sebagai jalan tanpa
+perlu menggambarnya, dan menyalin garis jalan berarti menelusuri kurva bebas
+yang justru dihindari di §11.1.
+
+Penanda T.4–T.6 dan T.8–T.13 hanya berupa label di atas jalan pada gambar
+bernomor; pada gambar bersih ia tidak membentuk daerah tertutup, jadi tidak ada
+yang bisa dikenali. Begitu pula TPS dan IPAL.
+
+---
+
+## 12. Penutup — verifikasi terhadap sistem yang berjalan
+
+Setelah kedua migrasi terpasang di Supabase, seluruhnya diperiksa terhadap
+proyek yang sebenarnya, bukan hanya terhadap Postgres lokal.
+
+### 12.1 Migrasi hidup
+
+| Yang diperiksa | Hasil |
+|---|---|
+| `my_notifications()` | mengembalikan bentuk yang benar |
+| `convert_lead_to_customer()` | menolak pemanggil tak terautentikasi dengan `42501` beserta pesan Indonesianya |
+| `business_settings` kategori `wa_template` | delapan template bawaan terpasang, kolom `label` terisi |
+
+### 12.2 Data hidup cocok dengan peta vektor
+
+158 unit di database, kode `A1`–`H13`, status nyata: 148 tersedia · 5 terjual ·
+4 booking · 1 batal. Perbandingan kode database dengan kode pada geometri:
+**cocok sempurna, tidak ada yatim di kedua sisi.** Peta langsung mewarnai
+dirinya dari status sebenarnya.
+
+### 12.3 Sebelas bentuk kueri diuji terhadap skema hidup
+
+Seluruh kueri baru dijalankan apa adanya ke PostgREST untuk menangkap kesalahan
+sintaks yang hanya muncul saat dijalankan — termasuk dua yang paling rawan:
+embed yang harus didisambiguasi (`profiles:sales_agent_id(full_name)`) dan
+filter `.or(lead_id.eq.…,customer_id.eq.…)` pada riwayat gabungan. **Semua
+mengembalikan 200**, tidak ada `400`.
+
+### 12.4 Bug yang tertangkap pada telaah terakhir
+
+- **`keTanggal()` mengembalikan objek `Date` milik pemanggil**, lalu
+  `selisihHari()` memanggil `setHours(0,0,0,0)` di atasnya — memutasi data
+  pemanggil. Sebuah `Date` yang dipegang komponen lain akan diam-diam bergeser
+  ke tengah malam hanya karena tanggalnya pernah diformat. Kini selalu salinan.
+- `FokusHariIni` merender `undefined →` untuk kategori notifikasi yang belum
+  punya kalimat ajakan. Diberi cadangan.
+- Beberapa impor yang tidak terpakai dibersihkan.
+
+### 12.5 Keadaan akhir
+
+- `npm run test:db` — **160/160 lulus**
+- `vite build` — bersih
+- Seluruh modul yang disentuh diverifikasi ter-*transform* lewat dev server
+
+---
+
+### 12.6 Catatan untuk nanti
+
+Peta memakai `touch-action: none` supaya seluruh gerakan jari menjadi geseran
+peta. Konsekuensinya, di ponsel halaman tidak dapat digulir selama jari berada
+di atas peta — tingginya sengaja dibatasi 380–520px agar selalu ada ruang di
+atas dan bawahnya. Cubit-untuk-memperbesar belum ada; perbesaran di ponsel
+lewat tombol + / −.
+
+---
+
+## 13. Alat kerja Admin Marketing
+
+Ditemukan dengan menelusuri satu hari kerja Admin Marketing, bukan dengan
+membaca daftar fitur.
+
+### 13.1 Yang ditemukan
+
+| Temuan | Bukti |
+|---|---|
+| Enam tahap pemberkasan **sudah ada** di `business_settings`, tetapi hanya hidup sebagai dropdown di dalam satu konsumen | `progres_berkas` hanya dipakai di `KprStepper.jsx` dan halaman pengaturan |
+| Syarat berkas per bank **belum ada sama sekali**, padahal diminta PRD §1.4 | 9 bank terdaftar, 5 jenis dokumen ditulis mati di satu berkas |
+| Dua dari tujuh alasan pembatalan **bisa dicegah** | "Tidak lolos BI-Checking" dan "RPC tidak cukup" — keduanya diketahui sebelum berkas dikirim, tetapi tak ada tempat mencatatnya |
+| Tak ada jawaban untuk "akad minggu ini siapa" | `tanggal_akad` hanya ada di dalam KPR per konsumen |
+
+### 13.2 `migration_015_pemberkasan.sql`
+
+- **`bank_doc_requirements`** — syarat dokumen per bank. Baris `bank = '*'`
+  adalah bawaan yang berlaku untuk bank yang belum punya daftar sendiri; tanpa
+  itu, menambah satu bank berarti mengetik ulang 14 baris. Hak tulisnya
+  diberikan kepada Pengawas **dan** Admin Marketing — dialah yang paling tahu
+  bank meminta apa, dan dia pula yang menanggung akibatnya bila daftarnya salah.
+- **Daftar induk dokumen KPR subsidi** di `business_settings` — 14 jenis yang
+  lazim, menggantikan lima yang ditulis mati. Lima nama lama tidak dihapus:
+  dokumen yang telanjur diunggah memakai nama itu.
+- **BI-Checking & RPC** pada `customer_kpr`, dengan `check` constraint agar
+  status yang salah ketik ditolak di database, bukan muncul sebagai status
+  hantu di layar.
+- **Dua kategori notifikasi baru**: berkas yang sudah di bank tanpa hasil
+  BI-Checking, dan angsuran di atas sepertiga penghasilan.
+
+### 13.3 Yang berubah di antarmuka
+
+**Papan Berkas** (`/pemberkasan`) — membalik sudut pandang: yang menjadi objek
+bukan konsumen, melainkan berkas. Enam kolom sesuai tahap, kartu memuat
+kelengkapan berkas dan ringkasan masalah, pindah tahap satu klik, saring per
+bank. Tahap yang tidak dikenal tetap ditampilkan sebagai kolomnya sendiri agar
+tidak ada berkas yang lenyap dari papan.
+
+**Tampilan Jadwal** pada halaman yang sama — akad dan serah terima
+dikelompokkan Lewat / Tujuh Hari / Mendatang.
+
+**Kejar berkas massal** — pilih beberapa kartu, satu tombol. Percakapan tetap
+dibuka satu per satu (WhatsApp memang tidak bisa dikirim borongan, dan pesan
+identik menurunkan tingkat balasan); yang dihemat adalah menyusun pesannya —
+daftar dokumen yang kurang diisikan otomatis per konsumen, dan setiap yang
+dihubungi tercatat sendiri di riwayatnya.
+
+**Checklist berkas dinamis** pada kartu konsumen, mengikuti bank yang dipilih.
+Pilihan jenis dokumen saat mengunggah langsung menunjuk ke yang paling
+dibutuhkan: wajib tetapi belum ada. Dokumen di luar daftar syarat tetap
+ditampilkan — bank kadang meminta tambahan mendadak.
+
+**Tahap "Saringan Awal"** pada Progres KPR, sebelum tahap Bank: hasil
+BI-Checking, penghasilan terverifikasi, dan perkiraan angsuran. Peringatannya
+adalah satu-satunya di layar itu yang masih bisa **dicegah**; sisanya
+melaporkan keadaan yang sudah terjadi.
+
+**Tombol prospek kilat** di header — tiga bidang, "Simpan & tambah lagi" untuk
+pameran, dan tetap terlihat di ponsel.
+
+### 13.4 Uji
+
+**172/172 lulus**, 12 baru. Satu di antaranya sempat gagal dan ternyata **uji
+saya yang keliru**, bukan migrasinya: konsumen ujinya sudah punya SP3K terbit
+dari bagian sebelumnya, sehingga peringatan BI-Checking memang berhenti berlaku
+— dan dua asersi "tidak diperingatkan" di dekatnya lolos secara hampa.
+Keadaannya kini dikembalikan lebih dulu agar ketiganya benar-benar menguji
+sesuatu.
+
+### 13.5 Yang perlu Anda lakukan
+
+**Jalankan `migration_015_pemberkasan.sql`.** Sampai itu dilakukan: Papan
+Berkas tetap tampil (kolomnya dari `progres_berkas` yang sudah ada) tetapi tanpa
+kelengkapan berkas, checklist konsumen menampilkan pesan yang menyebut nama
+berkas migrasinya, dan tahap Saringan Awal gagal menyimpan.
+
+**Periksa daftar dokumennya.** 14 jenis itu daftar umum KPR subsidi dari saya —
+Anda yang tahu apa yang sebenarnya diminta BTN Brebes, BRI Tegal, dan
+seterusnya. Semuanya dapat diubah dari Pengaturan Bisnis tanpa deploy.
+
+---
+
+## 14. Operasi per baris pada daftar Prospek
+
+### 14.1 Masalah pada layar itu
+
+| | |
+|---|---|
+| **60 tombol** | Empat aksi × lima belas baris. Mata berhenti bisa menemukan aksi utama |
+| **"Hapus" sebobot "Ubah"** | Tindakan permanen, di setiap baris, tanpa hierarki apa pun |
+| **Baris tidak bisa diklik** | Hal yang paling wajar dilakukan pengguna justru tidak melakukan apa-apa |
+| **Dua operasi tidak ada di mana pun** | Membatalkan prospek beserta alasannya, dan mengalihkannya ke agen lain |
+
+### 14.2 Dua temuan dari kode
+
+**Tujuh alasan pembatalan hanya terpakai untuk konsumen.** Tabel
+`cancellations` menuntut `customer_id`, sehingga prospek yang mati sebelum
+booking hanya berubah status menjadi `cancel` — tanpa sebab. Pertanyaan yang
+paling berguna bagi manajemen, *"kenapa kita kehilangan orang, dan di tahap
+mana"*, karena itu tidak terjawab.
+
+**`leads.assigned_to` hanya pernah diisi saat baris dibuat.** Tidak ada satu
+pun jalur untuk memindahkannya. Ketika seorang Sales berhenti, prospeknya
+terkunci padanya — dan karena RLS menyaring dengan kolom yang sama, prospek itu
+praktis lenyap dari pandangan semua orang.
+
+### 14.3 Keputusan: panel geser, bukan halaman
+
+Konsumen memakai halaman penuh (`/konsumen/:id`); prospek memakai panel geser.
+Perbedaannya bukan selera melainkan sifat pekerjaannya:
+
+- **Prospek** — rentetan cepat lintas banyak baris ("telepon dua belas orang").
+  Pindah halaman memaksa bolak-balik dan membuang posisi gulir serta saringan.
+  Panel membiarkan daftarnya tetap terlihat di belakang.
+- **Konsumen** — pekerjaan mendalam pada satu catatan, berhari-hari, dan sering
+  perlu dikirimkan ke rekan kerja. Itu menuntut URL sendiri.
+
+### 14.4 `migration_016_pembatalan_prospek.sql`
+
+- `cancellations` menerima `lead_id`, `customer_id` menjadi nullable, dengan
+  `check (num_nonnulls(lead_id, customer_id) = 1)`. **Satu tabel untuk kedua
+  tahap** — corong kehilangan mustahil disusun bila separuh datanya di tempat
+  lain. Kolom `tahap_saat_batal` menyalin tahap funnel saat itu agar tetap
+  terbaca meski tahapnya berubah kemudian.
+- Policy `cancellations_select`/`insert` mendapat cabang `owns_lead`. Tanpa itu
+  `owns_customer(NULL)` selalu salah, dan Sales tidak bisa melihat pembatalan
+  yang ia catat sendiri.
+- `cancel_lead()` — **SECURITY INVOKER**. RLS yang menahan, tanpa satu pun
+  pemeriksaan peran di dalam fungsi.
+- `transfer_lead()` — **SECURITY DEFINER**, dan alasannya halus: policy `leads`
+  menyaring dengan `assigned_to`, sedangkan pada UPDATE Postgres memeriksa
+  `WITH CHECK` terhadap baris **baru**. Seorang Sales karena itu tidak akan
+  pernah bisa menyerahkan prospeknya sendiri — padahal itu tindakan yang wajar.
+
+### 14.5 Antarmuka
+
+- **Klik baris → panel.** Kepala menempel (identitas, kontak, tahap), jadwal
+  follow-up naik ke atas sebagai satu-satunya hal yang menuntut tindakan hari
+  ini, lalu aksi berjenjang, rincian, dan riwayat.
+- **Kolom aksi: satu tombol + `⋯`.** Enam puluh tombol menjadi lima belas
+  tombol dan lima belas pemicu menu. "Hapus permanen" turun ke dasar menu,
+  dipisah garis, merah — dan peringatannya kini menunjuk ke jalan yang benar:
+  *untuk menutup prospek tanpa kehilangan jejaknya, pakai Batalkan Prospek.*
+- **`Drawer` dan `MenuAksi`** ditambahkan ke `ui.jsx`; perangkap fokus
+  diekstrak menjadi `usePerangkapFokus` yang dipakai bersama `Modal`. Menu
+  membuka ke atas bila baris berada di dekat tepi bawah layar.
+
+### 14.6 Uji
+
+**187/187 lulus**, 15 baru. Tiga sempat gagal, dan **dua di antaranya uji saya
+yang keliru** — keduanya karena lupa bahwa RLS juga berlaku pada `SELECT`
+pemeriksa:
+
+1. Prospek milik agen lain bukan "ditolak" melainkan **tidak terlihat**, jadi
+   `cancel_lead` berhenti di "tidak ditemukan", bukan "tidak berhak". Pesannya
+   diperbaiki menjadi *"Prospek tidak ditemukan atau bukan milik Anda"* — dari
+   sisi pemanggil kedua keadaan itu memang tak terbedakan, dan menyebut hanya
+   salah satunya menyesatkan.
+2. Setelah pengalihan berhasil, pemilik lama **tidak bisa lagi membaca barisnya**
+   — asersinya membaca `NULL` dan dikira gagal. Pemeriksaannya dipindahkan ke
+   peran yang boleh melihat lintas agen.
+
+### 14.7 Yang perlu Anda lakukan
+
+**Jalankan `migration_016_pembatalan_prospek.sql`.** Sebelum itu: panel, menu,
+dan klik baris sudah berfungsi, tetapi Batalkan Prospek dan Alihkan Agen akan
+menampilkan galat dari database. Sudah diperiksa langsung ke Supabase Anda —
+kedua RPC-nya memang belum ada di sana.

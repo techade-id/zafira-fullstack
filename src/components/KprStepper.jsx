@@ -32,6 +32,24 @@ import {
  * baru, sehingga tidak ada kemungkinan status dan tanggal saling bertentangan.
  */
 
+const LABEL_BI = { menunggu: "menunggu", lolos: "lolos", tidak_lolos: "TIDAK LOLOS" };
+
+/**
+ * Rasio angsuran terhadap penghasilan.
+ *
+ * Patokan lazim KPR subsidi: angsuran tidak lebih dari sepertiga penghasilan.
+ * Melebihi itu, berkas biasanya ditolak dengan alasan "RPC tidak cukup" —
+ * salah satu alasan pembatalan yang sudah dikonfigurasi di sistem ini.
+ */
+const BATAS_RPC = 1 / 3;
+
+function rasioRpc(k) {
+  const p = Number(k?.penghasilan_verifikasi);
+  const a = Number(k?.angsuran_bulanan);
+  if (!Number.isFinite(p) || !Number.isFinite(a) || p <= 0 || a <= 0) return null;
+  return a / p;
+}
+
 const TAHAP = [
   {
     kunci: "booking",
@@ -54,6 +72,30 @@ const TAHAP = [
       { key: "biaya_tambahan_tanah", label: "Biaya Tambahan Tanah", tipe: "rupiah" },
       { key: "nominal_total_dp", label: "Total DP (Promo + Tanah)", tipe: "rupiah" },
       { key: "dp_terbayar", label: "DP Terbayar", tipe: "rupiah" },
+    ],
+  },
+  {
+    // Saringan awal. Dua dari tujuh alasan pembatalan yang dikonfigurasi
+    // ("Tidak lolos BI-Checking", "RPC tidak cukup") sepenuhnya dapat diketahui
+    // SEBELUM berkas dikirim — dan menunggu jawaban bank selama 30-60 hari
+    // untuk mendengar sesuatu yang sudah bisa ditebak sejak awal adalah
+    // kerugian terbesar dalam alur ini.
+    kunci: "saring",
+    label: "Saringan Awal",
+    selesai: (k) => k.bi_checking_status === "lolos",
+    ringkas: (k) =>
+      [
+        k.bi_checking_status ? `BI-Checking ${LABEL_BI[k.bi_checking_status] || k.bi_checking_status}` : null,
+        rasioRpc(k) != null ? `RPC ${Math.round(rasioRpc(k) * 100)}%` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    bidang: [
+      { key: "bi_checking_status", label: "Hasil BI-Checking", tipe: "bi" },
+      { key: "bi_checking_tanggal", label: "Tanggal Pemeriksaan", tipe: "date" },
+      { key: "penghasilan_verifikasi", label: "Penghasilan Terverifikasi / bulan", tipe: "rupiah" },
+      { key: "angsuran_bulanan", label: "Perkiraan Angsuran / bulan", tipe: "rupiah" },
+      { key: "bi_checking_catatan", label: "Catatan BI-Checking", tipe: "text" },
     ],
   },
   {
@@ -114,6 +156,30 @@ const TAHAP = [
 /** Peringatan yang selama ini tidak pernah dimunculkan meski datanya ada. */
 function peringatan(kpr) {
   const hasil = [];
+
+  // Saringan awal lebih dulu: ini satu-satunya peringatan yang masih bisa
+  // dicegah, sisanya melaporkan keadaan yang sudah terjadi.
+  if (kpr.bi_checking_status === "tidak_lolos") {
+    hasil.push({
+      berat: true,
+      teks: kpr.tanggal_masuk_bank
+        ? "BI-Checking tidak lolos, tetapi berkas sudah dikirim ke bank. Pertimbangkan menarik pengajuan sebelum tercatat sebagai penolakan."
+        : "BI-Checking tidak lolos. Jangan kirim berkas ke bank sebelum masalahnya diselesaikan.",
+    });
+  } else if (kpr.tanggal_masuk_bank && !kpr.tanggal_sp3k_terbit && kpr.bi_checking_status !== "lolos") {
+    hasil.push({
+      berat: false,
+      teks: "Berkas sudah di bank tetapi hasil BI-Checking belum tercatat.",
+    });
+  }
+
+  const rpc = rasioRpc(kpr);
+  if (rpc != null && rpc > BATAS_RPC && !kpr.tanggal_akad) {
+    hasil.push({
+      berat: rpc > 0.4,
+      teks: `Angsuran ${Math.round(rpc * 100)}% dari penghasilan — di atas patokan sepertiga. Berkas dengan rasio ini kerap ditolak dengan alasan RPC tidak cukup.`,
+    });
+  }
 
   if (kpr.tanggal_sp3k_expired && !kpr.tanggal_akad) {
     const sisa = selisihHari(kpr.tanggal_sp3k_expired);
@@ -214,6 +280,25 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
   function renderBidang(b) {
     const v = nilai[b.key] ?? "";
     const gaya = { ...inputStyle, ...(editable ? null : { background: "#F4F6FA", color: TEXT_MID }) };
+
+    if (b.tipe === "bi") {
+      return (
+        <select
+          value={v}
+          disabled={!editable}
+          onChange={(e) => {
+            ubah(b.key, e.target.value);
+            simpanBidang(b.key, e.target.value);
+          }}
+          style={gaya}
+        >
+          <option value="">Belum diperiksa</option>
+          <option value="menunggu">Menunggu hasil</option>
+          <option value="lolos">Lolos</option>
+          <option value="tidak_lolos">Tidak lolos</option>
+        </select>
+      );
+    }
 
     if (b.tipe === "bank" || b.tipe === "progres") {
       const opsi = b.tipe === "bank" ? banks : progresBerkas;

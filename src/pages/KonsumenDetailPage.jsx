@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Home, User, Wallet, FolderOpen, ClipboardList, History, FileText, Upload } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canEditBerkas, isLocked, lockReason, roleOf } from "../lib/permissions";
 import { rupiah, tanggal, tanggalWaktu, durasiHari, labelTahap, labelJenisBayar } from "../lib/format";
+import { useSyaratBerkas, cocokkanBerkas } from "../lib/useSyaratBerkas";
 import FollowUpTimeline from "../components/FollowUpTimeline";
 import KprStepper from "../components/KprStepper";
 import KontakAksi from "../components/KontakAksi";
@@ -218,6 +219,7 @@ export default function KonsumenDetailPage() {
         <TabDokumen
           dokumen={dokumen}
           customerId={konsumen.id}
+          bank={kpr?.nama_bank}
           editable={bolehBerkas}
           onUbah={muat}
           toast={toast}
@@ -255,14 +257,20 @@ function Hitung({ n, aktif }) {
 function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, onBuka }) {
   const terverifikasi = pembayaran.filter((p) => p.status === "terverifikasi").reduce((s, p) => s + Number(p.amount || 0), 0);
   const menunggu = pembayaran.filter((p) => p.status === "menunggu").reduce((s, p) => s + Number(p.amount || 0), 0);
-  const lengkap = DOC_TYPES.filter((t) => dokumen.some((d) => d.doc_type === t && d.status === "terverifikasi"));
+  // Kelengkapan dihitung terhadap syarat bank yang berlaku, bukan daftar tetap.
+  const { syarat } = useSyaratBerkas(kpr?.nama_bank);
+  const rekap = useMemo(() => cocokkanBerkas(syarat, dokumen), [syarat, dokumen]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="rg-3">
         <Ringkas label="Sudah Terverifikasi" nilai={rupiah(terverifikasi)} />
         <Ringkas label="Menunggu Verifikasi" nilai={rupiah(menunggu)} sorot={menunggu > 0} />
-        <Ringkas label="Dokumen Lengkap" nilai={`${lengkap.length} / ${DOC_TYPES.length}`} />
+        <Ringkas
+          label="Berkas Wajib"
+          nilai={rekap.totalWajib ? `${rekap.lengkapWajib} / ${rekap.totalWajib}` : "-"}
+          sorot={rekap.kurang.length > 0}
+        />
       </div>
 
       <Card>
@@ -331,10 +339,20 @@ function Baris({ label, nilai }) {
    Dokumen
    ============================================================ */
 
-function TabDokumen({ dokumen, customerId, editable, onUbah, toast }) {
-  const [jenis, setJenis] = useState(DOC_TYPES[0]);
+function TabDokumen({ dokumen, customerId, bank, editable, onUbah, toast }) {
+  const { syarat, pakaiBawaan } = useSyaratBerkas(bank);
+  const rekap = useMemo(() => cocokkanBerkas(syarat, dokumen), [syarat, dokumen]);
+  const [jenis, setJenis] = useState("");
   const [berkas, setBerkas] = useState(null);
   const [unggah, setUnggah] = useState(false);
+
+  // Pilihan jenis dokumen mengikuti syarat bank yang sedang berlaku, dan
+  // langsung menunjuk ke yang paling dibutuhkan: yang wajib tapi belum ada.
+  const pilihanJenis = syarat.length > 0 ? syarat.map((s) => s.doc_type) : DOC_TYPES;
+  useEffect(() => {
+    if (jenis && pilihanJenis.includes(jenis)) return;
+    setJenis(rekap.kurang[0]?.doc_type || pilihanJenis[0] || "");
+  }, [pilihanJenis, rekap.kurang, jenis]);
 
   async function kirim() {
     if (!berkas) return;
@@ -375,33 +393,99 @@ function TabDokumen({ dokumen, customerId, editable, onUbah, toast }) {
     else toast.gagal("Tautan dokumen tidak dapat dibuka.");
   }
 
-  const kurang = DOC_TYPES.filter((t) => !dokumen.some((d) => d.doc_type === t));
-
   return (
     <Card>
-      {/* Kelengkapan berkas: yang dicari Admin Marketing adalah yang BELUM ada,
-          dan itu justru tidak terlihat pada daftar dokumen yang sudah masuk. */}
+      {/* Checklist mengikuti syarat bank yang dipilih (PRD §1.4). Yang dicari
+          Admin Marketing selalu hal yang sama: apa yang BELUM ada — dan itu
+          justru tidak terlihat pada daftar dokumen yang sudah masuk. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 11, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>
+          Kelengkapan Berkas
+          {rekap.totalWajib > 0 && (
+            <span style={{ fontWeight: 500, color: TEXT_MID }}>
+              {" "}
+              · {rekap.lengkapWajib}/{rekap.totalWajib} wajib terverifikasi
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 11.5, color: TEXT_MID }}>
+          {bank ? (
+            pakaiBawaan ? (
+              <>
+                <b style={{ color: TEXT_DARK }}>{bank}</b> — memakai syarat bawaan
+              </>
+            ) : (
+              <>
+                Syarat khusus <b style={{ color: TEXT_DARK }}>{bank}</b>
+              </>
+            )
+          ) : (
+            "Bank belum dipilih — menampilkan syarat bawaan"
+          )}
+        </div>
+      </div>
+
+      {rekap.baris.length === 0 && (
+        <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 16, lineHeight: 1.5 }}>
+          Belum ada syarat berkas tersimpan. Aturlah di Pengaturan Bisnis, atau jalankan{" "}
+          <code style={{ fontSize: 11 }}>migration_015_pemberkasan.sql</code>.
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 16 }}>
-        {DOC_TYPES.map((t) => {
-          const doc = dokumen.find((d) => d.doc_type === t);
-          const warna = !doc ? { bg: "#EEF1F6", fg: "#516079" } : doc.status === "terverifikasi" ? { bg: "#E4F2E8", fg: "#166534" } : doc.status === "ditolak" ? { bg: "#FBE9E8", fg: "#A6332C" } : { bg: "#FDECE4", fg: ACCENT_DARK };
+        {rekap.baris.map((b) => {
+          const w =
+            b.keadaan === "terverifikasi"
+              ? { bg: "#E4F2E8", fg: "#166534", tanda: "✓" }
+              : b.keadaan === "ditolak"
+              ? { bg: "#FBE9E8", fg: "#A6332C", tanda: "✕" }
+              : b.keadaan === "menunggu"
+              ? { bg: "#FDECE4", fg: ACCENT_DARK, tanda: "…" }
+              : b.wajib
+              ? { bg: "#EEF1F6", fg: "#516079", tanda: "belum ada" }
+              : { bg: "#F7F9FC", fg: "#8A97AB", tanda: "opsional" };
           return (
-            <span key={t} style={{ fontSize: 11.5, fontWeight: 600, background: warna.bg, color: warna.fg, padding: "5px 11px", borderRadius: 999 }}>
-              {t}
-              {doc ? ` · ${doc.status === "terverifikasi" ? "✓" : doc.status === "ditolak" ? "✕" : "…"}` : " · belum ada"}
+            <span
+              key={b.doc_type}
+              title={b.catatan || (b.wajib ? "Wajib" : "Tidak wajib")}
+              style={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                background: w.bg,
+                color: w.fg,
+                padding: "5px 11px",
+                borderRadius: 999,
+                border: b.wajib && b.keadaan === "belum" ? "1px dashed #C7D3EA" : "1px solid transparent",
+              }}
+            >
+              {b.doc_type} · {w.tanda}
             </span>
           );
         })}
+        {rekap.ekstra.map((d) => (
+          <span key={d.id} title="Di luar daftar syarat" style={{ fontSize: 11.5, fontWeight: 600, background: "#EFEAF7", color: "#5B3E8F", padding: "5px 11px", borderRadius: 999 }}>
+            {d.doc_type} · tambahan
+          </span>
+        ))}
       </div>
+
+      {rekap.kurang.length > 0 && (
+        <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "#FDECE4", border: "1px solid #F6CDB8", borderRadius: 12, padding: "10px 13px", marginBottom: 16, fontSize: 12.5, color: ACCENT_DARK, lineHeight: 1.55 }}>
+          <span aria-hidden="true">📄</span>
+          <span>
+            Masih kurang <b>{rekap.kurang.length}</b> dokumen wajib: {rekap.kurang.map((b) => b.doc_type).join(", ")}.
+          </span>
+        </div>
+      )}
 
       {editable && (
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 18, flexWrap: "wrap" }}>
-          <div style={{ minWidth: 150 }}>
+          <div style={{ minWidth: 180 }}>
             <label htmlFor="dok-jenis" style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
               Jenis Dokumen
             </label>
             <select id="dok-jenis" value={jenis} onChange={(e) => setJenis(e.target.value)} style={inputStyle}>
-              {DOC_TYPES.map((t) => (
+              {pilihanJenis.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -425,8 +509,8 @@ function TabDokumen({ dokumen, customerId, editable, onUbah, toast }) {
         emptyIcon={Upload}
         emptyLabel="Belum ada dokumen diunggah"
         emptyHint={
-          kurang.length > 0
-            ? `Yang masih dibutuhkan: ${kurang.join(", ")}.`
+          rekap.kurang.length > 0
+            ? `Yang masih dibutuhkan: ${rekap.kurang.map((b) => b.doc_type).join(", ")}.`
             : "Unggah berkas KPR di sini agar Admin Marketing dapat memverifikasinya."
         }
         columns={[

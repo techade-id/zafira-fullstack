@@ -4,7 +4,7 @@ import { Clock, Snowflake, FileWarning, Landmark, Wallet, ArrowRight, CheckCircl
 import { useAuth } from "../context/AuthContext";
 import { roleOf, roleLabel } from "../lib/permissions";
 import { useNotifications, LABEL_KATEGORI } from "../lib/useNotifications";
-import { Card, SectionTitle, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE, POSITIVE } from "./ui";
+import { Card, SectionTitle, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_SOFT, ACCENT_DARK, POSITIVE } from "./ui";
 
 /**
  * "Apa yang harus saya kerjakan hari ini?"
@@ -185,7 +185,7 @@ export default function FokusHariIni() {
                     <span style={{ display: "block", fontSize: 11.5, color: TEXT_MID, marginTop: 2 }}>{it.detail}</span>
                   </span>
                   <span style={{ fontSize: 11.5, color: PRIMARY, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {SARAN[it.kategori]} →
+                    {SARAN[it.kategori] || "Buka"} →
                   </span>
                 </button>
               ))}

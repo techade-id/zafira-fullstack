@@ -64,7 +64,11 @@ export function rupiahInput(n) {
  */
 function keTanggal(nilai) {
   if (!nilai) return null;
-  if (nilai instanceof Date) return nilai;
+  // Selalu salinan baru. `selisihHari` memanggil setHours() pada hasilnya, dan
+  // mengembalikan instans milik pemanggil berarti memutasi datanya sendiri —
+  // sebuah Date yang dipegang komponen lain akan diam-diam bergeser ke tengah
+  // malam hanya karena tanggalnya pernah diformat.
+  if (nilai instanceof Date) return new Date(nilai.getTime());
   const teks = String(nilai);
   const d = /^\d{4}-\d{2}-\d{2}$/.test(teks) ? new Date(`${teks}T00:00:00`) : new Date(teks);
   return Number.isNaN(d.getTime()) ? null : d;

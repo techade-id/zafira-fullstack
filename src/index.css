@@ -141,7 +141,7 @@ input:focus, select:focus, textarea:focus {
   /* Avatar dilepas untuk memberi ruang. Pencarian dan lonceng tidak: keduanya
      justru paling dibutuhkan di ponsel — Sales membuka aplikasi ini di
      lapangan untuk melihat apa yang harus dikerjakan hari ini. */
-  .topbar-actions .icon-btn:not(.search-toggle):not(.notif-btn) {
+  .topbar-actions .icon-btn:not(.search-toggle):not(.notif-btn):not(.tambah-cepat) {
     display: none !important;
   }
 
@@ -330,4 +330,37 @@ input:focus, select:focus, textarea:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* ---------- Papan Berkas ---------- */
+
+/* Kolom tetap selebar 250px dan papannya digulir menyamping, bukan kolom yang
+   menyempit. Enam tahap yang diperas ke dalam lebar layar membuat kartunya
+   terlalu sempit untuk dibaca — dan yang dibaca di kartu itu justru
+   ringkasan masalah, bagian yang paling menentukan. */
+.papan-berkas {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  align-items: flex-start;
+}
+
+.papan-kolom {
+  flex: 0 0 250px;
+  background: #fff;
+  border: 1px solid #E3E8F0;
+  border-radius: 16px;
+  padding: 13px;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+  /* Di ponsel kolom melebar mengikuti layar: menggulir dua arah sekaligus
+     lebih menyulitkan daripada satu kolom penuh per layar. */
+  .papan-kolom {
+    flex: 0 0 84vw;
+    max-height: none;
+  }
 }

@@ -853,9 +853,8 @@ export function friendlyDbError(error) {
  * melihatnya. Escape ditambahkan karena itu yang dicoba orang lebih dulu
  * sebelum mencari tombol Batal.
  */
-export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
-  const kotak = React.useRef(null);
-
+/** Perangkap fokus + Escape, dipakai bersama oleh Modal dan Drawer. */
+function usePerangkapFokus(open, kotak, onClose) {
   React.useEffect(() => {
     if (!open) return undefined;
 
@@ -893,7 +892,12 @@ export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
       document.removeEventListener("keydown", onKey, true);
       if (fokusSebelumnya instanceof HTMLElement) fokusSebelumnya.focus();
     };
-  }, [open, onClose]);
+  }, [open, kotak, onClose]);
+}
+
+export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
+  const kotak = React.useRef(null);
+  usePerangkapFokus(open, kotak, onClose);
 
   if (!open) return null;
 
@@ -932,6 +936,181 @@ export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+/**
+ * Panel geser dari kanan.
+ *
+ * Dipakai ketika pekerjaannya adalah rentetan cepat lintas banyak baris —
+ * membuka, bertindak, menutup, lanjut ke baris berikutnya. Daftarnya tetap
+ * terlihat di belakang, sehingga posisi gulir dan saringan tidak hilang.
+ *
+ * Untuk pekerjaan yang mendalam pada satu catatan, halaman penuh tetap lebih
+ * tepat: ia bisa ditautkan, dibagikan, dan di-bookmark. Beda sifat pekerjaan,
+ * beda pola — itulah kenapa konsumen memakai /konsumen/:id sedangkan prospek
+ * memakai panel ini.
+ */
+export function Drawer({ open, labelledBy, onClose, children, width = 460 }) {
+  const kotak = React.useRef(null);
+  usePerangkapFokus(open, kotak, onClose);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 65, whiteSpace: "normal" }}>
+      <div
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, background: "rgba(10,29,66,0.38)" }}
+        aria-hidden="true"
+      />
+      <div
+        ref={kotak}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
+        className="drawer-panel"
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width,
+          maxWidth: "100%",
+          background: SURFACE,
+          borderLeft: `1px solid ${BORDER}`,
+          boxShadow: "-18px 0 44px rgba(15,42,92,0.14)",
+          overflowY: "auto",
+          outline: "none",
+          textAlign: "left",
+        }}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/**
+ * Menu aksi tambahan.
+ *
+ * Empat tombol pada setiap baris tabel berarti enam puluh tombol pada satu
+ * layar, dan mata berhenti bisa menemukan mana yang utama. Satu aksi utama
+ * ditinggalkan di baris; sisanya turun ke sini — termasuk yang merusak, yang
+ * memang tidak pantas berdiri sebobot "Ubah".
+ */
+export function MenuAksi({ items, label = "Aksi lain" }) {
+  const [buka, setBuka] = React.useState(false);
+  const [keAtas, setKeAtas] = React.useState(false);
+  const kotak = React.useRef(null);
+  const tombol = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!buka) return undefined;
+    function onDoc(e) {
+      if (kotak.current && !kotak.current.contains(e.target)) setBuka(false);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") setBuka(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [buka]);
+
+  const tampil = (items || []).filter(Boolean);
+  if (tampil.length === 0) return null;
+
+  return (
+    <span ref={kotak} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        ref={tombol}
+        onClick={() => {
+          // Baris di bagian bawah tabel akan menampilkan menunya ke atas,
+          // supaya tidak terpotong tepi layar.
+          const r = tombol.current?.getBoundingClientRect();
+          setKeAtas(Boolean(r) && window.innerHeight - r.bottom < 40 + tampil.length * 36);
+          setBuka((v) => !v);
+        }}
+        aria-label={label}
+        aria-expanded={buka}
+        aria-haspopup="menu"
+        title={label}
+        style={{
+          border: `1px solid ${BORDER}`,
+          background: SURFACE,
+          color: TEXT_MID,
+          borderRadius: 9,
+          padding: "5px 9px",
+          fontSize: 13,
+          lineHeight: 1,
+          fontWeight: 700,
+          cursor: "pointer",
+          letterSpacing: "0.06em",
+        }}
+      >
+        ⋯
+      </button>
+
+      {buka && (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            right: 0,
+            [keAtas ? "bottom" : "top"]: "calc(100% + 5px)",
+            minWidth: 196,
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            boxShadow: "0 14px 34px rgba(15,42,92,0.16)",
+            padding: 5,
+            zIndex: 30,
+          }}
+        >
+          {tampil.map((it, i) => (
+            <React.Fragment key={it.label}>
+              {it.pisah && i > 0 && <div style={{ height: 1, background: BORDER, margin: "5px 4px" }} />}
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setBuka(false);
+                  it.onClick?.();
+                }}
+                disabled={it.disabled}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  width: "100%",
+                  textAlign: "left",
+                  border: "none",
+                  background: "none",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: it.disabled ? PRIMARY_MUTED : it.rusak ? NEGATIVE : TEXT_DARK,
+                  cursor: it.disabled ? "not-allowed" : "pointer",
+                  whiteSpace: "nowrap",
+                  font: "inherit",
+                }}
+                onMouseEnter={(e) => !it.disabled && (e.currentTarget.style.background = "#F4F6FA")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+              >
+                {it.ikon && <it.ikon size={14} style={{ flexShrink: 0 }} aria-hidden="true" />}
+                {it.label}
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
 

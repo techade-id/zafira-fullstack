@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useToast } from "../context/ToastContext";
 import { TEMPLATE_BAWAAN, isiPenanda } from "../lib/waTemplates";
 import { labelTahap } from "../lib/format";
+import SyaratBerkasPanel from "../components/SyaratBerkasPanel";
 import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, POSITIVE, ReadOnlyBanner } from "../components/ui";
 
 /** Urutan tahap pada panel template WhatsApp — mengikuti alur funnel. */
@@ -15,7 +16,8 @@ const CATEGORIES = [
   { key: "bank", label: "Nama Bank" },
   { key: "cancel_reason", label: "Alasan Pembatalan" },
   { key: "followup_category", label: "Kategori Rencana Selanjutnya" },
-  { key: "progres_berkas", label: "Progres Berkas" },
+  { key: "progres_berkas", label: "Progres Berkas", hint: "Kolom pada Papan Berkas mengikuti urutan daftar ini" },
+  { key: "dokumen_kpr", label: "Jenis Dokumen KPR", hint: "Daftar induk; syarat per bank dipilih dari sini" },
   { key: "pic", label: "PIC / Karyawan Lapangan" },
   { key: "jenis_pekerjaan", label: "Jenis Pekerjaan Umum" },
   { key: "bobot_komplain", label: "Bobot Komplain", hint: 'Format "Nama:bobot", mis. Berat:3' },
@@ -328,6 +330,8 @@ export default function PengaturanBisnisPage() {
           })}
         </div>
       </Card>
+
+      <SyaratBerkasPanel />
 
       <Card style={{ marginBottom: 18 }}>
         <SectionTitle title="Ads Campaign" />

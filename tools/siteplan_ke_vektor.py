@@ -45,8 +45,15 @@ KOLOM_TENGAH = [("B", 7), ("B", 7), ("B", 7), ("C", 8), ("C", 8),
                 ("F", 8), ("F", 8), ("G", 8), ("G", 8), ("H", 8)]
 HARAP_BLOK = {"A": 32, "B": 21, "C": 16, "D": 28, "E": 16, "F": 16, "G": 16, "H": 13}
 
-LUAS_SEL = (700, 1200)     # luas daerah putih satu kavling, piksel
-LUAS_MASJID = (3000, 4500) # 240 m² = empat kali kavling
+LUAS_SEL = (700, 1200)      # luas daerah putih satu kavling, piksel
+LUAS_MASJID = (3000, 4500)  # 240 m² = empat kali kavling
+LUAS_FASILITAS = (1400, 2600)  # kotak fasilitas, sekitar dua kali kavling
+
+# Kotak fasilitas yang berdiri sendiri pada gambar bersih. Labelnya diambil apa
+# adanya dari gambar bernomor — apa persisnya "T" tidak diasumsikan di sini.
+# T.7 duduk di dalam baris blok A; T.3 tepat di atas kolom B8/B15.
+# Luas terukurnya (~115 dan ~127 m²) cocok dengan dimensi pada gambar.
+FASILITAS_LAIN = [("T.7", "di baris A"), ("T.3", "di atas kolom B")]
 
 
 def sudut_grid(gelap):
@@ -147,15 +154,37 @@ def main():
         return [ke_citra(u, v) for u, v in
                 [(s["u0"], s["v0"]), (s["u1"], s["v0"]), (s["u1"], s["v1"]), (s["u0"], s["v1"])]]
 
+    # Kotak fasilitas dikenali dari bentuknya: segi empat yang terisi penuh
+    # (rasio isi > 0,95), berbeda dari jalan dan area berarsir yang selalu
+    # berlekuk sehingga rasio isinya rendah.
+    def persegi_penuh(L, batas):
+        if not (batas[0] <= luas[L - 1] < batas[1]):
+            return None
+        u0, u1, v0, v1 = kotak(L)
+        if luas[L - 1] / ((u1 - u0) * (v1 - v0)) <= 0.95:
+            return None
+        return u0, u1, v0, v1
+
     masjid = None
+    kotak_lain = []
     for L in range(1, n + 1):
-        if LUAS_MASJID[0] <= luas[L - 1] < LUAS_MASJID[1]:
-            u0, u1, v0, v1 = kotak(L)
-            if luas[L - 1] / ((u1 - u0) * (v1 - v0)) > 0.95:   # persegi penuh
-                masjid = [ke_citra(u, v) for u, v in [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]]
-                break
+        b = persegi_penuh(L, LUAS_MASJID)
+        if b and masjid is None:
+            masjid = b
+            continue
+        b = persegi_penuh(L, LUAS_FASILITAS)
+        if b:
+            kotak_lain.append(b)
+
     if masjid is None:
         sys.exit("Kotak masjid tidak ditemukan.")
+    if len(kotak_lain) != len(FASILITAS_LAIN):
+        sys.exit(f"Ditemukan {len(kotak_lain)} kotak fasilitas, seharusnya {len(FASILITAS_LAIN)}.")
+
+    # T.7 berada di dalam baris blok A (v kecil); T.3 di bawahnya.
+    kotak_lain.sort(key=lambda b: b[2])
+    masjid = [ke_citra(u, v) for u, v in
+              [(masjid[0], masjid[2]), (masjid[1], masjid[2]), (masjid[1], masjid[3]), (masjid[0], masjid[3])]]
 
     semua = [p for _, _, s in hasil for p in sudut4(s)] + masjid
     xs = [p[0] for p in semua]
@@ -175,6 +204,9 @@ def main():
                    for k, b, s in hasil), key=lambda d: (d["blok"], int(d["kode"][1:])))
     fasilitas = [{"kode": "MASJID", "label": "Masjid", "luas": "240 m²",
                   "titik": titik(masjid), "pusat": pusat(masjid)}]
+    for (kode, _), (u0, u1, v0, v1) in zip(FASILITAS_LAIN, kotak_lain):
+        p = [ke_citra(u, v) for u, v in [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]]
+        fasilitas.append({"kode": kode, "label": kode, "luas": "", "titik": titik(p), "pusat": pusat(p)})
 
     tulis_svg(W, H, unit, fasilitas)
     tulis_js(W, H, unit, fasilitas, sudut)

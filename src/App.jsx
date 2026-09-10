@@ -11,6 +11,7 @@ import ProspekPage from "./pages/ProspekPage";
 import PembayaranPage from "./pages/PembayaranPage";
 import KonsumenPage from "./pages/KonsumenPage";
 import KonsumenDetailPage from "./pages/KonsumenDetailPage";
+import PemberkasanPage from "./pages/PemberkasanPage";
 import PembatalanPage from "./pages/PembatalanPage";
 import ProyekPage from "./pages/ProyekPage";
 import SiteplanPage from "./pages/SiteplanPage";
@@ -61,6 +62,7 @@ export default function App() {
               ["prospek", <ProspekPage />],
               ["pembayaran", <PembayaranPage />],
               ["konsumen", <KonsumenPage />],
+              ["pemberkasan", <PemberkasanPage />],
               ["pembatalan", <PembatalanPage />],
               ["proyek", <ProyekPage />],
               ["siteplan", <SiteplanPage />],

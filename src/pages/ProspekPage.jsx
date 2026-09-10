@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Target } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Target, PanelRight, History, ArrowUpDown, Pencil, ArrowRightLeft, Ban, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
@@ -12,6 +12,7 @@ import FollowUpTimeline from "../components/FollowUpTimeline";
 import KontakAksi from "../components/KontakAksi";
 import KonversiBookingModal from "../components/KonversiBookingModal";
 import UbahTahapModal from "../components/UbahTahapModal";
+import PanelProspek, { ModalBatal, ModalAlih } from "../components/PanelProspek";
 import {
   Card,
   PageTitle,
@@ -25,9 +26,10 @@ import {
   ACCENT,
   ACCENT_DARK,
   NEGATIVE,
-  DeleteButton,
-  EditButton,
   RowActions,
+  MenuAksi,
+  ConfirmDialog,
+  PRIMARY_MUTED,
   ReadOnlyBanner,
   inputStyle,
 } from "../components/ui";
@@ -96,6 +98,7 @@ const emptyForm = {
 
 export default function ProspekPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
   const [params] = useSearchParams();
 
@@ -115,6 +118,11 @@ export default function ProspekPage() {
   const [openLeadId, setOpenLeadId] = useState(params.get("sorot") || null);
   const [konversiLead, setKonversiLead] = useState(null);
   const [tahapLead, setTahapLead] = useState(null);
+  const [panelLead, setPanelLead] = useState(null);
+  const [panelAksi, setPanelAksi] = useState(null);
+  const [hapusLead, setHapusLead] = useState(null);
+  const [hapusSibuk, setHapusSibuk] = useState(false);
+  const [hapusGalat, setHapusGalat] = useState("");
 
   const sources = useBusinessSettings("lead_source");
   const followupCategories = useBusinessSettings("followup_category");
@@ -389,6 +397,7 @@ export default function ProspekPage() {
           // saringan daftar, supaya baris yang dicari langsung terlihat.
           initialSearch={params.get("cari") || ""}
           highlightId={params.get("sorot") || undefined}
+          onRowClick={(row) => setPanelLead(row)}
           pageSize={25}
           defaultSort={{ key: "created_at", arah: "desc" }}
           emptyIcon={Target}
@@ -452,32 +461,39 @@ export default function ProspekPage() {
               key: "aksi",
               label: "",
               sortable: false,
+              // Satu aksi utama di baris, sisanya turun ke menu. Empat tombol
+              // per baris berarti enam puluh tombol pada satu layar, dan mata
+              // berhenti bisa menemukan mana yang utama — sementara "Hapus"
+              // berdiri sebobot "Ubah", padahal ia permanen.
               render: (row) => {
                 const sudah = terkonversi.get(row.id);
-                const bisaKonversi = mayWrite && !sudah && !["cancel"].includes(row.status);
+                const dibatalkan = row.status === "cancel";
+                const bisaKonversi = mayWrite && !sudah && !dibatalkan;
                 return (
                   <RowActions>
                     {sudah ? (
-                      <a href={`/konsumen/${sudah}`} style={{ ...gayaKecil, textDecoration: "none", color: PRIMARY }}>
+                      <button onClick={() => navigate(`/konsumen/${sudah}`)} style={{ ...gayaKecil, color: PRIMARY, borderColor: PRIMARY_MUTED }}>
                         Lihat Konsumen
-                      </a>
+                      </button>
+                    ) : bisaKonversi ? (
+                      <button onClick={() => setKonversiLead(row)} style={gayaKonversi} title="Buat konsumen, reserve unit, dan catat booking fee sekaligus">
+                        + Booking
+                      </button>
                     ) : (
-                      bisaKonversi && (
-                        <button onClick={() => setKonversiLead(row)} style={gayaKonversi} title="Buat konsumen, reserve unit, dan catat booking fee sekaligus">
-                          + Booking
-                        </button>
-                      )
+                      <button onClick={() => setPanelLead(row)} style={gayaKecil}>
+                        Buka
+                      </button>
                     )}
-                    <button onClick={() => setOpenLeadId(openLeadId === row.id ? null : row.id)} style={gayaKecil}>
-                      {openLeadId === row.id ? "Tutup" : "Riwayat"}
-                    </button>
-                    <EditButton subject="lead" onClick={() => startEdit(row)} />
-                    <DeleteButton
-                      subject="lead"
-                      itemName={row.name}
-                      warning="Riwayat follow-up prospek ini ikut terhapus. Konsumen yang sudah dibuat dari prospek ini tetap ada, hanya kehilangan kaitannya."
-                      onDelete={() => supabase.from("leads").delete().eq("id", row.id)}
-                      onDone={fetchLeads}
+                    <MenuAksi
+                      items={[
+                        { label: "Buka panel", ikon: PanelRight, onClick: () => setPanelLead(row) },
+                        { label: "Riwayat follow-up", ikon: History, onClick: () => setOpenLeadId(openLeadId === row.id ? null : row.id) },
+                        mayWrite && !dibatalkan && { label: "Ubah tahap", ikon: ArrowUpDown, onClick: () => setTahapLead(row) },
+                        mayWrite && { label: "Ubah data", ikon: Pencil, onClick: () => startEdit(row) },
+                        mayWrite && !dibatalkan && { label: "Alihkan ke agen lain", ikon: ArrowRightLeft, onClick: () => setPanelAksi({ lead: row, aksi: "alih" }) },
+                        mayWrite && !dibatalkan && { label: "Batalkan prospek", ikon: Ban, onClick: () => setPanelAksi({ lead: row, aksi: "batal" }), pisah: true, rusak: true },
+                        mayWrite && { label: "Hapus permanen", ikon: Trash2, onClick: () => setHapusLead(row), rusak: true },
+                      ]}
                     />
                   </RowActions>
                 );
@@ -501,7 +517,68 @@ export default function ProspekPage() {
         lead={tahapLead}
         open={Boolean(tahapLead)}
         onClose={() => setTahapLead(null)}
+        onSelesai={() => {
+          fetchLeads();
+          setPanelLead((v) => (v ? { ...v } : v));
+        }}
+      />
+
+      <PanelProspek
+        lead={panelLead}
+        open={Boolean(panelLead)}
+        onClose={() => setPanelLead(null)}
         onSelesai={fetchLeads}
+        konsumenId={panelLead ? terkonversi.get(panelLead.id) : null}
+        sumberLabel={panelLead ? sourceLabel(panelLead) : ""}
+        onKonversi={() => setKonversiLead(panelLead)}
+        onUbahTahap={() => setTahapLead(panelLead)}
+        onUbahData={() => {
+          startEdit(panelLead);
+          setPanelLead(null);
+        }}
+      />
+
+      {/* Aksi dari menu baris memanggil modal yang sama dengan yang dipakai
+          panel, langsung pada operasinya — tanpa memaksa membuka panel dulu. */}
+      <ModalBatal
+        open={panelAksi?.aksi === "batal"}
+        lead={panelAksi?.lead || null}
+        onClose={() => setPanelAksi(null)}
+        onSelesai={fetchLeads}
+      />
+      <ModalAlih
+        open={panelAksi?.aksi === "alih"}
+        lead={panelAksi?.lead || null}
+        onClose={() => setPanelAksi(null)}
+        onSelesai={fetchLeads}
+      />
+
+      <ConfirmDialog
+        open={Boolean(hapusLead)}
+        title="Hapus prospek ini?"
+        message={hapusLead ? `\u201c${hapusLead.name}\u201d akan dihapus permanen dan tidak bisa dikembalikan.` : ""}
+        warning="Riwayat follow-up prospek ini ikut terhapus. Untuk menutup prospek tanpa kehilangan jejaknya, pakai Batalkan Prospek — alasannya akan tercatat."
+        busy={hapusSibuk}
+        error={hapusGalat}
+        onCancel={() => {
+          if (!hapusSibuk) {
+            setHapusLead(null);
+            setHapusGalat("");
+          }
+        }}
+        onConfirm={async () => {
+          setHapusSibuk(true);
+          const { error: e } = await supabase.from("leads").delete().eq("id", hapusLead.id);
+          setHapusSibuk(false);
+          if (e) {
+            setHapusGalat(e.message);
+            return;
+          }
+          setHapusLead(null);
+          setPanelLead(null);
+          toast.sukses("Prospek dihapus.");
+          fetchLeads();
+        }}
       />
     </div>
   );

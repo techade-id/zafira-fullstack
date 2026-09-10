@@ -304,3 +304,213 @@ select test.affects(
   'Sales tidak dapat mengubah template',
   $$update business_settings set value = 'Diubah Sales' where category = 'wa_template' and label = 'hot'$$,
   0);
+
+
+-- ---------- pemberkasan: syarat per bank, BI-Checking, RPC (migration_015) ----------
+select test.bagian('Pemberkasan');
+
+set test.uid = '44444444-4444-4444-4444-444444444444';  -- Admin Marketing
+
+select test.ok(
+  'Syarat berkas bawaan terpasang',
+  (select count(*) >= 12 from bank_doc_requirements where bank = '*'));
+
+select test.ok(
+  'Dokumen situasional ditandai tidak wajib',
+  (select count(*) > 0 from bank_doc_requirements where bank = '*' and not wajib));
+
+-- Satu bank boleh punya daftarnya sendiri, dan itu menimpa daftar bawaan.
+insert into bank_doc_requirements (bank, doc_type, wajib, sort_order)
+values ('Bank BTN Brebes', 'KTP Pemohon', true, 1),
+       ('Bank BTN Brebes', 'Surat Keterangan Belum Memiliki Rumah', true, 2);
+select test.eq_query(
+  'Bank boleh punya daftar syarat sendiri',
+  $$select count(*)::text from bank_doc_requirements where bank = 'Bank BTN Brebes'$$,
+  '2');
+
+select test.raises(
+  'Satu dokumen tidak boleh didaftar dua kali untuk bank yang sama',
+  $$insert into bank_doc_requirements (bank, doc_type) values ('Bank BTN Brebes', 'KTP Pemohon')$$,
+  'duplicate key');
+
+-- Admin Marketing-lah yang tahu bank meminta apa, jadi ia boleh mengubahnya.
+select test.affects(
+  'Admin Marketing boleh mengubah syarat berkas',
+  $$update bank_doc_requirements set wajib = false where bank = 'Bank BTN Brebes' and doc_type = 'KTP Pemohon'$$,
+  1);
+
+-- Sales tidak: ini data referensi, bukan pekerjaan hariannya.
+set test.uid = '11111111-1111-1111-1111-111111111111';
+select test.affects(
+  'Sales tidak dapat mengubah syarat berkas',
+  $$update bank_doc_requirements set wajib = true where bank = '*' and doc_type = 'NPWP'$$,
+  0);
+
+-- BI-Checking hanya menerima nilai yang dikenal; salah ketik harus ditolak
+-- sekarang, bukan muncul sebagai status hantu di layar Admin Marketing.
+set test.uid = '44444444-4444-4444-4444-444444444444';
+select test.raises(
+  'Status BI-Checking di luar daftar ditolak',
+  $$update customer_kpr set bi_checking_status = 'kira-kira lolos'
+     where customer_id = (select id from customers where lead_id = '09000000-0000-0000-0000-0000000000b1')$$,
+  'customer_kpr_bi_checking_status_check');
+
+-- Bagian Notifikasi di atas sudah menerbitkan SP3K untuk konsumen ini, dan
+-- peringatan BI-Checking memang berhenti berlaku begitu SP3K keluar. Supaya
+-- ketiga uji di bawah benar-benar menguji sesuatu — bukan lolos secara hampa —
+-- keadaannya dikembalikan ke "berkas di bank, SP3K belum terbit".
+update customer_kpr
+   set tanggal_sp3k_terbit = null, tanggal_sp3k_expired = null,
+       bi_checking_status = 'lolos', bi_checking_tanggal = current_date,
+       penghasilan_verifikasi = 4000000, angsuran_bulanan = 1200000
+ where customer_id = (select id from customers where lead_id = '09000000-0000-0000-0000-0000000000b1');
+select test.eq_query(
+  'BI-Checking dan RPC tersimpan',
+  $$select bi_checking_status from customer_kpr
+     where customer_id = (select id from customers where lead_id = '09000000-0000-0000-0000-0000000000b1')$$,
+  'lolos');
+
+-- Berkas ini sudah di bank dan BI-Checking-nya lolos, jadi tidak boleh muncul
+-- sebagai peringatan; rasio angsurannya 30% — masih di bawah sepertiga.
+select test.ok(
+  'Berkas dengan BI-Checking lolos tidak diperingatkan',
+  (select count(*) = 0 from json_array_elements(my_notifications()->'items') i
+    where i->>'kategori' = 'bi_checking' and i->>'judul' = 'Konversi Sukses'));
+select test.ok(
+  'Angsuran 30% dari penghasilan tidak diperingatkan',
+  (select count(*) = 0 from json_array_elements(my_notifications()->'items') i
+    where i->>'kategori' = 'rpc' and i->>'judul' = 'Konversi Sukses'));
+
+-- Dinaikkan melewati sepertiga: sekarang harus muncul.
+update customer_kpr set angsuran_bulanan = 1600000
+ where customer_id = (select id from customers where lead_id = '09000000-0000-0000-0000-0000000000b1');
+select test.ok(
+  'Angsuran di atas sepertiga penghasilan diperingatkan',
+  (select count(*) > 0 from json_array_elements(my_notifications()->'items') i
+    where i->>'kategori' = 'rpc' and i->>'judul' = 'Konversi Sukses'));
+
+-- BI-Checking dicabut: berkas sudah di bank tanpa hasil, itu yang paling mahal.
+update customer_kpr set bi_checking_status = null
+ where customer_id = (select id from customers where lead_id = '09000000-0000-0000-0000-0000000000b1');
+select test.ok(
+  'Berkas di bank tanpa BI-Checking diperingatkan',
+  (select count(*) > 0 from json_array_elements(my_notifications()->'items') i
+    where i->>'kategori' = 'bi_checking' and i->>'judul' = 'Konversi Sukses'));
+
+
+-- ---------- pembatalan prospek & pengalihan agen (migration_016) ----------
+select test.bagian('Pembatalan Prospek');
+
+reset role;
+insert into leads (id, name, phone, status, assigned_to) values
+  ('09000000-0000-0000-0000-0000000000c1', 'Prospek Dibatalkan A', '0812222001', 'warm', '11111111-1111-1111-1111-111111111111'),
+  ('09000000-0000-0000-0000-0000000000c2', 'Prospek Dialihkan',    '0812222002', 'hot',  '11111111-1111-1111-1111-111111111111'),
+  ('09000000-0000-0000-0000-0000000000c3', 'Milik Sales B',        '0813222003', 'warm', '22222222-2222-2222-2222-222222222222');
+set role authenticated;
+
+set test.uid = '11111111-1111-1111-1111-111111111111';
+
+select test.raises(
+  'Pembatalan tanpa alasan ditolak',
+  $$select cancel_lead('09000000-0000-0000-0000-0000000000c1', '   ')$$,
+  'wajib diisi');
+
+select cancel_lead('09000000-0000-0000-0000-0000000000c1', 'Tidak lolos BI-Checking', 'SLIK menunjukkan tunggakan aktif');
+
+select test.eq_query(
+  'Prospek berubah menjadi cancel',
+  $$select status::text from leads where id = '09000000-0000-0000-0000-0000000000c1'$$,
+  'cancel');
+
+-- Inilah yang selama ini hilang: alasannya, bukan hanya statusnya.
+select test.eq_query(
+  'Alasan pembatalan tercatat',
+  $$select reason from cancellations where lead_id = '09000000-0000-0000-0000-0000000000c1'$$,
+  'Tidak lolos BI-Checking');
+
+select test.eq_query(
+  'Tahap saat batal ikut disalin',
+  $$select tahap_saat_batal from cancellations where lead_id = '09000000-0000-0000-0000-0000000000c1'$$,
+  'warm');
+
+select test.eq_query(
+  'Jadwal follow-up ikut dikosongkan',
+  $$select (tanggal_rencana is null)::text from leads where id = '09000000-0000-0000-0000-0000000000c1'$$,
+  'true');
+
+select test.eq_query(
+  'Pembatalan meninggalkan jejak di riwayat',
+  $$select activity from lead_activities
+     where lead_id = '09000000-0000-0000-0000-0000000000c1' and activity = 'Prospek dibatalkan'$$,
+  'Prospek dibatalkan');
+
+select test.raises(
+  'Prospek yang sudah batal tidak bisa dibatalkan lagi',
+  $$select cancel_lead('09000000-0000-0000-0000-0000000000c1', 'Alasan sepihak')$$,
+  'sudah dibatalkan');
+
+-- Satu baris pembatalan hanya boleh menunjuk salah satu, bukan keduanya.
+select test.raises(
+  'Pembatalan tidak boleh menunjuk prospek dan konsumen sekaligus',
+  $$insert into cancellations (lead_id, customer_id, reason)
+    values ('09000000-0000-0000-0000-0000000000c2',
+            (select id from customers where lead_id = '09000000-0000-0000-0000-0000000000b1'), 'Ganda')$$,
+  'cancellations_satu_pemilik');
+
+-- RLS yang menahannya, bukan pemeriksaan peran di dalam fungsi.
+-- Prospek milik agen lain tidak "ditolak" melainkan tidak terlihat: SELECT di
+-- dalam cancel_lead tunduk pada RLS yang sama. Pesannya menyebut kedua
+-- kemungkinan, karena dari sisi pemanggil keduanya memang tak terbedakan.
+select test.raises(
+  'Sales tidak dapat membatalkan prospek agen lain',
+  $$select cancel_lead('09000000-0000-0000-0000-0000000000c3', 'Alasan sepihak')$$,
+  'bukan milik Anda');
+
+-- ---------- pengalihan agen ----------
+select test.bagian('Pengalihan Prospek');
+
+set test.uid = '11111111-1111-1111-1111-111111111111';
+select transfer_lead('09000000-0000-0000-0000-0000000000c2', '22222222-2222-2222-2222-222222222222', 'Sales A cuti panjang');
+
+-- Diperiksa sebagai peran yang boleh melihat lintas agen. Sebagai Sales A,
+-- barisnya justru sudah hilang dari pandangan begitu diserahkan — dan
+-- kehilangan itu sendiri adalah bukti pengalihannya berhasil.
+set test.uid = '44444444-4444-4444-4444-444444444444';
+select test.eq_query(
+  'Prospek berpindah ke agen tujuan',
+  $$select assigned_to::text from leads where id = '09000000-0000-0000-0000-0000000000c2'$$,
+  '22222222-2222-2222-2222-222222222222');
+
+select test.eq_query(
+  'Pengalihan tercatat di riwayat',
+  $$select activity from lead_activities
+     where lead_id = '09000000-0000-0000-0000-0000000000c2' and activity = 'Prospek dialihkan'$$,
+  'Prospek dialihkan');
+
+set test.uid = '11111111-1111-1111-1111-111111111111';
+-- Setelah diserahkan, pemilik lama kehilangan jangkauannya — itu memang RLS
+-- bekerja, dan karena itu pula transfer_lead harus SECURITY DEFINER.
+select test.raises(
+  'Pemilik lama tidak bisa menarik kembali prospeknya',
+  $$select transfer_lead('09000000-0000-0000-0000-0000000000c2', '11111111-1111-1111-1111-111111111111')$$,
+  'bukan milik Anda');
+
+set test.uid = '22222222-2222-2222-2222-222222222222';
+select test.raises(
+  'Mengalihkan ke agen yang sama ditolak',
+  $$select transfer_lead('09000000-0000-0000-0000-0000000000c2', '22222222-2222-2222-2222-222222222222')$$,
+  'sudah dipegang');
+
+select test.raises(
+  'Agen tujuan yang tidak ada ditolak',
+  $$select transfer_lead('09000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-000000000000')$$,
+  'tidak ditemukan');
+
+-- Penyelia boleh memindahkan milik siapa pun — itulah gunanya saat seorang
+-- Sales berhenti dan prospeknya harus diselamatkan.
+set test.uid = '44444444-4444-4444-4444-444444444444';
+select transfer_lead('09000000-0000-0000-0000-0000000000c2', '11111111-1111-1111-1111-111111111111');
+select test.eq_query(
+  'Admin Marketing boleh memindahkan prospek milik siapa pun',
+  $$select assigned_to::text from leads where id = '09000000-0000-0000-0000-0000000000c2'$$,
+  '11111111-1111-1111-1111-111111111111');
