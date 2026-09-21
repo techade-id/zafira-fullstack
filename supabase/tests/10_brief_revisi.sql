@@ -547,3 +547,209 @@ select test.eq_query(
   'Penyapuan tidak menyentuh prospek yang sudah booking',
   $$select status::text from leads where id = '10000000-0000-0000-0000-0000000000b3'$$,
   'booking');
+
+
+-- ============================================================
+select test.bagian('Aturan berlaku untuk data lama juga');
+-- ============================================================
+
+-- Sebuah CHECK yang dibiarkan NOT VALID adalah aturan yang hanya setengah
+-- berlaku: baris lama melanggarnya diam-diam, dan tidak ada layar yang akan
+-- memberi tahu siapa pun. Yang diuji di sini bukan perilakunya, melainkan
+-- keadaan constraint-nya sendiri.
+select test.eq_query(
+  'Aturan sumber leads sudah tervalidasi untuk seluruh baris',
+  $$select convalidated::text from pg_constraint
+     where conrelid = 'leads'::regclass and conname = 'leads_source_type_check'$$,
+  'true');
+
+select test.eq_query(
+  'Aturan keterangan organik sudah tervalidasi untuk seluruh baris',
+  $$select convalidated::text from pg_constraint
+     where conrelid = 'leads'::regclass and conname = 'leads_organik_detail_check'$$,
+  'true');
+
+-- Keterangan yang hanya berisi spasi sama saja dengan kosong.
+select test.raises(
+  'Keterangan organik berisi spasi ditolak',
+  $$insert into leads (name, phone, status, source_type, organik_detail, assigned_to)
+    values ('Organik Spasi', '0812666001', 'warm', 'organik', '   ',
+            '11111111-1111-1111-1111-111111111111')$$,
+  'organik_detail');
+
+
+-- ============================================================
+select test.bagian('Lampiran hanya untuk tahap berkas');
+-- ============================================================
+
+-- Kuitansi dan bukti transfer sengaja TIDAK punya slot di sini: keduanya
+-- melekat pada sebuah pembayaran, bukan pada sebuah tahap. Satu konsumen bisa
+-- punya beberapa setoran DP, dan slot per tahap membuat buktinya menumpuk
+-- tanpa cara mengetahui mana milik setoran mana.
+select test.raises(
+  'Slot kuitansi booking ditolak — tempatnya di payments',
+  $$insert into berkas_lampiran (customer_id, slot, file_url)
+    select id, 'kwitansi_booking', 'x.pdf' from customers
+     where lead_id = '10000000-0000-0000-0000-0000000000c1'$$,
+  'slot_check');
+
+select test.raises(
+  'Slot bukti transfer DP ditolak — tempatnya di payments',
+  $$insert into berkas_lampiran (customer_id, slot, file_url)
+    select id, 'bukti_transfer_dp', 'x.pdf' from customers
+     where lead_id = '10000000-0000-0000-0000-0000000000c1'$$,
+  'slot_check');
+
+
+-- ============================================================
+select test.bagian('Saringan awal di area konsumen');
+-- ============================================================
+
+-- Brief menempatkan survei dan BI-Checking "di area konsumen", sementara di
+-- kalimat lain menyebut seseorang baru disebut konsumen setelah booking.
+-- Keduanya dilayani: dicatat sejak prospek (diuji di atas), DAN tetap bisa
+-- diisi langsung pada berkas konsumen — termasuk konsumen yang memang tidak
+-- pernah melewati tahap prospek sama sekali.
+reset role;
+insert into customers (id, name, phone, status, sales_agent_id)
+values ('10000000-0000-0000-0000-0000000000e1', 'Konsumen Tanpa Prospek', '0812777001', 'proses',
+        '11111111-1111-1111-1111-111111111111');
+set role authenticated;
+set test.uid = '44444444-4444-4444-4444-444444444444';
+
+select test.affects(
+  'Survei dan BI-Checking dapat diisi langsung pada berkas konsumen',
+  $$insert into customer_kpr (customer_id, tanggal_survei, bi_checking_status, bi_checking_tanggal)
+    values ('10000000-0000-0000-0000-0000000000e1', current_date - 1, 'lolos', current_date)$$,
+  1);
+
+select test.eq_query(
+  'Berkas konsumen tanpa prospek tetap menyimpan saringan awalnya',
+  $$select bi_checking_status from customer_kpr
+     where customer_id = '10000000-0000-0000-0000-0000000000e1'$$,
+  'lolos');
+
+-- Konsumen tanpa prospek tidak boleh membuat trigger tahap funnel meledak:
+-- sync_lead_stage_from_kpr() harus diam ketika lead_id-nya null.
+select test.affects(
+  'Tahap KPR konsumen tanpa prospek tidak menyentuh funnel',
+  $$update customer_kpr set tanggal_booking = current_date
+     where customer_id = '10000000-0000-0000-0000-0000000000e1'$$,
+  1);
+
+
+-- ============================================================
+select test.bagian('Catatan terakhir mengalahkan survei');
+-- ============================================================
+
+-- Aturan utama brief, dan yang paling mudah dilanggar tanpa terlihat: catatan
+-- "kurang minat" HARUS membuat prospek Cold — termasuk prospek yang sudah
+-- disurvei. Urutan pemeriksaan pernah terbalik di sini, dan akibatnya orang
+-- yang jelas-jelas menolak tetap tampil sebagai Hot Lead di dashboard.
+reset role;
+insert into leads (id, name, phone, status, assigned_to, tanggal_survei) values
+  ('10000000-0000-0000-0000-00000000f001', 'Disurvei Lalu Menolak', '0812888001', 'warm',
+   '11111111-1111-1111-1111-111111111111', current_date - 7),
+  ('10000000-0000-0000-0000-00000000f002', 'Disurvei Lalu Diam', '0812888002', 'warm',
+   '11111111-1111-1111-1111-111111111111', current_date - 40),
+  ('10000000-0000-0000-0000-00000000f003', 'Disurvei Dan Aktif', '0812888003', 'warm',
+   '11111111-1111-1111-1111-111111111111', current_date - 3);
+
+insert into lead_activities (lead_id, actor_id, activity, note, created_at) values
+  ('10000000-0000-0000-0000-00000000f001', '11111111-1111-1111-1111-111111111111',
+   'WhatsApp', 'Setelah survei jadi kurang minat, terlalu jauh dari kantor', now() - interval '1 day'),
+  ('10000000-0000-0000-0000-00000000f002', '11111111-1111-1111-1111-111111111111',
+   'WhatsApp', 'Menanyakan sisa unit', now() - interval '30 days'),
+  ('10000000-0000-0000-0000-00000000f003', '11111111-1111-1111-1111-111111111111',
+   'WhatsApp', 'Menanyakan sisa unit', now() - interval '2 days');
+set role authenticated;
+set test.uid = '11111111-1111-1111-1111-111111111111';
+
+select test.eq_query(
+  'Prospek yang sudah disurvei lalu bilang "kurang minat" menjadi Cold',
+  $$select status::text from leads where id = '10000000-0000-0000-0000-00000000f001'$$,
+  'cold');
+
+select test.eq_query(
+  'Prospek yang sudah disurvei lalu menghilang 30 hari menjadi Cold',
+  $$select lead_temperature('10000000-0000-0000-0000-00000000f002')$$,
+  'cold');
+
+select test.eq_query(
+  'Prospek yang sudah disurvei dan masih dihubungi tetap Hot',
+  $$select lead_temperature('10000000-0000-0000-0000-00000000f003')$$,
+  'hot');
+
+-- Penyapuan berbasis waktu juga harus menjangkau prospek yang sudah disurvei;
+-- mengecualikannya berarti kehilangan yang paling mahal tidak pernah muncul di
+-- daftar yang perlu dikejar.
+reset role;
+update leads set status = 'warm' where id = '10000000-0000-0000-0000-00000000f002';
+set role authenticated;
+set test.uid = '11111111-1111-1111-1111-111111111111';
+
+select refresh_lead_temperature();
+
+select test.eq_query(
+  'Penyapuan ikut mendinginkan prospek yang sudah disurvei tetapi mandek',
+  $$select status::text from leads where id = '10000000-0000-0000-0000-00000000f002'$$,
+  'cold');
+
+-- Penyapuan dijalankan juga oleh Admin Marketing, yang bukan pemilik prospek
+-- mana pun. Sebagai SECURITY INVOKER ia akan diam-diam tidak melakukan
+-- apa-apa — dan tidak ada yang akan menyadarinya.
+reset role;
+update leads set status = 'warm' where id = '10000000-0000-0000-0000-00000000f002';
+set role authenticated;
+set test.uid = '44444444-4444-4444-4444-444444444444';
+
+select refresh_lead_temperature();
+
+select test.eq_query(
+  'Penyapuan oleh Admin Marketing benar-benar berjalan',
+  $$select status::text from leads where id = '10000000-0000-0000-0000-00000000f002'$$,
+  'cold');
+
+
+-- ============================================================
+select test.bagian('Nominal membeku setelah diserahkan');
+-- ============================================================
+
+set test.uid = '11111111-1111-1111-1111-111111111111';
+
+-- Pembayaran baru, masih 'menunggu': selama belum diserahkan, koreksi nominal
+-- memang harus boleh — yang salah ketik hari ini dibetulkan hari ini juga.
+insert into payments (id, customer_id, payment_type, amount, payment_date)
+select '10000000-0000-0000-0000-00000000f101', id, 'termin', 8000000, current_date
+  from customers where lead_id = '10000000-0000-0000-0000-0000000000c1';
+
+select test.affects(
+  'Nominal masih bisa dibetulkan selama bukti belum diserahkan',
+  $$update payments set amount = 9000000 where id = '10000000-0000-0000-0000-00000000f101'$$,
+  1);
+
+select test.affects(
+  'Bukti transfer diserahkan ke Finance',
+  $$update payments set bukti_transfer_url = 'cust/termin.jpg', status = 'menunggu_verifikasi'
+     where id = '10000000-0000-0000-0000-00000000f101'$$,
+  1);
+
+-- Sesudah diserahkan, angkanya membeku: yang diverifikasi Finance harus sama
+-- dengan yang tertulis, dan perubahan diam-diam tidak meninggalkan jejak.
+select test.raises(
+  'Nominal tidak bisa diubah setelah bukti diserahkan ke Finance',
+  $$update payments set amount = 1 where id = '10000000-0000-0000-0000-00000000f101'$$,
+  'tidak bisa diubah');
+
+select test.raises(
+  'Tanggal pembayaran ikut membeku',
+  $$update payments set payment_date = current_date - 30
+     where id = '10000000-0000-0000-0000-00000000f101'$$,
+  'tidak bisa diubah');
+
+-- Yang tetap boleh: membetulkan bukti yang salah unggah.
+select test.affects(
+  'Bukti yang salah unggah tetap bisa diganti',
+  $$update payments set bukti_transfer_url = 'cust/termin-benar.jpg'
+     where id = '10000000-0000-0000-0000-00000000f101'$$,
+  1);

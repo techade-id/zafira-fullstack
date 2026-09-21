@@ -6,6 +6,8 @@
 -- Run this before handing the system over for real use.
 -- ============================================================
 
+delete from berkas_lampiran    where id::text like '5eed%';
+delete from lead_activities    where id::text like '5eed%';
 delete from task_evaluations   where id::text like '5eed%';
 delete from project_tasks      where id::text like '5eed%';
 delete from complaints         where id::text like '5eed%';

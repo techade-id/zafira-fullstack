@@ -132,19 +132,30 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai }) {
       return;
     }
 
-    const { error: errLead } = await supabase
+    // `.select()` bukan hiasan: policy leads_update hanya mengenal admin dan
+    // sales pemiliknya, sementara tombol "Catat Follow Up" juga diberikan
+    // kepada Admin Marketing dan Finance. Bagi mereka pembaruan ini mengenai
+    // NOL baris — dan PostgREST tidak menganggapnya kesalahan, sehingga tanpa
+    // pemeriksaan ini layar akan mengabarkan jadwal yang tidak pernah
+    // tersimpan, lalu prospeknya hilang dari antrean tanpa sebab.
+    const { data: terubah, error: errLead } = await supabase
       .from("leads")
       .update({
         tanggal_rencana: tanggalRencana || null,
         rencana_selanjutnya: rencana.trim() || null,
         kategori_rencana: kategori || null,
       })
-      .eq("id", lead.id);
+      .eq("id", lead.id)
+      .select("id");
 
     setKirim(false);
 
     if (errLead) {
       toast.gagal(`Catatan tersimpan, tetapi jadwalnya gagal: ${errLead.message}`);
+    } else if (!terubah || terubah.length === 0) {
+      toast.gagal(
+        "Catatan tersimpan, tetapi jadwal follow-up tidak dapat diubah — prospek ini bukan milik Anda. Mintalah agen pemiliknya yang menjadwalkan."
+      );
     } else {
       toast.sukses(
         `Follow-up ${lead.name} tercatat — dihubungi lagi ${new Date(`${tanggalRencana}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}.`

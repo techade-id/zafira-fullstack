@@ -262,7 +262,7 @@ function peringatan(kpr) {
   return hasil;
 }
 
-export default function KprStepper({ kpr, customerId, editable, onChange }) {
+export default function KprStepper({ kpr, customerId, editable, onChange, onBerkasUbah }) {
   const toast = useToast();
   const banks = useBusinessSettings("bank");
   const progresBerkas = useBusinessSettings("progres_berkas");
@@ -380,9 +380,19 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
       toast.gagal(error.message);
       return;
     }
-    const baris = { ...nilai, proses_bank_at: data, tanggal_masuk_bank: nilai.tanggal_masuk_bank || new Date().toISOString().slice(0, 10) };
+    // Barisnya dibaca kembali, bukan ditebak. tandai_proses_bank() mengisi
+    // tanggal_masuk_bank dengan current_date milik server; menyusunnya sendiri
+    // dari new Date().toISOString() memakai tanggal UTC, yang tujuh jam pertama
+    // setiap hari di WIB masih menunjuk hari kemarin.
+    const { data: segar } = await supabase
+      .from("customer_kpr")
+      .select("*")
+      .eq("customer_id", customerId)
+      .maybeSingle();
+
+    const baris = segar || { ...nilai, proses_bank_at: data };
     tersimpanRef.current = { ...tersimpanRef.current, ...baris };
-    setNilai(baris);
+    setNilai((v) => ({ ...v, ...baris }));
     toast.sukses("Berkas dinyatakan lengkap dan diproses ke bank.");
     onChange?.(baris);
   }
@@ -691,7 +701,13 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
                         customerId={customerId}
                         bank={nilai.nama_bank}
                         editable={editable}
-                        onChange={() => setSegarBerkas((v) => v + 1)}
+                        onChange={() => {
+                          setSegarBerkas((v) => v + 1);
+                          // Jumlah dokumen juga tampil sebagai lencana pada tab
+                          // di induk; tanpa kabar ini ia akan tetap menunjukkan
+                          // angka sebelum unggahan sampai halaman dimuat ulang.
+                          onBerkasUbah?.();
+                        }}
                       />
 
                       <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap" }}>

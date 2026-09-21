@@ -251,3 +251,140 @@ insert into holidays (tanggal, keterangan) values
   (date_trunc('year', current_date)::date + 116, 'Hari Buruh'),
   (date_trunc('year', current_date)::date + 226, 'Hari Kemerdekaan RI')
 on conflict (tanggal) do nothing;
+
+
+-- ============================================================
+-- BRIEF ZAFIRA PROPERTY (migration_017) — data demo untuk alur yang baru
+--
+-- Tanpa bagian ini, menu Follow Up Leads, tahap Survei/Saringan Awal, dan fase
+-- "menunggu verifikasi" akan tampak kosong pada demo — bukan karena fiturnya
+-- tidak jalan, melainkan karena tidak ada satu baris pun yang memakainya.
+-- ============================================================
+
+-- ---------- Sumber leads yang sudah dipecah empat ----------
+-- Prospek demo lama hanya punya kolom `source` berupa teks. Dipetakan ke
+-- source_type supaya kartu "Jumlah Sumber Leads" pada dashboard memperlihatkan
+-- keempat sumber, bukan satu tumpukan "Tidak diketahui".
+update leads set source_type = 'ads'       where id::text like '5eed%' and source in ('Instagram', 'Tiktok', 'Ads');
+update leads set source_type = 'freelance' where id::text like '5eed%' and source = 'Freelance';
+update leads
+   set source_type = 'organik',
+       organik_kategori = 'Event',
+       organik_detail = 'Pameran Kota Brebes'
+ where id::text like '5eed%' and coalesce(source_type, '') = '';
+
+-- ---------- Saringan awal: survei dan BI-Checking sebelum booking ----------
+-- Tiga keadaan yang berbeda, supaya peringatan dan penolakan konversi
+-- dua-duanya bisa dilihat pada demo.
+update leads
+   set tanggal_survei = current_date - 6,
+       catatan_survei = 'Lokasi cocok, dekat sekolah anak',
+       bi_checking_status = 'lolos',
+       bi_checking_tanggal = current_date - 4
+ where id = '5eed0001-0000-4000-8000-000000000010';
+
+update leads
+   set tanggal_survei = current_date - 9,
+       catatan_survei = 'Minta unit hook',
+       bi_checking_status = 'menunggu',
+       bi_checking_tanggal = current_date - 2
+ where id = '5eed0001-0000-4000-8000-000000000011';
+
+update leads
+   set bi_checking_status = 'tidak_lolos',
+       bi_checking_tanggal = current_date - 3,
+       bi_checking_catatan = 'Ada tunggakan kartu kredit'
+ where id = '5eed0001-0000-4000-8000-000000000012';
+
+-- ---------- Antrean follow-up ----------
+-- Suhu prospek ditulis trigger dari catatan di bawah, jadi statusnya sengaja
+-- TIDAK diisi tangan di sini — inilah yang justru ingin diperlihatkan.
+insert into lead_activities (id, lead_id, actor_id, activity, hasil, note, created_at) values
+  ('5eed0013-0000-4000-8000-000000000000', '5eed0001-0000-4000-8000-000000000010',
+   (select id from profiles order by created_at limit 1),
+   'WhatsApp', 'Siap Booking', 'Sudah survei, siap booking minggu depan', now() - interval '1 day'),
+  ('5eed0013-0000-4000-8000-000000000001', '5eed0001-0000-4000-8000-000000000011',
+   (select id from profiles order by created_at limit 1),
+   -- Sengaja tanpa kata kunci yang panas: demo perlu memperlihatkan ketiga
+   -- suhu, dan "minta simulasi angsuran" justru terbaca sebagai sinyal beli.
+   'Telepon', 'Masih Pertimbangan', 'Masih menimbang dulu, mau bicara dengan istri', now() - interval '2 days'),
+  ('5eed0013-0000-4000-8000-000000000002', '5eed0001-0000-4000-8000-000000000012',
+   (select id from profiles order by created_at limit 1),
+   'WhatsApp', 'Tidak Berminat', 'Kurang minat, mau cari yang lebih dekat kota', now() - interval '3 days'),
+  -- Hangat murni: tidak ada survei, tidak ada kata kunci yang menonjol. Ini
+  -- keadaan bawaan sebagian besar prospek, dan demo perlu memperlihatkannya
+  -- berdampingan dengan Hot dan Cold.
+  ('5eed0013-0000-4000-8000-000000000004', '5eed0001-0000-4000-8000-000000000015',
+   (select id from profiles order by created_at limit 1),
+   'WhatsApp', 'Masih Pertimbangan', 'Menanyakan sisa unit, masih menimbang dulu', now() - interval '1 day'),
+  -- Didiamkan lama: inilah yang disapu refresh_lead_temperature() menjadi Cold.
+  ('5eed0013-0000-4000-8000-000000000003', '5eed0001-0000-4000-8000-000000000014',
+   (select id from profiles order by created_at limit 1),
+   'WhatsApp', null, 'Menanyakan lokasi dan harga', now() - interval '40 days')
+on conflict (id) do nothing;
+
+-- Jadwal tindak lanjut: satu terlewat, satu hari ini, satu akan datang.
+update leads set tanggal_rencana = current_date - 2, rencana_selanjutnya = 'Kirim simulasi angsuran BTN'
+ where id = '5eed0001-0000-4000-8000-000000000010';
+update leads set tanggal_rencana = current_date, rencana_selanjutnya = 'Atur jadwal survei ulang'
+ where id = '5eed0001-0000-4000-8000-000000000011';
+-- Prospek ini sudah disurvei tetapi catatan terakhirnya masih menimbang, jadi
+-- sistem menahannya di Warm: kata pada catatan TERAKHIR mengalahkan survei,
+-- karena survei adalah kejadian kemarin sementara suhu menjawab hari ini.
+update leads set tanggal_rencana = current_date + 2, rencana_selanjutnya = 'Kirim daftar sisa unit'
+ where id = '5eed0001-0000-4000-8000-000000000015';
+update leads set tanggal_rencana = null, rencana_selanjutnya = null
+ where id = '5eed0001-0000-4000-8000-000000000014';
+
+-- ---------- Bukti transfer dan fase menunggu verifikasi ----------
+-- Dua pembayaran yang buktinya sudah masuk dan kini menunggu Finance. Kolom
+-- bukti_transfer_by sengaja dibiarkan kosong: tidak ada satu pun profil yang
+-- pasti ada di setiap pemasangan.
+update payments
+   set bukti_transfer_url = 'demo/bukti-transfer-termin.jpg',
+       bukti_transfer_at = now() - interval '2 days',
+       status = 'menunggu_verifikasi'
+ where id = '5eed0005-0000-4000-8000-000000000002';
+
+update payments
+   set bukti_transfer_url = 'demo/bukti-transfer-pelunasan.jpg',
+       bukti_transfer_at = now() - interval '1 day',
+       status = 'menunggu_verifikasi'
+ where id = '5eed0005-0000-4000-8000-000000000003';
+
+-- ---------- Saringan awal dan hasil akhir pada berkas konsumen ----------
+update customer_kpr
+   set tanggal_survei = current_date - 120,
+       catatan_survei = 'Survei bersama keluarga',
+       bi_checking_status = 'lolos',
+       bi_checking_tanggal = current_date - 118,
+       bphtb_status = 'lolos',
+       shm_balik_nama = 'sudah',
+       proses_bank_at = now() - interval '100 days'
+ where customer_id = '5eed0002-0000-4000-8000-000000000000';
+
+update customer_kpr
+   set tanggal_survei = current_date - 100,
+       bi_checking_status = 'lolos',
+       bi_checking_tanggal = current_date - 98,
+       bphtb_status = 'tidak_lolos'
+ where customer_id = '5eed0002-0000-4000-8000-000000000001';
+
+-- ---------- Lampiran per tahap ----------
+-- file_url menunjuk ke berkas yang tidak ada di bucket; yang ingin
+-- diperlihatkan adalah bentuk daftarnya, dan tombol "Lihat" memang akan gagal
+-- pada data demo.
+insert into berkas_lampiran (id, customer_id, slot, file_url, file_name, uploaded_at) values
+  ('5eed0014-0000-4000-8000-000000000000', '5eed0002-0000-4000-8000-000000000000', 'survei',
+   'demo/survei-1.jpg', 'survei-depan.jpg', now() - interval '120 days'),
+  ('5eed0014-0000-4000-8000-000000000001', '5eed0002-0000-4000-8000-000000000000', 'bi_checking',
+   'demo/slik-1.pdf', 'hasil-slik.pdf', now() - interval '118 days'),
+  ('5eed0014-0000-4000-8000-000000000002', '5eed0002-0000-4000-8000-000000000000', 'sp3k_terbit',
+   'demo/sp3k-1.pdf', 'sp3k.pdf', now() - interval '80 days'),
+  ('5eed0014-0000-4000-8000-000000000003', '5eed0002-0000-4000-8000-000000000000', 'akad',
+   'demo/akad-1.jpg', 'dokumentasi-akad.jpg', now() - interval '60 days'),
+  ('5eed0014-0000-4000-8000-000000000004', '5eed0002-0000-4000-8000-000000000000', 'berita_acara',
+   'demo/bast-1.pdf', 'berita-acara-serah-terima.pdf', now() - interval '40 days'),
+  ('5eed0014-0000-4000-8000-000000000005', '5eed0002-0000-4000-8000-000000000000', 'shm',
+   'demo/shm-1.pdf', 'sertifikat.pdf', now() - interval '20 days')
+on conflict (id) do nothing;

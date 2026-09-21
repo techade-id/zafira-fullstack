@@ -73,23 +73,63 @@ update leads l
    and l.source_type = 'freelance'
    and p.type = 'kemitraan';
 
+-- Data lama dirapikan lebih dulu, supaya aturannya bisa berlaku untuk SELURUH
+-- baris dan bukan hanya untuk yang akan datang.
+--
+-- Sebuah CHECK yang dibiarkan NOT VALID selamanya adalah aturan yang hanya
+-- setengah berlaku: baris lama tetap melanggarnya diam-diam, laporan sumber
+-- tetap memuat kategori yang tidak dikenal, dan tidak ada satu pun layar yang
+-- akan memberi tahu siapa pun. Lebih jujur menuliskan apa yang sebenarnya
+-- diketahui — termasuk ketika yang diketahui adalah "tidak tercatat" — lalu
+-- memvalidasinya.
+
+-- Nilai sumber di luar keempat pilihan dikosongkan, bukan ditebak. Kolom
+-- source teks lama tetap menyimpan bunyi aslinya, jadi tidak ada yang hilang.
+update leads
+   set source_type = null
+ where source_type is not null
+   and source_type not in ('ads', 'freelance', 'kemitraan', 'organik');
+
+-- Keterangan organik diambil dari yang paling dekat dengan kenyataan:
+-- kategorinya, lalu label sumber lama. Baris yang memang tidak pernah punya
+-- keterangan ditandai apa adanya — sebuah penanda yang bisa dicari dan
+-- dibereskan, bukan keterangan karangan yang akan dikira sungguhan.
+update leads
+   set organik_detail = coalesce(
+         nullif(btrim(organik_kategori), ''),
+         nullif(btrim(source), ''),
+         '(tidak tercatat)')
+ where source_type = 'organik'
+   and coalesce(btrim(organik_detail), '') = '';
+
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'leads_source_type_check') then
     alter table leads add constraint leads_source_type_check
-      check (source_type is null or source_type in ('ads', 'freelance', 'kemitraan', 'organik'))
-      not valid;
+      check (source_type is null or source_type in ('ads', 'freelance', 'kemitraan', 'organik'));
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'leads_organik_detail_check') then
+    alter table leads add constraint leads_organik_detail_check
+      check (source_type is distinct from 'organik' or coalesce(btrim(organik_detail), '') <> '');
   end if;
 end $$;
 
--- NOT VALID dengan sengaja: baris organik lama tidak punya keterangan, dan
--- memaksa mereka valid berarti menebak-nebak sesuatu yang tidak ada catatannya.
--- Aturannya berlaku untuk data baru, tempat aturan itu memang bisa dipenuhi.
-do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'leads_organik_detail_check') then
-    alter table leads add constraint leads_organik_detail_check
-      check (source_type is distinct from 'organik' or coalesce(organik_detail, '') <> '')
-      not valid;
-  end if;
+-- Proyek yang sempat menjalankan versi awal migrasi ini mendapat kedua CHECK
+-- dalam keadaan NOT VALID. Menjalankan ulang tidak akan membuatnya sah dengan
+-- sendirinya — `add constraint` di atas dilewati karena namanya sudah ada —
+-- jadi divalidasi di sini, setelah datanya dirapikan.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname from pg_constraint
+     where conrelid = 'leads'::regclass
+       and conname in ('leads_source_type_check', 'leads_organik_detail_check')
+       and not convalidated
+  loop
+    execute format('alter table leads validate constraint %I', c.conname);
+  end loop;
 end $$;
 
 
@@ -191,12 +231,9 @@ begin
   select l.tanggal_survei, l.bi_checking_status into v_survei, v_bi
     from leads l where l.id = p_lead_id;
 
-  -- Fakta mengalahkan kata-kata. Orang yang sudah disurvei atau sudah lolos
-  -- BI-Checking adalah prospek terpanas yang dimiliki perusahaan, apa pun
-  -- bunyi catatan terakhirnya.
-  if v_bi = 'lolos' or v_survei is not null then
-    return 'hot';
-  end if;
+  -- BI-Checking yang gagal adalah satu-satunya fakta yang mengalahkan segala
+  -- hal lain: pengajuannya memang tidak bisa diteruskan, seantusias apa pun
+  -- orangnya.
   if v_bi = 'tidak_lolos' then
     return 'cold';
   end if;
@@ -210,12 +247,37 @@ begin
 
   -- Belum pernah di-follow-up: tetap Warm, sesuai default saat prospek masuk.
   if v_terakhir is null then
+    -- Sudah disurvei atau lolos saringan tetapi belum ada catatan sama sekali:
+    -- perbuatannya sendiri sudah cukup menjadi sinyal.
+    if v_bi = 'lolos' or v_survei is not null then
+      return 'hot';
+    end if;
     return 'warm';
   end if;
 
+  -- Kata pada catatan TERAKHIR menang atas survei dan BI-Checking.
+  --
+  -- Urutan ini pernah terbalik, dan akibatnya persis melanggar aturan utama
+  -- brief: prospek yang sudah disurvei lalu berkata "kurang minat" tetap
+  -- ditandai Hot. Survei adalah sesuatu yang terjadi kemarin; catatan terakhir
+  -- adalah keadaan hari ini, dan suhu dimaksudkan untuk menjawab yang kedua.
   v_dari_teks := lead_temperature_from_text(v_teks);
   if v_dari_teks is not null then
     return v_dari_teks;
+  end if;
+
+  -- Didiamkan dua minggu setelah kontak terakhir: dingin, berapa pun jumlah
+  -- follow-up sebelumnya, dan sudah disurvei atau belum. Prospek yang hilang
+  -- setelah disurvei justru kehilangan yang paling mahal — menandainya Hot
+  -- hanya membuatnya tidak pernah muncul di daftar yang perlu dikejar.
+  if v_terakhir < now() - interval '14 days' then
+    return 'cold';
+  end if;
+
+  -- Baru sesudah itu fakta saringan awal berbicara: masih dihubungi, dan
+  -- sudah melewati survei atau BI-Checking.
+  if v_bi = 'lolos' or v_survei is not null then
+    return 'hot';
   end if;
 
   select count(*),
@@ -223,12 +285,6 @@ begin
     into v_jumlah, v_positif
     from lead_activities
    where lead_id = p_lead_id;
-
-  -- Didiamkan dua minggu setelah kontak terakhir: dingin, berapa pun jumlah
-  -- follow-up sebelumnya. Prospek tidak menjadi hangat karena pernah hangat.
-  if v_terakhir < now() - interval '14 days' then
-    return 'cold';
-  end if;
 
   if v_positif > 0 or v_jumlah >= 3 then
     return 'hot';
@@ -238,7 +294,7 @@ begin
 end $$;
 
 comment on function lead_temperature(uuid) is
-  'Suhu prospek dihitung dari saringan awal, kata kunci follow-up terakhir, lalu bentuk interaksinya. Tidak pernah dipilih tangan.';
+  'Suhu prospek: BI-Checking gagal, lalu kata kunci pada follow-up TERAKHIR, lalu kemandekan, lalu saringan awal, lalu bentuk interaksinya. Tidak pernah dipilih tangan.';
 
 
 create or replace function apply_lead_temperature(p_lead_id uuid)
@@ -330,10 +386,17 @@ create trigger leads_saringan_temperature
 -- Penyapuan suhu: aturan "didiamkan 14 hari menjadi dingin" bergantung pada
 -- waktu berjalan, bukan pada sebuah peristiwa, jadi tidak ada trigger yang
 -- bisa menyalakannya. Halaman Follow Up memanggil fungsi ini saat dibuka.
+-- SECURITY DEFINER dengan sengaja.
+--
+-- Ini rutin pemeliharaan, bukan pembacaan data: ia menerapkan aturan yang
+-- objektif dan tidak mengembalikan satu pun baris kepada pemanggil. Sebagai
+-- INVOKER ia akan diam-diam tidak melakukan apa-apa bagi Admin Marketing —
+-- policy leads_update hanya mengenal admin dan sales pemiliknya — padahal
+-- dialah salah satu yang paling sering membuka halaman Follow Up.
 create or replace function refresh_lead_temperature()
 returns int
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -366,8 +429,10 @@ begin
          limit 1
       ) a on true
      where l.status::text in ('leads', 'baru', 'warm', 'hot', 'dihubungi', 'appointment')
-       and l.tanggal_survei is null
-       and coalesce(l.bi_checking_status, '') = ''
+       -- Prospek yang sudah disurvei TIDAK dikecualikan: yang hilang setelah
+       -- disurvei justru kehilangan yang paling mahal, dan mengecualikannya
+       -- berarti ia tidak akan pernah muncul di daftar yang perlu dikejar.
+       and coalesce(l.bi_checking_status, '') <> 'tidak_lolos'
   ),
   sasaran as (
     select id from terakhir
@@ -388,7 +453,7 @@ end $$;
 grant execute on function refresh_lead_temperature() to authenticated;
 
 comment on function refresh_lead_temperature() is
-  'Menyegarkan suhu seluruh prospek pra-booking yang terlihat pemanggil. Menangkap aturan berbasis waktu yang tidak punya pemicu.';
+  'Menyegarkan suhu prospek pra-booking yang mandek lebih dari dua minggu. Menangkap satu-satunya aturan suhu yang bergantung pada waktu berjalan dan karena itu tidak punya pemicu.';
 
 
 -- ------------------------------------------------------------
@@ -414,10 +479,19 @@ create table if not exists berkas_lampiran (
   uploaded_by uuid references profiles(id) default auth.uid(),
   uploaded_at timestamptz not null default now(),
   constraint berkas_lampiran_pemilik_check check (lead_id is not null or customer_id is not null),
+  -- Sengaja TIDAK memuat slot untuk kuitansi dan bukti transfer.
+  --
+  -- Brief meminta keduanya pada tahap Booking dan DP, dan sempat masuk ke sini
+  -- sebagai slot tersendiri. Itu keliru: sebuah kuitansi melekat pada sebuah
+  -- PEMBAYARAN, bukan pada sebuah tahap. Satu konsumen bisa punya beberapa
+  -- pembayaran DP, dan slot per tahap memaksa semuanya menumpuk di satu kotak
+  -- tanpa cara mengetahui bukti mana milik setoran mana — persis pertanyaan
+  -- yang harus dijawab Finance saat memverifikasi.
+  --
+  -- Karena itu keduanya tinggal di payments.bukti_transfer_url dan
+  -- payments.proof_url, tempat mereka mewarisi pemisahan wewenangnya sendiri.
   constraint berkas_lampiran_slot_check check (slot in (
     'survei', 'bi_checking',
-    'kwitansi_booking', 'bukti_transfer_booking',
-    'bukti_transfer_dp',
     'sp3k_terbit', 'sp3k_perpanjangan',
     'akad', 'berita_acara',
     'bphtb', 'shm'
@@ -642,6 +716,20 @@ begin
     end if;
     if new.verified_by is distinct from old.verified_by then
       raise exception 'Kolom verifikator hanya boleh diisi Finance.' using errcode = '42501';
+    end if;
+    -- Nominal dan tanggal membeku begitu buktinya diserahkan ke Finance.
+    --
+    -- Policy update sengaja longgar sampai 'terverifikasi' supaya bukti yang
+    -- salah unggah masih bisa dibetulkan. Tetapi mengubah ANGKA-nya setelah
+    -- Finance menerima berkasnya adalah hal yang berbeda: yang diverifikasi
+    -- menjadi bukan lagi yang tertulis, dan tidak ada jejak bahwa ia pernah
+    -- berubah.
+    if old.status <> 'menunggu'
+       and (new.amount is distinct from old.amount
+            or new.payment_date is distinct from old.payment_date
+            or new.payment_type is distinct from old.payment_type) then
+      raise exception 'Pembayaran sudah diserahkan ke Finance — nominal, tanggal dan jenisnya tidak bisa diubah lagi.'
+        using errcode = '42501';
     end if;
   elsif new.status = 'terverifikasi' and old.status is distinct from 'terverifikasi' then
     new.verified_by := auth.uid();
@@ -1184,6 +1272,14 @@ language sql stable security invoker set search_path = public as $$
       ) r on true
      where coalesce(k.nama_bank, '') <> ''
        and k.proses_bank_at is null
+       -- Berkas yang sudah lewat SP3K/akad/serah terima jelas sudah sampai ke
+       -- bank, entah lewat tombol Proses Bank atau sebelum tombolnya ada.
+       -- Tanpa penjaga ini, konsumen yang sudah pegang kunci tetap menagih
+       -- dokumen selamanya — dan notifikasi yang tidak pernah bisa dituntaskan
+       -- adalah notifikasi yang berhenti dibaca.
+       and k.tanggal_sp3k_terbit is null
+       and k.tanggal_akad is null
+       and k.tanggal_serah_terima_kunci is null
        and c.status <> 'batal'
        and r.kurang > 0
   ),

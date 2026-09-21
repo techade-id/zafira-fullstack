@@ -72,7 +72,13 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
     () => rekap.baris.map((b, i) => ({ ...b, nomor: i + 1 })),
     [rekap.baris]
   );
-  const belum = bernomor.filter((b) => b.keadaan === "belum" || b.keadaan === "ditolak");
+  // Yang menahan "Proses Bank" hanyalah dokumen WAJIB — itulah aturan yang
+  // ditegakkan tandai_proses_bank() di server. Menghitung dokumen opsional
+  // sebagai kurang membuat layar menyalakan peringatan untuk berkas yang
+  // sebenarnya sudah boleh diproses, dan peringatan yang tidak bisa
+  // dituntaskan adalah peringatan yang berhenti dibaca.
+  const belum = bernomor.filter((b) => (b.keadaan === "belum" && b.wajib) || b.keadaan === "ditolak");
+  const opsionalKosong = bernomor.filter((b) => b.keadaan === "belum" && !b.wajib);
   const sudah = bernomor.filter((b) => b.keadaan !== "belum" && b.keadaan !== "ditolak");
 
   async function kirim(baris, file) {
@@ -179,7 +185,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
         >
           <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
           <span>
-            Sudah {sudah.length} dokumen, masih kurang <b>{belum.length}</b>:{" "}
+            Sudah {sudah.length} dokumen, masih kurang <b>{belum.length}</b> yang wajib:{" "}
             {belum.map((b) => `${b.nomor}. ${b.doc_type}`).join(" · ")}
           </span>
         </div>
@@ -201,7 +207,10 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
           }}
         >
           <Check size={15} aria-hidden="true" />
-          <span>Seluruh {rekap.baris.length} dokumen sudah diunggah.</span>
+          <span>
+            Seluruh {rekap.totalWajib} dokumen wajib sudah diunggah — berkas siap diproses ke bank.
+            {opsionalKosong.length > 0 && ` ${opsionalKosong.length} dokumen opsional belum ada.`}
+          </span>
         </div>
       )}
 
@@ -209,6 +218,23 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
       {belum.length > 0 && (
         <Bagian judul={`Belum diunggah (${belum.length})`} sorot>
           {belum.map((b) => (
+            <BarisBerkas
+              key={b.doc_type}
+              baris={b}
+              editable={editable}
+              unggah={unggah === b.doc_type}
+              onUnggah={(f) => kirim(b, f)}
+              onBuka={buka}
+              onStatus={ubahStatus}
+              onHapus={bolehHapus ? hapus : null}
+            />
+          ))}
+        </Bagian>
+      )}
+
+      {opsionalKosong.length > 0 && (
+        <Bagian judul={`Opsional, belum diunggah (${opsionalKosong.length})`}>
+          {opsionalKosong.map((b) => (
             <BarisBerkas
               key={b.doc_type}
               baris={b}

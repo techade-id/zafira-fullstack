@@ -17,7 +17,6 @@ import {
   Badge,
   EmptyState,
   BORDER,
-  SURFACE,
   TEXT_MID,
   TEXT_DARK,
   PRIMARY,
@@ -53,7 +52,6 @@ const TAB = [
 export default function KonsumenDetailPage() {
   const { id } = useParams();
   const { profile } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState("ringkasan");
@@ -221,7 +219,7 @@ export default function KonsumenDetailPage() {
 
       {tab === "kpr" && (
         <Card>
-          <KprStepper kpr={kpr} customerId={konsumen.id} editable={bolehBerkas} onChange={setKpr} />
+          <KprStepper kpr={kpr} customerId={konsumen.id} editable={bolehBerkas} onChange={setKpr} onBerkasUbah={muat} />
         </Card>
       )}
 
@@ -416,13 +414,3 @@ function TabPembayaran({ pembayaran }) {
   );
 }
 
-const gayaTautan = {
-  border: `1px solid ${BORDER}`,
-  background: SURFACE,
-  borderRadius: 8,
-  padding: "4px 10px",
-  fontSize: 11,
-  fontWeight: 600,
-  cursor: "pointer",
-  color: TEXT_DARK,
-};

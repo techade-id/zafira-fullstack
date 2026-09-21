@@ -56,6 +56,16 @@ constraint. Kolom `organik_detail` wajib saat sumbernya Organik — dijaga di
 formulir dan di database. Baris lama yang memakai mitra bertipe kemitraan
 dipindahkan otomatis oleh migrasi.
 
+Aturannya berlaku untuk **seluruh** baris, bukan hanya yang baru. Migrasi
+merapikan data lama lebih dulu — keterangan organik diambil dari kategorinya,
+lalu label sumber lama, dan baris yang memang tidak pernah punya keterangan
+ditandai `(tidak tercatat)`: sebuah penanda yang bisa dicari dan dibereskan,
+bukan keterangan karangan yang akan dikira sungguhan. Sumber di luar keempat
+pilihan dikosongkan, bukan ditebak. Setelah itu kedua CHECK divalidasi.
+Sebuah CHECK yang dibiarkan `NOT VALID` selamanya adalah aturan yang hanya
+setengah berlaku: baris lama tetap melanggarnya diam-diam, dan tidak ada satu
+pun layar yang akan memberi tahu siapa pun.
+
 > - Otomatisasi Status Leads: Saat input leads baru, status default harus
 >   langsung masuk ke "Warm" secara otomatis oleh sistem, bukan dipilih manual
 >   oleh sales
@@ -68,17 +78,33 @@ dipindahkan otomatis oleh migrasi.
 
 **Yang dikerjakan.** Tidak ada satu pun kontrol pengubah suhu yang tersisa di
 antarmuka. Prospek baru masuk sebagai Warm lewat trigger, dan sesudah itu
-`lead_temperature()` membacanya dari tiga hal berurutan:
+`lead_temperature()` membacanya dengan urutan prioritas berikut:
 
-1. **Fakta.** Sudah disurvei atau lolos BI-Checking → Hot. Tidak lolos → Cold.
-2. **Kata-kata pada follow-up terakhir.** Pola penolakan diperiksa lebih dulu,
+1. **BI-Checking tidak lolos → Cold.** Satu-satunya fakta yang mengalahkan
+   segalanya: pengajuannya memang tidak bisa diteruskan, seantusias apa pun
+   orangnya.
+2. **Kata-kata pada follow-up TERAKHIR.** Pola penolakan diperiksa lebih dulu,
    karena "tidak tertarik" memuat kata "tertarik".
-3. **Bentuk interaksinya.** Didiamkan lebih dari dua minggu → Cold. Direspons
-   berulang kali → Hot.
+3. **Kemandekan.** Didiamkan lebih dari dua minggu → Cold.
+4. **Saringan awal.** Sudah disurvei atau lolos BI-Checking → Hot.
+5. **Bentuk interaksinya.** Direspons berulang kali → Hot.
+
+Urutan 2 di atas 4 itu penting, dan sempat terbalik. Ketika survei
+didahulukan, prospek yang sudah disurvei lalu berkata "kurang minat" tetap
+ditandai **Hot** — persis kebalikan dari aturan yang brief tuliskan sebagai
+contohnya sendiri. Survei adalah sesuatu yang terjadi kemarin; catatan
+terakhir adalah keadaan hari ini, dan suhu dimaksudkan untuk menjawab yang
+kedua.
+
+Kemandekan juga berlaku bagi yang sudah disurvei. Prospek yang hilang setelah
+disurvei adalah kehilangan yang paling mahal — menahannya di Hot hanya membuat
+ia tidak pernah muncul di daftar yang perlu dikejar.
 
 Trigger pada `lead_activities` menerapkannya setiap kali catatan ditulis.
 Aturan yang bergantung pada waktu berjalan tidak punya peristiwa pemicu, jadi
-halaman Follow Up memanggil `refresh_lead_temperature()` saat dibuka.
+halaman Follow Up memanggil `refresh_lead_temperature()` saat dibuka — sebuah
+`SECURITY DEFINER`, karena sebagai `INVOKER` ia akan diam-diam tidak melakukan
+apa pun bagi Admin Marketing, yang bukan pemilik prospek mana pun.
 
 Tahap Booking ke atas dan Cancel tidak pernah disentuh: keduanya ditulis
 trigger lain dari kuitansi dan tanggal KPR, atau merupakan keputusan manusia
@@ -193,11 +219,18 @@ menolak. Kekurangan berkas juga muncul di lonceng lewat `my_notifications()`.
 > - BPHTB: Tambahkan Opsi (Lolos/tidak lolos), Tambahkan Atthatch Dokumen
 > - SHM: Opsi (Sudah Balik nama/Belum Balik nama), Tambahkan Input dokumen
 
-**Yang dikerjakan.** Tabel `berkas_lampiran` menampung sebelas jenis lampiran,
-ditandai `slot`. Satu tabel, bukan sebelas kolom URL: sebuah tahap sering butuh
-lebih dari satu berkas — foto survei jarang hanya satu — dan kolom tunggal
+**Yang dikerjakan.** Tabel `berkas_lampiran` menampung delapan jenis lampiran
+tahap, ditandai `slot`. Satu tabel, bukan delapan kolom URL: sebuah tahap sering
+butuh lebih dari satu berkas — foto survei jarang hanya satu — dan kolom tunggal
 memaksa berkas kedua menimpa yang pertama tanpa jejak. SP3K terbit dan SP3K
 perpanjangan mendapat slot terpisah, karena keduanya surat yang berbeda.
+
+Kuitansi dan bukti transfer sengaja **tidak** ada di sini. Keduanya sempat
+dibuatkan slot, dan itu keliru: sebuah kuitansi melekat pada sebuah pembayaran,
+bukan pada sebuah tahap. Satu konsumen bisa punya beberapa setoran DP, dan slot
+per tahap membuat buktinya menumpuk tanpa cara mengetahui mana milik setoran
+mana — persis pertanyaan yang harus dijawab Finance saat memverifikasi. Jadi
+keduanya tinggal di `payments.bukti_transfer_url` dan `payments.proof_url`.
 
 `bphtb_status` dan `shm_balik_nama` ditambahkan beserta CHECK constraint-nya.
 

@@ -38,7 +38,10 @@ every KPR stage, and a waiting-for-Finance phase on every payment.
    project with all 158 units already positioned on the siteplan, and
    `supabase/seed_demo_data.sql` fills every page with example prospek,
    konsumen, KPR, pembayaran, komplain, evaluasi kontraktor and ads data so
-   the app can be demoed. Every demo row's id starts with `5eed` — run
+   the app can be demoed — including the flows added by `migration_017`: leads
+   whose Hot/Warm/Cold is derived from their follow-up notes, survei and
+   BI-Checking recorded before booking, payments waiting on Finance with a
+   transfer proof attached, and per-stage KPR attachments. Every demo row's id starts with `5eed` — run
    `supabase/seed_demo_data_remove.sql` to delete all of it before real use.
    `supabase/migration_006_delete_behaviour.sql` is needed for the delete
    buttons: without it Postgres refuses to delete a prospek that became a
