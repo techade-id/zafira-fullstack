@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Target, PanelRight, History, ArrowUpDown, Pencil, ArrowRightLeft, Ban, Trash2 } from "lucide-react";
+import { Target, PanelRight, History, ClipboardCheck, Pencil, ArrowRightLeft, Ban, Trash2, MessageSquare } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
-import { tanggal, tanggalRelatif, labelTahap, rupiahInput, angkaDariRupiah } from "../lib/format";
+import { tanggal, tanggalRelatif, labelTahap } from "../lib/format";
 import FollowUpTimeline from "../components/FollowUpTimeline";
 import KontakAksi from "../components/KontakAksi";
 import KonversiBookingModal from "../components/KonversiBookingModal";
-import UbahTahapModal from "../components/UbahTahapModal";
+import CatatFollowUpModal from "../components/CatatFollowUpModal";
+import SaringanAwalModal from "../components/SaringanAwalModal";
+import InputRupiah from "../components/InputRupiah";
 import PanelProspek, { ModalBatal, ModalAlih } from "../components/PanelProspek";
 import {
   Card,
@@ -35,12 +37,17 @@ import {
 } from "../components/ui";
 
 /**
- * PRD §4.2 funnel. The first four stages are set by Sales; the rest are written
- * by database triggers from the booking receipt, KPR dates and handover, so
- * they render as read-only badges — letting someone pick them by hand would
- * just undo what the trigger recorded a moment earlier.
+ * Funnel PRD §4.2 — seluruhnya kini ditulis sistem.
+ *
+ * Tahap Booking ke atas sudah sejak dulu datang dari trigger (kuitansi, tanggal
+ * KPR, handover). Yang berubah dengan BRIEF §Leads adalah empat tahap pertama:
+ * suhu prospek tidak lagi dipilih Sales dari dropdown, melainkan dibaca sistem
+ * dari riwayat follow-up — "agar mengurangi human error dalam kategorisasi".
+ *
+ * Karena itu halaman ini tidak lagi punya satu pun kontrol pengubah tahap.
+ * Yang menggerakkannya ada di menu Follow Up Leads, tempat catatannya ditulis.
  */
-const MANUAL_STAGES = ["leads", "cold", "warm", "hot"];
+const SUHU_OTOMATIS = ["leads", "baru", "cold", "warm", "hot", "dihubungi", "appointment"];
 const AUTO_STAGES = ["booking", "kpr", "akad", "aftersales"];
 
 const STAGE_LABELS = {
@@ -61,11 +68,23 @@ const STAGE_LABELS = {
   closing: "Booking",
 };
 
+/**
+ * BRIEF §Leads: "Memisahkan opsi sumber leads menjadi: Ads, Freelance,
+ * Kemitraan, dan Organik."
+ *
+ * Freelance dan Kemitraan sebelumnya berbagi satu nilai. Keduanya memang
+ * sama-sama diwakili tabel partners, tetapi biaya, perjanjian, dan cara
+ * evaluasinya berbeda — dan begitu digabung, pertanyaan "kemitraan mana yang
+ * menghasilkan" tidak bisa dijawab lagi.
+ */
 const SOURCE_TYPES = [
   { value: "ads", label: "Ads" },
-  { value: "freelance", label: "Freelance / Kemitraan" },
+  { value: "freelance", label: "Freelance" },
+  { value: "kemitraan", label: "Kemitraan" },
   { value: "organik", label: "Organik" },
 ];
+
+const SOURCE_LABELS = { ads: "Ads", freelance: "Freelance", kemitraan: "Kemitraan", organik: "Organik" };
 
 const MARITAL_OPTIONS = ["Nikah", "Janda/Duda", "Single"];
 const PEKERJAAN_OPTIONS = ["Karyawan Swasta", "PNS/ASN", "Wirausaha"];
@@ -78,6 +97,7 @@ const emptyForm = {
   campaign_id: "",
   partner_id: "",
   organik_kategori: "",
+  organik_detail: "",
   source: "",
   // everything below is progressive
   username_sosmed: "",
@@ -118,6 +138,7 @@ export default function ProspekPage() {
   const [openLeadId, setOpenLeadId] = useState(params.get("sorot") || null);
   const [konversiLead, setKonversiLead] = useState(null);
   const [tahapLead, setTahapLead] = useState(null);
+  const [saringLead, setSaringLead] = useState(null);
   const [panelLead, setPanelLead] = useState(null);
   const [panelAksi, setPanelAksi] = useState(null);
   const [hapusLead, setHapusLead] = useState(null);
@@ -180,6 +201,13 @@ export default function ProspekPage() {
       setError("Nama atau username wajib diisi.");
       return;
     }
+    // BRIEF §Leads: "Khusus Organik … Wajib ada kolom isian tambahan untuk
+    // keterangan Detail (mis. nama event apa)." Tanpa itu, "Organik" tidak
+    // memberi tahu siapa pun apa yang harus diulang bulan depan.
+    if (form.source_type === "organik" && !form.organik_detail.trim()) {
+      setError("Sumber Organik wajib disertai keterangan detail — nama event, lokasi OTS, atau nama perujuk.");
+      return;
+    }
     setSaving(true);
     setError("");
 
@@ -189,8 +217,9 @@ export default function ProspekPage() {
       username_sosmed: form.username_sosmed.trim() || null,
       source_type: form.source_type || null,
       campaign_id: form.source_type === "ads" ? form.campaign_id || null : null,
-      partner_id: form.source_type === "freelance" ? form.partner_id || null : null,
+      partner_id: ["freelance", "kemitraan"].includes(form.source_type) ? form.partner_id || null : null,
       organik_kategori: form.source_type === "organik" ? form.organik_kategori || null : null,
+      organik_detail: form.source_type === "organik" ? form.organik_detail.trim() || null : null,
       source: form.source || null,
       usia: form.usia ? Number(form.usia) : null,
       marital_status: form.marital_status || null,
@@ -207,13 +236,18 @@ export default function ProspekPage() {
       notes: form.notes.trim() || null,
     };
 
-    // Status is set on create only — afterwards it moves through the funnel
-    // select or the database triggers, so editing must never reset a lead.
-    // assigned_to has to be stamped as well, otherwise RLS hides the row from
-    // the very person who just created it.
+    // BRIEF §Leads: "status default harus langsung masuk ke Warm secara
+    // otomatis oleh sistem, bukan dipilih manual oleh sales". Dikirim di sini
+    // dan dipaksakan sekali lagi oleh trigger leads_default_temperature —
+    // formulir ini bukan satu-satunya pintu masuk prospek.
+    //
+    // Sesudah itu status tidak pernah lagi ditulis dari layar ini: yang
+    // menggerakkannya adalah catatan follow-up dan trigger KPR.
+    // assigned_to harus ikut dicap, kalau tidak RLS menyembunyikan baris dari
+    // orang yang baru saja membuatnya.
     const { error: saveError } = editingId
       ? await supabase.from("leads").update(payload).eq("id", editingId)
-      : await supabase.from("leads").insert({ ...payload, status: "leads", assigned_to: profile?.id || null });
+      : await supabase.from("leads").insert({ ...payload, status: "warm", assigned_to: profile?.id || null });
 
     setSaving(false);
     if (saveError) {
@@ -221,7 +255,9 @@ export default function ProspekPage() {
       toast.gagal(`Gagal menyimpan: ${saveError.message}`);
       return;
     }
-    toast.sukses(editingId ? "Perubahan tersimpan." : `${payload.name} ditambahkan sebagai prospek.`);
+    toast.sukses(
+      editingId ? "Perubahan tersimpan." : `${payload.name} ditambahkan sebagai prospek — status awal Warm Lead.`
+    );
     resetForm();
     fetchLeads();
   }
@@ -231,12 +267,15 @@ export default function ProspekPage() {
       const c = campaigns.find((x) => x.id === row.campaign_id);
       return c ? `Ads · ${c.name}` : "Ads";
     }
-    if (row.source_type === "freelance") {
+    if (row.source_type === "freelance" || row.source_type === "kemitraan") {
       const p = partners.find((x) => x.id === row.partner_id);
-      return p ? `Mitra · ${p.name}` : "Freelance";
+      return p ? `${SOURCE_LABELS[row.source_type]} · ${p.name}` : SOURCE_LABELS[row.source_type];
     }
     if (row.source_type === "organik") {
-      return row.organik_kategori ? `Organik · ${row.organik_kategori}` : "Organik";
+      // Keterangan detail lebih berguna daripada kategorinya: "Event" ada di
+      // mana-mana, "Pameran Kota Tegal Mei" hanya sekali.
+      const detail = row.organik_detail || row.organik_kategori;
+      return detail ? `Organik · ${detail}` : "Organik";
     }
     return row.source || "-";
   }
@@ -246,8 +285,8 @@ export default function ProspekPage() {
   return (
     <div>
       <PageTitle
-        title="Prospek"
-        subtitle={`${leads.length} prospek tercatat`}
+        title="Leads"
+        subtitle={`${leads.length} prospek tercatat · tindak lanjutnya ada di menu Follow Up Leads`}
         action={
           <PrimaryButton subject="lead" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
             {showForm ? "Tutup" : "+ Prospek Baru"}
@@ -287,25 +326,41 @@ export default function ProspekPage() {
                   ))}
                 </select>
               )}
-              {form.source_type === "freelance" && (
+              {(form.source_type === "freelance" || form.source_type === "kemitraan") && (
                 <select value={form.partner_id} onChange={(e) => set("partner_id", e.target.value)} style={inputStyle}>
-                  <option value="">Pilih Mitra / Freelance</option>
-                  {partners.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.type})
-                    </option>
-                  ))}
+                  <option value="">Pilih {form.source_type === "kemitraan" ? "Mitra" : "Freelance"}</option>
+                  {partners
+                    // Daftarnya disaring menurut jenis mitra, bukan ditampilkan
+                    // seluruhnya: memisahkan dua sumber lalu menawarkan pilihan
+                    // yang sama untuk keduanya hanya memindahkan kekeliruannya.
+                    .filter((p) => (form.source_type === "kemitraan" ? p.type === "kemitraan" : p.type !== "kemitraan"))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
                 </select>
               )}
               {form.source_type === "organik" && (
-                <select value={form.organik_kategori} onChange={(e) => set("organik_kategori", e.target.value)} style={inputStyle}>
-                  <option value="">Kategori Organik</option>
-                  {withCurrentValue(organikCategories, form.organik_kategori).map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select value={form.organik_kategori} onChange={(e) => set("organik_kategori", e.target.value)} style={inputStyle}>
+                    <option value="">Kategori Organik</option>
+                    {withCurrentValue(organikCategories, form.organik_kategori).map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                  {/* BRIEF §Leads: keterangan detail wajib untuk sumber
+                      Organik. Dua kolom lebar, karena yang diketik di sini
+                      adalah nama event, bukan satu kata. */}
+                  <input
+                    placeholder="Keterangan Detail * — mis. Pameran Kota Tegal Mei 2026"
+                    value={form.organik_detail}
+                    onChange={(e) => set("organik_detail", e.target.value)}
+                    style={{ ...inputStyle, gridColumn: "span 2" }}
+                  />
+                </>
               )}
             </div>
           )}
@@ -336,7 +391,7 @@ export default function ProspekPage() {
                   ))}
                 </select>
                 <input placeholder="Perusahaan Tempat Kerja" value={form.perusahaan_tempat_kerja} onChange={(e) => set("perusahaan_tempat_kerja", e.target.value)} style={inputStyle} />
-                <input placeholder="Gaji (Rp)" type="number" value={form.gaji} onChange={(e) => set("gaji", e.target.value)} style={inputStyle} />
+                <InputRupiah value={form.gaji} onChange={(v) => set("gaji", v)} placeholder="Gaji per bulan — mis. 5jt" />
               </div>
 
               <div style={{ fontSize: 12, fontWeight: 600, color: TEXT_MID, marginBottom: 8 }}>Domisili</div>
@@ -407,7 +462,14 @@ export default function ProspekPage() {
             {
               key: "status",
               label: "Semua tahap",
-              options: [...MANUAL_STAGES, ...AUTO_STAGES, "cancel"].map((s) => ({ value: s, label: STAGE_LABELS[s] })),
+              options: [...SUHU_OTOMATIS.filter((x) => !["baru", "dihubungi", "appointment"].includes(x)), ...AUTO_STAGES, "cancel"].map(
+                (x) => ({ value: x, label: STAGE_LABELS[x] })
+              ),
+            },
+            {
+              key: "source_type",
+              label: "Semua sumber",
+              options: SOURCE_TYPES.map((x) => ({ value: x.value, label: x.label })),
             },
           ]}
           columns={[
@@ -425,21 +487,22 @@ export default function ProspekPage() {
             {
               key: "status",
               label: "Tahap",
-              // Tahap Booking ke atas ditulis trigger dari kuitansi dan tanggal
-              // KPR; membiarkannya dipilih tangan hanya akan membatalkan apa
-              // yang baru saja dicatat sistem.
-              render: (row) =>
-                AUTO_STAGES.includes(row.status) || !mayWrite ? (
+              // Tidak ada satu pun kontrol di sini. Tahap Booking ke atas
+              // ditulis trigger dari kuitansi dan tanggal KPR; suhu di
+              // bawahnya dibaca sistem dari riwayat follow-up. Menyediakan
+              // dropdown akan mengembalikan persis kesalahan kategorisasi yang
+              // BRIEF minta dihapus.
+              render: (row) => (
+                <span
+                  title={
+                    AUTO_STAGES.includes(row.status)
+                      ? "Ditulis sistem dari kuitansi dan tanggal KPR"
+                      : "Ditentukan sistem dari riwayat follow-up"
+                  }
+                >
                   <Badge value={row.status} label={STAGE_LABELS[row.status] || labelTahap(row.status)} />
-                ) : (
-                  <button
-                    onClick={() => setTahapLead(row)}
-                    title="Ubah tahap dan jadwalkan follow-up berikutnya"
-                    style={gayaTahap(row.status)}
-                  >
-                    {STAGE_LABELS[row.status] || labelTahap(row.status)} ▾
-                  </button>
-                ),
+                </span>
+              ),
             },
             {
               key: "tanggal_rencana",
@@ -488,7 +551,8 @@ export default function ProspekPage() {
                       items={[
                         { label: "Buka panel", ikon: PanelRight, onClick: () => setPanelLead(row) },
                         { label: "Riwayat follow-up", ikon: History, onClick: () => setOpenLeadId(openLeadId === row.id ? null : row.id) },
-                        mayWrite && !dibatalkan && { label: "Ubah tahap", ikon: ArrowUpDown, onClick: () => setTahapLead(row) },
+                        mayWrite && !dibatalkan && { label: "Catat follow-up", ikon: MessageSquare, onClick: () => setTahapLead(row) },
+                        mayWrite && !dibatalkan && { label: "Survei & BI-Checking", ikon: ClipboardCheck, onClick: () => setSaringLead(row) },
                         mayWrite && { label: "Ubah data", ikon: Pencil, onClick: () => startEdit(row) },
                         mayWrite && !dibatalkan && { label: "Alihkan ke agen lain", ikon: ArrowRightLeft, onClick: () => setPanelAksi({ lead: row, aksi: "alih" }) },
                         mayWrite && !dibatalkan && { label: "Batalkan prospek", ikon: Ban, onClick: () => setPanelAksi({ lead: row, aksi: "batal" }), pisah: true, rusak: true },
@@ -513,7 +577,7 @@ export default function ProspekPage() {
         onSelesai={fetchLeads}
       />
 
-      <UbahTahapModal
+      <CatatFollowUpModal
         lead={tahapLead}
         open={Boolean(tahapLead)}
         onClose={() => setTahapLead(null)}
@@ -521,6 +585,13 @@ export default function ProspekPage() {
           fetchLeads();
           setPanelLead((v) => (v ? { ...v } : v));
         }}
+      />
+
+      <SaringanAwalModal
+        lead={saringLead}
+        open={Boolean(saringLead)}
+        onClose={() => setSaringLead(null)}
+        onSelesai={fetchLeads}
       />
 
       <PanelProspek
@@ -593,21 +664,6 @@ function warnaJadwal(tgl) {
   if (selisih < 0) return NEGATIVE;
   if (selisih <= 2) return ACCENT_DARK;
   return TEXT_DARK;
-}
-
-function gayaTahap(status) {
-  const panas = status === "hot";
-  return {
-    border: `1px solid ${panas ? ACCENT : BORDER}`,
-    background: "#fff",
-    color: panas ? ACCENT_DARK : TEXT_DARK,
-    borderRadius: 999,
-    padding: "5px 11px",
-    fontSize: 11.5,
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
 }
 
 const gayaKecil = {

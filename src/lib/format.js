@@ -45,6 +45,61 @@ export function angkaDariRupiah(teks) {
   return bersih === "" ? "" : Number(bersih);
 }
 
+/**
+ * Singkatan nominal: "7jt" → 7000000, "350rb" → 350000, "1,5jt" → 1500000.
+ *
+ * BRIEF §Leads mengeluhkan booking fee yang "harus diinput satu per satu:
+ * 7 → 70 → 700 → 7.000.000". Keluhannya bukan soal pemisah ribuan — itu sudah
+ * ada — melainkan soal tujuh ketukan untuk sebuah angka yang di kepala orang
+ * berbunyi "tujuh juta". Satuan yang dipakai sehari-hari diterima apa adanya,
+ * jadi yang diketik sama dengan yang diucapkan.
+ *
+ * Mengembalikan null bila teksnya bukan singkatan, supaya pemanggil tahu
+ * kapan harus jatuh kembali ke pembacaan digit biasa.
+ */
+export function angkaDariSingkatan(teks) {
+  const t = String(teks ?? "").trim().toLowerCase().replace(/\s+/g, "");
+  const m = t.match(/^(\d+(?:[.,]\d+)?)(k|rb|ribu|jt|juta|m|milyar|miliar)$/);
+  if (!m) return null;
+  // Satu titik/koma di dalam singkatan selalu berarti desimal ("1,5jt"):
+  // pemisah ribuan tidak pernah dipakai bersama satuan.
+  const angka = Number(m[1].replace(",", "."));
+  if (!Number.isFinite(angka)) return null;
+  const pengali = { k: 1e3, rb: 1e3, ribu: 1e3, jt: 1e6, juta: 1e6, m: 1e9, milyar: 1e9, miliar: 1e9 }[m[2]];
+  return Math.round(angka * pengali);
+}
+
+const SATUAN = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"];
+
+/**
+ * 7000000 → "tujuh juta rupiah".
+ *
+ * Dipakai sebagai konfirmasi di bawah kotak isian nominal. Satu nol yang
+ * terlewat pada booking fee adalah kesalahan yang mahal, dan pemisah ribuan
+ * saja tidak cukup untuk menangkapnya — "7.000.000" dan "70.000.000" terlihat
+ * nyaris sama pada pandangan sekilas, sementara "tujuh juta" dan "tujuh puluh
+ * juta" tidak mungkin tertukar.
+ */
+export function terbilang(n) {
+  const angka = Math.floor(Math.abs(Number(n)));
+  if (!Number.isFinite(angka)) return "";
+  if (angka === 0) return "nol rupiah";
+  return `${susun(angka).replace(/\s+/g, " ").trim()} rupiah`;
+}
+
+function susun(n) {
+  if (n < 12) return SATUAN[n];
+  if (n < 20) return `${susun(n - 10)} belas`;
+  if (n < 100) return `${susun(Math.floor(n / 10))} puluh ${susun(n % 10)}`;
+  if (n < 200) return `seratus ${susun(n - 100)}`;
+  if (n < 1000) return `${susun(Math.floor(n / 100))} ratus ${susun(n % 100)}`;
+  if (n < 2000) return `seribu ${susun(n - 1000)}`;
+  if (n < 1e6) return `${susun(Math.floor(n / 1000))} ribu ${susun(n % 1000)}`;
+  if (n < 1e9) return `${susun(Math.floor(n / 1e6))} juta ${susun(n % 1e6)}`;
+  if (n < 1e12) return `${susun(Math.floor(n / 1e9))} miliar ${susun(n % 1e9)}`;
+  return `${susun(Math.floor(n / 1e12))} triliun ${susun(n % 1e12)}`;
+}
+
 /** 45000000 → "45.000.000" — tanpa awalan Rp, untuk isi kotak input. */
 export function rupiahInput(n) {
   if (n === null || n === undefined || n === "") return "";
@@ -183,7 +238,8 @@ const STATUS = {
   selesai: "Selesai",
   batal: "Batal",
   // pembayaran & dokumen
-  menunggu: "Menunggu",
+  menunggu: "Menunggu Bukti",
+  menunggu_verifikasi: "Menunggu Verifikasi",
   terverifikasi: "Terverifikasi",
   ditolak: "Ditolak",
   // unit

@@ -170,8 +170,9 @@ export default function KonsumenPage() {
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 12, lineHeight: 1.5 }}>
-            Untuk prospek yang sudah booking, gunakan tombol <b>Konversi ke Booking</b> di halaman Prospek — datanya terbawa otomatis
-            dan unitnya sekaligus ter-<i>reserve</i>.
+            Konsumen semestinya lahir dari prospek yang sudah ada: gunakan <b>Konversi ke Booking</b> di menu Leads atau Follow Up
+            Leads — datanya terbawa otomatis, unitnya sekaligus ter-<i>reserve</i>, dan riwayat follow-up sebelum booking tidak
+            terputus. Formulir di bawah ini hanya untuk konsumen yang memang tidak pernah melewati tahap prospek.
           </div>
 
           <div className="rg-3" style={{ marginBottom: 14, rowGap: 14 }}>

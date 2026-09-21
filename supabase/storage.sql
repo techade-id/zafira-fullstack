@@ -13,7 +13,9 @@ values
   ('customer-documents', 'customer-documents', false),
   ('field-report-photos', 'field-report-photos', false),
   ('complaint-photos', 'complaint-photos', false),
-  ('payment-receipts', 'payment-receipts', false)
+  ('payment-receipts', 'payment-receipts', false),
+  ('payment-proofs', 'payment-proofs', false),
+  ('berkas-lampiran', 'berkas-lampiran', false)
 on conflict (id) do nothing;
 
 -- ---------- SITEPLAN IMAGES (public read, config managers write) ----------
@@ -107,3 +109,48 @@ create policy "complaint_photos_write" on storage.objects for insert
 drop policy if exists "complaint_photos_delete" on storage.objects;
 create policy "complaint_photos_delete" on storage.objects for delete
   using (bucket_id = 'complaint-photos' and (can_manage_config() or can_write_berkas()));
+
+
+-- ---------- PAYMENT PROOFS (bukti transfer — migration 017) ----------
+-- Dua berkas yang sengaja tidak berbagi bucket. Bukti transfer datang dari
+-- konsumen dan diunggah Admin Marketing; kuitansi resmi ditandatangani
+-- perusahaan dan hanya boleh datang dari Finance. Menyatukan keduanya akan
+-- membuat pemisahan wewenang itu bergantung pada nama berkas.
+drop policy if exists "payment_proofs_read" on storage.objects;
+create policy "payment_proofs_read" on storage.objects for select
+  using (
+    bucket_id = 'payment-proofs' and (
+      can_view_all() or owns_customer(((storage.foldername(name))[1])::uuid)
+    )
+  );
+
+drop policy if exists "payment_proofs_write" on storage.objects;
+create policy "payment_proofs_write" on storage.objects for insert
+  with check (
+    bucket_id = 'payment-proofs' and (
+      can_write_finance() or can_write_berkas()
+      or owns_customer(((storage.foldername(name))[1])::uuid)
+    )
+  );
+
+drop policy if exists "payment_proofs_delete" on storage.objects;
+create policy "payment_proofs_delete" on storage.objects for delete
+  using (bucket_id = 'payment-proofs' and (can_write_finance() or can_write_berkas()));
+
+-- ---------- BERKAS LAMPIRAN (lampiran per tahap KPR — migration 017) ----------
+-- Segmen pertama path adalah id prospek ATAU id konsumen, tergantung tahapnya:
+-- survei dan BI-Checking terjadi sebelum konsumen ada. Karena satu path tidak
+-- bisa dipetakan ke satu tabel, aksesnya dijaga di tabel berkas_lampiran —
+-- di sini cukup dipastikan hanya pengguna yang masuk yang bisa menyentuhnya,
+-- dan URL-nya selalu bertanda tangan (lihat getSignedUrl).
+drop policy if exists "berkas_lampiran_read" on storage.objects;
+create policy "berkas_lampiran_read" on storage.objects for select
+  using (bucket_id = 'berkas-lampiran' and auth.uid() is not null);
+
+drop policy if exists "berkas_lampiran_write" on storage.objects;
+create policy "berkas_lampiran_write" on storage.objects for insert
+  with check (bucket_id = 'berkas-lampiran' and auth.uid() is not null and not is_monitor());
+
+drop policy if exists "berkas_lampiran_delete" on storage.objects;
+create policy "berkas_lampiran_delete" on storage.objects for delete
+  using (bucket_id = 'berkas-lampiran' and (can_manage_config() or can_write_berkas()));

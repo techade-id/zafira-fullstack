@@ -1,22 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Home, User, Wallet, FolderOpen, ClipboardList, History, FileText, Upload } from "lucide-react";
+import { ArrowLeft, Home, User, Wallet, ClipboardList, History } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { uploadFile, getSignedUrl } from "../lib/storage";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { canEditBerkas, isLocked, lockReason, roleOf } from "../lib/permissions";
+import { canEditBerkas, canEditCustomer, isLocked, lockReason, roleOf } from "../lib/permissions";
 import { rupiah, tanggal, tanggalWaktu, durasiHari, labelTahap, labelJenisBayar } from "../lib/format";
 import { useSyaratBerkas, cocokkanBerkas } from "../lib/useSyaratBerkas";
 import FollowUpTimeline from "../components/FollowUpTimeline";
 import KprStepper from "../components/KprStepper";
 import KontakAksi from "../components/KontakAksi";
+import InputRupiah from "../components/InputRupiah";
 import {
   Card,
   DataTable,
   Badge,
-  PrimaryButton,
-  DeleteButton,
   EmptyState,
   BORDER,
   SURFACE,
@@ -25,19 +23,21 @@ import {
   PRIMARY,
   PRIMARY_SOFT,
   ACCENT_DARK,
-  NEGATIVE,
   ReadOnlyBanner,
   LockBanner,
-  inputStyle,
 } from "../components/ui";
 
-const DOC_TYPES = ["KTP", "KK", "NPWP", "Slip Gaji", "Akad"];
-const DOC_STATUS = ["menunggu", "terverifikasi", "ditolak"];
-
+/**
+ * Tab konsumen.
+ *
+ * "Dokumen" sengaja tidak lagi berdiri sendiri. BRIEF §Bank memintanya masuk
+ * ke dalam section Bank — dan itu memang tempatnya: kelengkapan berkas hanya
+ * punya arti terhadap syarat bank yang dipilih, dan tab terpisah membuat
+ * keduanya harus dibaca bergantian untuk menjawab satu pertanyaan.
+ */
 const TAB = [
   { kunci: "ringkasan", label: "Ringkasan", ikon: User },
   { kunci: "kpr", label: "Progres KPR", ikon: ClipboardList },
-  { kunci: "dokumen", label: "Dokumen", ikon: FolderOpen },
   { kunci: "pembayaran", label: "Pembayaran", ikon: Wallet },
   { kunci: "riwayat", label: "Riwayat", ikon: History },
 ];
@@ -200,30 +200,29 @@ export default function KonsumenDetailPage() {
             >
               <t.ikon size={14} aria-hidden="true" />
               {t.label}
-              {t.kunci === "dokumen" && dokumen.length > 0 && <Hitung n={dokumen.length} aktif={aktif} />}
+              {t.kunci === "kpr" && dokumen.length > 0 && <Hitung n={dokumen.length} aktif={aktif} />}
               {t.kunci === "pembayaran" && pembayaran.length > 0 && <Hitung n={pembayaran.length} aktif={aktif} />}
             </button>
           );
         })}
       </div>
 
-      {tab === "ringkasan" && <TabRingkasan konsumen={konsumen} kpr={kpr} pembayaran={pembayaran} dokumen={dokumen} onBuka={setTab} />}
+      {tab === "ringkasan" && (
+        <TabRingkasan
+          konsumen={konsumen}
+          kpr={kpr}
+          pembayaran={pembayaran}
+          dokumen={dokumen}
+          bolehUbah={canEditCustomer(profile, konsumen)}
+          onUbah={muat}
+          onBuka={setTab}
+        />
+      )}
 
       {tab === "kpr" && (
         <Card>
           <KprStepper kpr={kpr} customerId={konsumen.id} editable={bolehBerkas} onChange={setKpr} />
         </Card>
-      )}
-
-      {tab === "dokumen" && (
-        <TabDokumen
-          dokumen={dokumen}
-          customerId={konsumen.id}
-          bank={kpr?.nama_bank}
-          editable={bolehBerkas}
-          onUbah={muat}
-          toast={toast}
-        />
       )}
 
       {tab === "pembayaran" && <TabPembayaran pembayaran={pembayaran} />}
@@ -254,12 +253,38 @@ function Hitung({ n, aktif }) {
    Ringkasan
    ============================================================ */
 
-function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, onBuka }) {
+function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, bolehUbah, onUbah, onBuka }) {
+  const toast = useToast();
   const terverifikasi = pembayaran.filter((p) => p.status === "terverifikasi").reduce((s, p) => s + Number(p.amount || 0), 0);
-  const menunggu = pembayaran.filter((p) => p.status === "menunggu").reduce((s, p) => s + Number(p.amount || 0), 0);
+  // "Menunggu" kini dua status: yang belum berbukti, dan yang buktinya sudah
+  // dikirim ke Finance. Keduanya sama-sama belum menjadi uang yang diakui.
+  const menunggu = pembayaran.filter((p) => p.status !== "terverifikasi").reduce((s, p) => s + Number(p.amount || 0), 0);
   // Kelengkapan dihitung terhadap syarat bank yang berlaku, bukan daftar tetap.
   const { syarat } = useSyaratBerkas(kpr?.nama_bank);
   const rekap = useMemo(() => cocokkanBerkas(syarat, dokumen), [syarat, dokumen]);
+
+  const [penghasilan, setPenghasilan] = useState(konsumen.penghasilan ?? "");
+  const [simpan, setSimpan] = useState(null);
+
+  // BRIEF §Saringan Awal: penghasilan terverifikasi pindah ke sini dari tahap
+  // BI-Checking. Ia memang keterangan tentang orangnya, bukan hasil sebuah
+  // pemeriksaan — dan dipakai ulang di banyak tahap sesudahnya.
+  // Nilainya datang sebagai argumen, bukan dari state: InputRupiah baru
+  // mengurai singkatan ("5jt") pada saat blur, dan state belum sempat ikut.
+  async function simpanPenghasilan(nilai) {
+    const baru = nilai === "" || nilai === null || nilai === undefined ? null : Number(nilai);
+    if (String(baru ?? "") === String(konsumen.penghasilan ?? "")) return;
+    setSimpan("menyimpan");
+    const { error } = await supabase.from("customers").update({ penghasilan: baru }).eq("id", konsumen.id);
+    setSimpan(null);
+    if (error) {
+      setPenghasilan(konsumen.penghasilan ?? "");
+      toast.gagal(`Gagal menyimpan penghasilan: ${error.message}`);
+      return;
+    }
+    toast.sukses("Penghasilan tersimpan.");
+    onUbah?.();
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -285,6 +310,24 @@ function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, onBuka }) {
           <Baris label="Alamat KTP" nilai={kpr?.alamat_ktp} />
           <Baris label="Unit" nilai={konsumen.units?.unit_code} />
           <Baris label="Harga Unit" nilai={konsumen.units?.price ? rupiah(konsumen.units.price) : null} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 3 }}>
+              Penghasilan Terverifikasi / bulan
+              {simpan && <span style={{ color: TEXT_MID }}> · menyimpan…</span>}
+            </div>
+            {bolehUbah ? (
+              <InputRupiah
+                value={penghasilan}
+                onChange={setPenghasilan}
+                onBlur={(_e, n) => simpanPenghasilan(n)}
+                placeholder="mis. 5jt"
+              />
+            ) : (
+              <div style={{ fontSize: 13, color: konsumen.penghasilan ? TEXT_DARK : TEXT_MID }}>
+                {konsumen.penghasilan ? rupiah(konsumen.penghasilan) : "-"}
+              </div>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -292,13 +335,17 @@ function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, onBuka }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>Ringkasan KPR</div>
           <button onClick={() => onBuka("kpr")} style={{ border: "none", background: "none", color: PRIMARY, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-            Buka progres →
+            Buka progres &amp; dokumen →
           </button>
         </div>
         <div className="rg-3" style={{ rowGap: 14 }}>
           <Baris label="Tanggal Booking" nilai={kpr?.tanggal_booking ? tanggal(kpr.tanggal_booking) : null} />
           <Baris label="Nominal Booking" nilai={kpr?.nominal_booking ? rupiah(kpr.nominal_booking) : null} />
           <Baris label="Bank" nilai={kpr?.nama_bank} />
+          <Baris
+            label="Berkas Bank"
+            nilai={rekap.totalWajib ? `${rekap.lengkapWajib}/${rekap.totalWajib} wajib · ${rekap.kurang.length} kurang` : null}
+          />
           <Baris label="Masuk Bank" nilai={kpr?.tanggal_masuk_bank ? tanggal(kpr.tanggal_masuk_bank) : null} />
           <Baris label="SP3K Terbit" nilai={kpr?.tanggal_sp3k_terbit ? tanggal(kpr.tanggal_sp3k_terbit) : null} />
           <Baris label="SP3K Expired" nilai={kpr?.tanggal_sp3k_expired ? tanggal(kpr.tanggal_sp3k_expired) : null} />
@@ -332,242 +379,6 @@ function Baris({ label, nilai }) {
       <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 3 }}>{label}</div>
       <div style={{ fontSize: 13, color: nilai ? TEXT_DARK : TEXT_MID, wordBreak: "break-word" }}>{nilai || "-"}</div>
     </div>
-  );
-}
-
-/* ============================================================
-   Dokumen
-   ============================================================ */
-
-function TabDokumen({ dokumen, customerId, bank, editable, onUbah, toast }) {
-  const { syarat, pakaiBawaan } = useSyaratBerkas(bank);
-  const rekap = useMemo(() => cocokkanBerkas(syarat, dokumen), [syarat, dokumen]);
-  const [jenis, setJenis] = useState("");
-  const [berkas, setBerkas] = useState(null);
-  const [unggah, setUnggah] = useState(false);
-
-  // Pilihan jenis dokumen mengikuti syarat bank yang sedang berlaku, dan
-  // langsung menunjuk ke yang paling dibutuhkan: yang wajib tapi belum ada.
-  const pilihanJenis = syarat.length > 0 ? syarat.map((s) => s.doc_type) : DOC_TYPES;
-  useEffect(() => {
-    if (jenis && pilihanJenis.includes(jenis)) return;
-    setJenis(rekap.kurang[0]?.doc_type || pilihanJenis[0] || "");
-  }, [pilihanJenis, rekap.kurang, jenis]);
-
-  async function kirim() {
-    if (!berkas) return;
-    setUnggah(true);
-    const { path, error: upErr } = await uploadFile("customer-documents", customerId, berkas);
-    if (upErr) {
-      setUnggah(false);
-      toast.gagal(`Gagal mengunggah: ${upErr.message}`);
-      return;
-    }
-    const { error } = await supabase
-      .from("customer_documents")
-      .insert({ customer_id: customerId, doc_type: jenis, file_url: path, status: "menunggu" });
-    setUnggah(false);
-    if (error) {
-      toast.gagal(`Gagal menyimpan dokumen: ${error.message}`);
-      return;
-    }
-    setBerkas(null);
-    toast.sukses(`${jenis} terunggah dan menunggu verifikasi.`);
-    onUbah();
-  }
-
-  async function ubahStatus(docId, status) {
-    // Hasilnya diperiksa: sebelum ini penolakan RLS lewat tanpa jejak, dan
-    // pengguna hanya melihat nilai lama kembali tanpa sebab.
-    const { error } = await supabase.from("customer_documents").update({ status }).eq("id", docId);
-    if (error) {
-      toast.gagal(`Status dokumen gagal diubah: ${error.message}`);
-      return;
-    }
-    onUbah();
-  }
-
-  async function lihat(path) {
-    const url = await getSignedUrl("customer-documents", path);
-    if (url) window.open(url, "_blank", "noopener");
-    else toast.gagal("Tautan dokumen tidak dapat dibuka.");
-  }
-
-  return (
-    <Card>
-      {/* Checklist mengikuti syarat bank yang dipilih (PRD §1.4). Yang dicari
-          Admin Marketing selalu hal yang sama: apa yang BELUM ada — dan itu
-          justru tidak terlihat pada daftar dokumen yang sudah masuk. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 11, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>
-          Kelengkapan Berkas
-          {rekap.totalWajib > 0 && (
-            <span style={{ fontWeight: 500, color: TEXT_MID }}>
-              {" "}
-              · {rekap.lengkapWajib}/{rekap.totalWajib} wajib terverifikasi
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: 11.5, color: TEXT_MID }}>
-          {bank ? (
-            pakaiBawaan ? (
-              <>
-                <b style={{ color: TEXT_DARK }}>{bank}</b> — memakai syarat bawaan
-              </>
-            ) : (
-              <>
-                Syarat khusus <b style={{ color: TEXT_DARK }}>{bank}</b>
-              </>
-            )
-          ) : (
-            "Bank belum dipilih — menampilkan syarat bawaan"
-          )}
-        </div>
-      </div>
-
-      {rekap.baris.length === 0 && (
-        <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 16, lineHeight: 1.5 }}>
-          Belum ada syarat berkas tersimpan. Aturlah di Pengaturan Bisnis, atau jalankan{" "}
-          <code style={{ fontSize: 11 }}>migration_015_pemberkasan.sql</code>.
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 16 }}>
-        {rekap.baris.map((b) => {
-          const w =
-            b.keadaan === "terverifikasi"
-              ? { bg: "#E4F2E8", fg: "#166534", tanda: "✓" }
-              : b.keadaan === "ditolak"
-              ? { bg: "#FBE9E8", fg: "#A6332C", tanda: "✕" }
-              : b.keadaan === "menunggu"
-              ? { bg: "#FDECE4", fg: ACCENT_DARK, tanda: "…" }
-              : b.wajib
-              ? { bg: "#EEF1F6", fg: "#516079", tanda: "belum ada" }
-              : { bg: "#F7F9FC", fg: "#8A97AB", tanda: "opsional" };
-          return (
-            <span
-              key={b.doc_type}
-              title={b.catatan || (b.wajib ? "Wajib" : "Tidak wajib")}
-              style={{
-                fontSize: 11.5,
-                fontWeight: 600,
-                background: w.bg,
-                color: w.fg,
-                padding: "5px 11px",
-                borderRadius: 999,
-                border: b.wajib && b.keadaan === "belum" ? "1px dashed #C7D3EA" : "1px solid transparent",
-              }}
-            >
-              {b.doc_type} · {w.tanda}
-            </span>
-          );
-        })}
-        {rekap.ekstra.map((d) => (
-          <span key={d.id} title="Di luar daftar syarat" style={{ fontSize: 11.5, fontWeight: 600, background: "#EFEAF7", color: "#5B3E8F", padding: "5px 11px", borderRadius: 999 }}>
-            {d.doc_type} · tambahan
-          </span>
-        ))}
-      </div>
-
-      {rekap.kurang.length > 0 && (
-        <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "#FDECE4", border: "1px solid #F6CDB8", borderRadius: 12, padding: "10px 13px", marginBottom: 16, fontSize: 12.5, color: ACCENT_DARK, lineHeight: 1.55 }}>
-          <span aria-hidden="true">📄</span>
-          <span>
-            Masih kurang <b>{rekap.kurang.length}</b> dokumen wajib: {rekap.kurang.map((b) => b.doc_type).join(", ")}.
-          </span>
-        </div>
-      )}
-
-      {editable && (
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 18, flexWrap: "wrap" }}>
-          <div style={{ minWidth: 180 }}>
-            <label htmlFor="dok-jenis" style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
-              Jenis Dokumen
-            </label>
-            <select id="dok-jenis" value={jenis} onChange={(e) => setJenis(e.target.value)} style={inputStyle}>
-              {pilihanJenis.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ minWidth: 200 }}>
-            <label htmlFor="dok-berkas" style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
-              Berkas
-            </label>
-            <input id="dok-berkas" type="file" onChange={(e) => setBerkas(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
-          </div>
-          <PrimaryButton subject="document" onClick={kirim} disabled={unggah || !berkas}>
-            {unggah ? "Mengunggah…" : "Unggah"}
-          </PrimaryButton>
-        </div>
-      )}
-
-      <DataTable
-        sortable
-        emptyIcon={Upload}
-        emptyLabel="Belum ada dokumen diunggah"
-        emptyHint={
-          rekap.kurang.length > 0
-            ? `Yang masih dibutuhkan: ${rekap.kurang.map((b) => b.doc_type).join(", ")}.`
-            : "Unggah berkas KPR di sini agar Admin Marketing dapat memverifikasinya."
-        }
-        columns={[
-          { key: "doc_type", label: "Jenis" },
-          {
-            key: "file_url",
-            label: "Berkas",
-            sortable: false,
-            render: (row) =>
-              row.file_url ? (
-                <button onClick={() => lihat(row.file_url)} style={gayaTautan}>
-                  <FileText size={12} style={{ marginRight: 4, verticalAlign: -2 }} />
-                  Lihat
-                </button>
-              ) : (
-                "-"
-              ),
-          },
-          { key: "uploaded_at", label: "Diunggah", render: (row) => tanggal(row.uploaded_at) },
-          {
-            key: "status",
-            label: "Status",
-            render: (row) =>
-              editable ? (
-                <select
-                  value={row.status}
-                  onChange={(e) => ubahStatus(row.id, e.target.value)}
-                  aria-label={`Status dokumen ${row.doc_type}`}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
-                >
-                  {DOC_STATUS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Badge value={row.status} />
-              ),
-          },
-          {
-            key: "aksi",
-            label: "",
-            sortable: false,
-            render: (row) => (
-              <DeleteButton
-                subject="document_delete"
-                itemName={row.doc_type}
-                onDelete={() => supabase.from("customer_documents").delete().eq("id", row.id)}
-                onDone={onUbah}
-              />
-            ),
-          },
-        ]}
-        rows={dokumen}
-      />
-    </Card>
   );
 }
 

@@ -6,6 +6,11 @@ global Notes search, the five-role access matrix with Segregation of Duties, the
 Booking Fee Handover Hard-Lock, an audit trail, and the PRD sales pipeline
 (relational lead sources, seven-stage funnel, follow-up tracking).
 
+`BRIEF.md` carries the revision-meeting brief and how each item was
+implemented: lead temperature written by the system instead of picked by Sales,
+Saringan Awal (survei + BI-Checking) moved ahead of Booking, an attachment on
+every KPR stage, and a waiting-for-Finance phase on every payment.
+
 `PLAN.md` records the full plan these changes were built from.
 
 ## 1. Set up Supabase
@@ -68,15 +73,46 @@ Booking Fee Handover Hard-Lock, an audit trail, and the PRD sales pipeline
      value a row still carries; the funnel, handover and Finance-queue figures
      on the dashboard; and `campaign_performance()`, which derives cost per lead
      and cost per deal from leads actually tagged to a campaign.
+   - **`migration_017_brief_revisi.sql`** — implements `BRIEF_ZAFIRA_PROPERTY`.
+     Run it **last**, after 013–016, because it redefines `dashboard_stats()`,
+     `my_notifications()` and `convert_lead_to_customer()`. It brings four
+     changes:
+     1. **Lead temperature is written by the system, not picked by Sales.** A
+        new lead lands as Warm automatically; after that `lead_temperature()`
+        reads the follow-up history — the words in the latest note, how many
+        follow-ups there have been, and how long the lead has been left alone —
+        and a trigger on `lead_activities` applies it. A note saying "kurang
+        minat" turns the lead Cold on its own. Booking and above, and Cancel,
+        are never touched.
+     2. **Saringan awal moves ahead of Booking.** `leads` gains
+        `tanggal_survei` and the BI-Checking columns, so both can be recorded
+        while the record is still a prospect; conversion carries them — and
+        their attachments — into `customer_kpr`, and refuses outright when
+        BI-Checking failed.
+     3. **`berkas_lampiran`** — one table for the attachment every KPR stage
+        now has (survey photos, BI-Checking result, SP3K, akad documentation,
+        berita acara, BPHTB, SHM).
+     4. **Payments gain a waiting phase.** `payment_status` gains
+        `menunggu_verifikasi`: Admin Marketing uploads `bukti_transfer_url` and
+        the payment moves into Finance's queue. Only Finance can attach the
+        official receipt (`proof_url`), and only that still fires the Handover
+        Hard-Lock.
 
-   Re-run `supabase/storage.sql` after 008: it creates the `payment-receipts`
-   bucket and re-points every storage policy at the new access helpers.
+     It also adds `kelengkapan_berkas()` and `tandai_proses_bank()` behind the
+     "Proses Bank" button, computes Total DP from its parts, and moves verified
+     income to `customers.penghasilan`.
+
+   Re-run `supabase/storage.sql` after 008 **and after 017**: it creates the
+   `payment-receipts`, `payment-proofs` and `berkas-lampiran` buckets and
+   re-points every storage policy at the new access helpers.
 
    Run `supabase/check_setup.sql` afterwards to confirm all of it landed.
 3. Run `supabase/storage.sql` next — it creates the Storage buckets
    (`siteplan-images`, `customer-documents`, `field-report-photos`,
-   `complaint-photos`) and their RLS policies, needed by Siteplan Digital,
-   Konsumen documents, Monitoring Lapangan photos, and Komplain photos.
+   `complaint-photos`, `payment-receipts`, `payment-proofs`,
+   `berkas-lampiran`) and their RLS policies, needed by Siteplan Digital,
+   Konsumen documents, Monitoring Lapangan photos, Komplain photos, payment
+   receipts and transfer proofs, and the per-stage KPR attachments.
 4. Go to Project Settings → API and copy your **Project URL** and **anon public key**.
 5. In this repo, copy `.env.example` to `.env` and fill in those two values:
    ```
@@ -169,20 +205,37 @@ matching your `.env`.
 
 - **Auth**: real Supabase email/password login, session persistence, role read
   from `profiles`.
-- **Dashboard**: the seven-stage funnel with stage-to-stage conversion, how many
-  customers have been handed over to Admin Marketing, the Finance verification
-  queue, and live counts (prospek, konsumen, unit tersedia, komplain aktif)
-  pulled from Supabase.
-- **Prospek (Leads)**: full CRUD — add lead, change status inline, list with
-  live data.
+- **Dashboard**: defaults to the current month, with a per-procedure strip
+  answering "how many of each this month" (prospek baru, follow up, survei,
+  BI-Checking, booking, masuk bank, SP3K, akad, serah terima, batal) counted
+  from the date each event actually happened. Below it the seven-stage funnel
+  with stage-to-stage conversion, how many customers have been handed over to
+  Admin Marketing, and the Finance verification queue — all foldable, so the
+  first screen stays short.
+- **Leads**: lead intake only. Four separate sources (Ads, Freelance,
+  Kemitraan, Organik), with Organik requiring a detail line — the event name,
+  not just the word "Organik". Status is never picked by hand: a new lead lands
+  as Warm and moves between Cold/Warm/Hot from the follow-up history.
+- **Follow Up Leads**: its own menu — a queue, not a form. Overdue first, with
+  last contact, last outcome, and whether survei/BI-Checking have been done.
+  Recording a follow-up is what moves the lead's temperature: the note text is
+  read by the database, so "kurang minat" turns the lead Cold without anyone
+  choosing it.
 - **Pembayaran (Payments)**: record payments per customer (booking, DP, dana
-  talangan, termin, pelunasan), verify payments — this is the billing-history
-  module that covers the gap flagged against the original quotation.
+  talangan, termin, pelunasan). Every payment now passes through three states —
+  recorded, bukti transfer uploaded (waiting on Finance), verified. Admin
+  Marketing uploads the customer's transfer proof; only Finance can attach the
+  official receipt, and only that closes the payment and fires the Hard-Lock.
 - **Proyek**: multi-project CRUD plus per-project unit management (kode unit,
   blok, tipe, harga, status) — unblocks every module below.
 - **Konsumen**: customer CRUD linked to lead/unit/sales agent, process
-  duration tracking (`process_started_at`/`process_completed_at`), and
-  document upload (`customer_documents`) with verification status.
+  duration tracking (`process_started_at`/`process_completed_at`), and a KPR
+  stepper that runs Survei → Saringan Awal → Booking → DP → Bank → SP3K → Akad
+  → Serah Terima → BPHTB → SHM. Each stage carries its own attachments, Total
+  DP is computed from its parts rather than typed, and the bank document
+  checklist lives inside the Bank stage — numbered, missing ones listed first,
+  with a "Proses Bank" button the database refuses while anything mandatory is
+  still missing.
 - **Pembatalan**: cancellation history per customer (reason, detail, who
   cancelled, when) — auto-marks the customer as `batal`.
 - **Siteplan Digital**: per-project siteplan image upload, click-to-place unit
@@ -233,17 +286,18 @@ Every list has an **Ubah** and a **Hapus** button on each row. "Ubah" reopens
 the same form the row was created with, pre-filled, and saves as an update
 rather than a new row; "Batal" leaves edit mode without touching anything. A
 handful of fields stay create-only on purpose because a dedicated control
-already owns them — a lead's status (the inline funnel select), a customer's
-sales agent (the transfer flow on Data Agen, which writes an audit row), and
-the status of a customer, complaint or payment. Agent details and the business
+already owns them — a lead's status (now written by the system from the
+follow-up history, never chosen), a customer's sales agent (the transfer flow
+on Data Agen, which writes an audit row), and the status of a customer,
+complaint or payment. Agent details and the business
 dropdown lists edit in place: type over the value and it saves when the field
 loses focus.
 
 The modules above mirror the team's live sales spreadsheet: the 9-stage
 funnel, full lead intake (usia, marital status, pekerjaan, gaji, domisili),
-and the KPR customer pipeline (Booking → DP → Bank → SP3K → Akad → Serah
-Terima Kunci → BPHTB → SHM) with per-stage duration tracking on the Konsumen
-page and the dashboard.
+and the KPR customer pipeline (Survei → Saringan Awal → Booking → DP → Bank →
+SP3K → Akad → Serah Terima Kunci → BPHTB → SHM) with per-stage duration
+tracking on the Konsumen page and the dashboard.
 
 ## Not yet built
 

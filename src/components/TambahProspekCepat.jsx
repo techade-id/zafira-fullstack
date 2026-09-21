@@ -31,6 +31,7 @@ export default function TambahProspekCepat() {
   const [telepon, setTelepon] = useState("");
   const [sumber, setSumber] = useState("organik");
   const [kategori, setKategori] = useState("");
+  const [detail, setDetail] = useState("");
   const [kirim, setKirim] = useState(false);
   const [galat, setGalat] = useState("");
   const namaRef = useRef(null);
@@ -43,6 +44,7 @@ export default function TambahProspekCepat() {
     setTelepon("");
     setSumber("organik");
     setKategori(organik[0] || "");
+    setDetail("");
     setGalat("");
     setKirim(false);
     // Fokus langsung ke nama: di lapangan, setiap ketukan tambahan berarti
@@ -57,6 +59,12 @@ export default function TambahProspekCepat() {
       setGalat("Nama atau username wajib diisi.");
       return;
     }
+    // Sama seperti formulir lengkap: sumber Organik tanpa keterangan tidak
+    // memberi tahu siapa pun apa yang harus diulang (BRIEF §Leads).
+    if (sumber === "organik" && !detail.trim()) {
+      setGalat("Sumber Organik wajib disertai keterangan — mis. nama event.");
+      return;
+    }
     setKirim(true);
     setGalat("");
 
@@ -67,7 +75,9 @@ export default function TambahProspekCepat() {
         phone: telepon.trim() || null,
         source_type: sumber,
         organik_kategori: sumber === "organik" ? kategori || null : null,
-        status: "leads",
+        organik_detail: sumber === "organik" ? detail.trim() || null : null,
+        // Prospek baru selalu Warm, ditetapkan sistem (BRIEF §Leads).
+        status: "warm",
         // Tanpa ini RLS menyembunyikan baris dari orang yang baru saja membuatnya.
         assigned_to: profile?.id || null,
       })
@@ -88,6 +98,7 @@ export default function TambahProspekCepat() {
       // tetap terbuka supaya yang berikutnya tidak perlu membuka ulang.
       setNama("");
       setTelepon("");
+      setDetail("");
       setGalat("");
       namaRef.current?.focus();
       return;
@@ -127,7 +138,7 @@ export default function TambahProspekCepat() {
             Prospek Baru
           </div>
           <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 16, lineHeight: 1.55 }}>
-            Cukup nama dan nomor. Sisanya dapat dilengkapi nanti dari halaman Prospek.
+            Cukup nama dan nomor. Status awal Warm Lead, ditetapkan sistem.
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -168,6 +179,7 @@ export default function TambahProspekCepat() {
                 { v: "organik", l: "Organik" },
                 { v: "ads", l: "Ads" },
                 { v: "freelance", l: "Freelance" },
+                { v: "kemitraan", l: "Kemitraan" },
               ].map((s) => {
                 const aktif = sumber === s.v;
                 return (
@@ -192,20 +204,32 @@ export default function TambahProspekCepat() {
               })}
             </div>
 
-            {sumber === "organik" && organik.length > 0 && (
-              <select value={kategori} onChange={(e) => setKategori(e.target.value)} aria-label="Kategori organik" style={{ ...inputStyle, marginTop: 9 }}>
-                <option value="">Kategori organik</option>
-                {organik.map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
+            {sumber === "organik" && (
+              <>
+                {organik.length > 0 && (
+                  <select value={kategori} onChange={(e) => setKategori(e.target.value)} aria-label="Kategori organik" style={{ ...inputStyle, marginTop: 9 }}>
+                    <option value="">Kategori organik</option>
+                    {organik.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  value={detail}
+                  onChange={(e) => setDetail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && simpan(false)}
+                  aria-label="Keterangan detail sumber organik"
+                  placeholder="Keterangan * — mis. Pameran Kota Tegal"
+                  style={{ ...inputStyle, marginTop: 9 }}
+                />
+              </>
             )}
 
             {sumber !== "organik" && (
               <div style={{ fontSize: 11.5, color: TEXT_MID, marginTop: 8, lineHeight: 1.45, background: PRIMARY_SOFT, borderRadius: 10, padding: "8px 11px" }}>
-                Campaign atau mitra asalnya dipilih nanti dari halaman Prospek.
+                Campaign atau mitra asalnya dipilih nanti dari halaman Leads.
               </div>
             )}
           </div>

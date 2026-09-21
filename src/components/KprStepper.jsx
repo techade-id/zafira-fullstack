@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from "react";
-import { Check, Lock, AlertTriangle, ChevronDown } from "lucide-react";
+import { Check, Lock, AlertTriangle, ChevronDown, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useToast } from "../context/ToastContext";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { rupiah, rupiahInput, angkaDariRupiah, tanggal, selisihHari } from "../lib/format";
+import { rupiah, tanggal, selisihHari } from "../lib/format";
+import InputRupiah from "./InputRupiah";
+import LampiranTahap from "./LampiranTahap";
+import VerifikasiPembayaran from "./VerifikasiPembayaran";
+import BerkasBankPanel from "./BerkasBankPanel";
 import {
   BORDER,
   SURFACE,
@@ -22,14 +26,20 @@ import {
 /**
  * Progres KPR sebagai tahapan, bukan formulir.
  *
- * Sebelumnya layar ini adalah tujuh belas kotak isian datar dalam satu grid,
- * padahal subjudulnya sendiri sudah menjanjikan sebuah alur
- * (Booking → DP → Bank → SP3K → Akad → Serah Terima → BPHTB → SHM). Yang hilang
- * bukan datanya, melainkan jawaban atas dua pertanyaan yang justru paling
- * sering ditanyakan Admin Marketing: *sekarang sampai mana* dan *berikutnya apa*.
+ * Perubahan terbesar dari BRIEF: SARINGAN AWAL PINDAH KE DEPAN BOOKING.
  *
- * Tahap aktif dihitung dari tanggal yang sudah terisi — tidak ada kolom status
- * baru, sehingga tidak ada kemungkinan status dan tanggal saling bertentangan.
+ * Sebelumnya urutannya Booking → DP → Saringan Awal → Bank, artinya survei dan
+ * BI-Checking dicatat setelah uang booking berpindah tangan. Padahal dua dari
+ * tujuh alasan pembatalan yang dikonfigurasi di sistem ini — "Tidak lolos
+ * BI-Checking" dan "RPC tidak cukup" — sudah bisa diketahui sebelum booking
+ * diterima. Menaruh saringannya di belakang berarti setiap kegagalan yang
+ * sebenarnya bisa dicegah berubah menjadi pengembalian uang.
+ *
+ * Urutannya kini: Survei → Saringan Awal → Booking → DP → Bank → SP3K → Akad →
+ * Serah Terima → BPHTB → SHM, persis seperti alur yang dijabarkan brief.
+ *
+ * Tahap aktif tetap dihitung dari data yang sudah terisi — tidak ada kolom
+ * status terpisah, sehingga status dan isi tidak mungkin saling bertentangan.
  */
 
 const LABEL_BI = { menunggu: "menunggu", lolos: "lolos", tidak_lolos: "TIDAK LOLOS" };
@@ -38,8 +48,9 @@ const LABEL_BI = { menunggu: "menunggu", lolos: "lolos", tidak_lolos: "TIDAK LOL
  * Rasio angsuran terhadap penghasilan.
  *
  * Patokan lazim KPR subsidi: angsuran tidak lebih dari sepertiga penghasilan.
- * Melebihi itu, berkas biasanya ditolak dengan alasan "RPC tidak cukup" —
- * salah satu alasan pembatalan yang sudah dikonfigurasi di sistem ini.
+ * Angsurannya sendiri tidak lagi diisi di sini — BRIEF §Saringan Awal
+ * menyatakan "Perkiraan Angsuran/Bulan (Belum diperlukan)" — tetapi berkas
+ * lama yang sudah mencatatnya tetap dihitung, karena peringatannya masih benar.
  */
 const BATAS_RPC = 1 / 3;
 
@@ -50,36 +61,26 @@ function rasioRpc(k) {
   return a / p;
 }
 
+/** Nilai kosong ditulis strip, bukan dibiarkan hilang (BRIEF §Saringan Awal). */
+function atauStrip(v) {
+  return v === null || v === undefined || String(v).trim() === "" ? "-" : v;
+}
+
 const TAHAP = [
   {
-    kunci: "booking",
-    label: "Booking",
-    selesai: (k) => Boolean(k.tanggal_booking),
-    ringkas: (k) => [tanggal(k.tanggal_booking), rupiah(k.nominal_booking)].filter((v) => v !== "-").join(" · "),
+    // BRIEF §Progres KPR: "leads > Follow up {jika berminat} > survei
+    // {melampirkan foto survei, Tanggal Survei} > BI checking > … > Booking".
+    kunci: "survei",
+    label: "Survei",
+    selesai: (k) => Boolean(k.tanggal_survei),
+    ringkas: (k) => tanggal(k.tanggal_survei),
     bidang: [
-      { key: "tanggal_booking", label: "Tanggal Booking", tipe: "date" },
-      { key: "nominal_booking", label: "Nominal Booking", tipe: "rupiah" },
+      { key: "tanggal_survei", label: "Tanggal Survei", tipe: "date" },
+      { key: "catatan_survei", label: "Catatan Survei", tipe: "text", lebar: 2 },
     ],
+    lampiran: [{ slot: "survei", label: "Foto Survei", hint: "Foto lokasi saat survei bersama calon pembeli." }],
   },
   {
-    kunci: "dp",
-    label: "DP",
-    selesai: (k) => Boolean(k.tanggal_dp),
-    ringkas: (k) => [tanggal(k.tanggal_dp), rupiah(k.nominal_total_dp || k.nominal_dp)].filter((v) => v !== "-").join(" · "),
-    bidang: [
-      { key: "tanggal_dp", label: "Tanggal Pembayaran DP", tipe: "date" },
-      { key: "nominal_dp", label: "Nominal DP", tipe: "rupiah" },
-      { key: "biaya_tambahan_tanah", label: "Biaya Tambahan Tanah", tipe: "rupiah" },
-      { key: "nominal_total_dp", label: "Total DP (Promo + Tanah)", tipe: "rupiah" },
-      { key: "dp_terbayar", label: "DP Terbayar", tipe: "rupiah" },
-    ],
-  },
-  {
-    // Saringan awal. Dua dari tujuh alasan pembatalan yang dikonfigurasi
-    // ("Tidak lolos BI-Checking", "RPC tidak cukup") sepenuhnya dapat diketahui
-    // SEBELUM berkas dikirim — dan menunggu jawaban bank selama 30-60 hari
-    // untuk mendengar sesuatu yang sudah bisa ditebak sejak awal adalah
-    // kerugian terbesar dalam alur ini.
     kunci: "saring",
     label: "Saringan Awal",
     selesai: (k) => k.bi_checking_status === "lolos",
@@ -93,10 +94,40 @@ const TAHAP = [
     bidang: [
       { key: "bi_checking_status", label: "Hasil BI-Checking", tipe: "bi" },
       { key: "bi_checking_tanggal", label: "Tanggal Pemeriksaan", tipe: "date" },
-      { key: "penghasilan_verifikasi", label: "Penghasilan Terverifikasi / bulan", tipe: "rupiah" },
-      { key: "angsuran_bulanan", label: "Perkiraan Angsuran / bulan", tipe: "rupiah" },
-      { key: "bi_checking_catatan", label: "Catatan BI-Checking", tipe: "text" },
+      { key: "bi_checking_catatan", label: "Catatan", tipe: "text", strip: true },
     ],
+    lampiran: [{ slot: "bi_checking", label: "Hasil BI-Checking", hint: "Lampirkan hasil pemeriksaan SLIK dari bank." }],
+    // Penghasilan terverifikasi sengaja tidak ada di sini lagi: BRIEF
+    // memindahkannya ke data diri konsumen, tempat ia memang dipakai berulang.
+    catatan: "Penghasilan terverifikasi kini ada di Ringkasan → Data Diri konsumen.",
+  },
+  {
+    kunci: "booking",
+    label: "Booking",
+    selesai: (k) => Boolean(k.tanggal_booking),
+    ringkas: (k) => [tanggal(k.tanggal_booking), rupiah(k.nominal_booking)].filter((v) => v !== "-").join(" · "),
+    bidang: [
+      { key: "tanggal_booking", label: "Tanggal Booking", tipe: "date" },
+      { key: "nominal_booking", label: "Nominal Booking", tipe: "rupiah", cepat: [3e6, 5e6, 7e6, 10e6] },
+    ],
+    pembayaran: "booking",
+  },
+  {
+    kunci: "dp",
+    label: "DP",
+    selesai: (k) => Boolean(k.tanggal_dp),
+    ringkas: (k) => [tanggal(k.tanggal_dp), rupiah(k.nominal_total_dp || k.nominal_dp)].filter((v) => v !== "-").join(" · "),
+    bidang: [
+      { key: "tanggal_dp", label: "Tanggal Pembayaran DP", tipe: "date" },
+      { key: "nominal_dp", label: "Nominal DP (Promo)", tipe: "rupiah" },
+      { key: "biaya_tambahan_tanah", label: "Biaya Tambahan Tanah", tipe: "rupiah" },
+      // BRIEF §DP: "Tambahkan akumulasi otomatis dari Nominal DP + Biaya Tanah
+      // untuk di Total DP". Dihitung, jadi dibaca saja — mengetiknya sendiri
+      // hanya menciptakan kemungkinan angkanya tidak cocok.
+      { key: "nominal_total_dp", label: "Total DP (Promo + Tanah)", tipe: "hitung" },
+      { key: "dp_terbayar", label: "DP Terbayar", tipe: "rupiah" },
+    ],
+    pembayaran: "dp",
   },
   {
     kunci: "bank",
@@ -108,6 +139,9 @@ const TAHAP = [
       { key: "tanggal_masuk_bank", label: "Tanggal Masuk Bank", tipe: "date" },
       { key: "progres_berkas", label: "Progres Berkas", tipe: "progres" },
     ],
+    // BRIEF §Bank: attach dokumen dipindahkan ke dalam section Bank, dengan
+    // penomoran dan daftar yang kurang di atas daftar yang sudah ada.
+    berkasBank: true,
   },
   {
     kunci: "sp3k",
@@ -122,6 +156,13 @@ const TAHAP = [
       { key: "tanggal_sp3k_expired", label: "Tanggal SP3K Expired", tipe: "date" },
       { key: "tanggal_sp3k_perpanjangan", label: "Tanggal SP3K Perpanjangan", tipe: "date" },
     ],
+    // Dua lampiran terpisah, sesuai permintaan brief "input dokumen per
+    // section": SP3K perpanjangan adalah surat yang berbeda dari SP3K aslinya,
+    // dan satu kotak lampiran akan membuat keduanya tercampur.
+    lampiran: [
+      { slot: "sp3k_terbit", label: "Dokumen SP3K" },
+      { slot: "sp3k_perpanjangan", label: "Dokumen SP3K Perpanjangan", hint: "Diisi bila SP3K diperpanjang." },
+    ],
   },
   {
     kunci: "akad",
@@ -129,6 +170,7 @@ const TAHAP = [
     selesai: (k) => Boolean(k.tanggal_akad),
     ringkas: (k) => tanggal(k.tanggal_akad),
     bidang: [{ key: "tanggal_akad", label: "Tanggal Akad", tipe: "date" }],
+    lampiran: [{ slot: "akad", label: "Dokumentasi Akad", hint: "Foto atau salinan dokumen akad." }],
   },
   {
     kunci: "serah",
@@ -136,20 +178,31 @@ const TAHAP = [
     selesai: (k) => Boolean(k.tanggal_serah_terima_kunci),
     ringkas: (k) => tanggal(k.tanggal_serah_terima_kunci),
     bidang: [{ key: "tanggal_serah_terima_kunci", label: "Tanggal Serah Terima Kunci", tipe: "date" }],
+    lampiran: [{ slot: "berita_acara", label: "Berita Acara Serah Terima", hint: "Unggah berita acara dalam bentuk PDF." }],
   },
   {
     kunci: "bphtb",
     label: "BPHTB",
-    selesai: (k) => k.bphtb !== null && k.bphtb !== undefined && k.bphtb !== "",
-    ringkas: (k) => rupiah(k.bphtb),
-    bidang: [{ key: "bphtb", label: "BPHTB", tipe: "rupiah" }],
+    // Yang menyelesaikan tahap ini adalah keputusannya, bukan nominalnya:
+    // sebuah BPHTB yang tidak lolos tetap sebuah tahap yang sudah dijalani.
+    selesai: (k) => Boolean(k.bphtb_status),
+    ringkas: (k) => [k.bphtb_status === "lolos" ? "Lolos" : k.bphtb_status === "tidak_lolos" ? "Tidak lolos" : null, rupiah(k.bphtb)].filter((v) => v && v !== "-").join(" · "),
+    bidang: [
+      { key: "bphtb_status", label: "Hasil BPHTB", tipe: "pilih", opsi: [["lolos", "Lolos"], ["tidak_lolos", "Tidak lolos"]] },
+      { key: "bphtb", label: "Nominal BPHTB", tipe: "rupiah" },
+    ],
+    lampiran: [{ slot: "bphtb", label: "Dokumen BPHTB" }],
   },
   {
     kunci: "shm",
     label: "SHM",
     selesai: (k) => Boolean(k.shm),
-    ringkas: (k) => k.shm || "-",
-    bidang: [{ key: "shm", label: "Nomor SHM", tipe: "text" }],
+    ringkas: (k) => [k.shm, k.shm_balik_nama === "sudah" ? "sudah balik nama" : k.shm_balik_nama === "belum" ? "belum balik nama" : null].filter(Boolean).join(" · ") || "-",
+    bidang: [
+      { key: "shm", label: "Nomor SHM", tipe: "text" },
+      { key: "shm_balik_nama", label: "Balik Nama", tipe: "pilih", opsi: [["sudah", "Sudah balik nama"], ["belum", "Belum balik nama"]] },
+    ],
+    lampiran: [{ slot: "shm", label: "Dokumen SHM" }],
   },
 ];
 
@@ -157,8 +210,6 @@ const TAHAP = [
 function peringatan(kpr) {
   const hasil = [];
 
-  // Saringan awal lebih dulu: ini satu-satunya peringatan yang masih bisa
-  // dicegah, sisanya melaporkan keadaan yang sudah terjadi.
   if (kpr.bi_checking_status === "tidak_lolos") {
     hasil.push({
       berat: true,
@@ -166,11 +217,14 @@ function peringatan(kpr) {
         ? "BI-Checking tidak lolos, tetapi berkas sudah dikirim ke bank. Pertimbangkan menarik pengajuan sebelum tercatat sebagai penolakan."
         : "BI-Checking tidak lolos. Jangan kirim berkas ke bank sebelum masalahnya diselesaikan.",
     });
-  } else if (kpr.tanggal_masuk_bank && !kpr.tanggal_sp3k_terbit && kpr.bi_checking_status !== "lolos") {
+  } else if (kpr.tanggal_booking && !kpr.bi_checking_status) {
+    // Saringan yang dilewati adalah saringan yang tidak ada gunanya.
     hasil.push({
       berat: false,
-      teks: "Berkas sudah di bank tetapi hasil BI-Checking belum tercatat.",
+      teks: "Booking sudah tercatat tetapi BI-Checking belum. Saringan awal seharusnya mendahului booking.",
     });
+  } else if (kpr.tanggal_masuk_bank && !kpr.tanggal_sp3k_terbit && kpr.bi_checking_status !== "lolos") {
+    hasil.push({ berat: false, teks: "Berkas sudah di bank tetapi hasil BI-Checking belum tercatat." });
   }
 
   const rpc = rasioRpc(kpr);
@@ -201,6 +255,10 @@ function peringatan(kpr) {
     if (sisa > 0) hasil.push({ berat: false, teks: `Sisa DP belum terbayar: ${rupiah(sisa)}.` });
   }
 
+  if (kpr.bphtb_status === "tidak_lolos") {
+    hasil.push({ berat: true, teks: "BPHTB tidak lolos — serah terima sertifikat tidak bisa diteruskan sebelum diselesaikan." });
+  }
+
   return hasil;
 }
 
@@ -213,6 +271,8 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
   const [dibuka, setDibuka] = useState(null);
   const [menyimpan, setMenyimpan] = useState(null);
   const [tersimpan, setTersimpan] = useState(null);
+  const [prosesBank, setProsesBank] = useState(false);
+  const [segarBerkas, setSegarBerkas] = useState(0);
 
   // Cerminan nilai yang benar-benar ada di database. Membandingkan dengan prop
   // `kpr` tidak cukup: prop itu ikut basi begitu induk memuat ulang karena
@@ -221,11 +281,6 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
   const tersimpanRef = React.useRef({ ...(kpr || {}) });
 
   // Hanya berganti konsumen yang mengatur ulang keadaan.
-  //
-  // Sebelumnya `kpr` ikut menjadi dependensi, dan karena setiap penyimpanan
-  // per kolom mengabarkan objek KPR baru ke induk, efek ini menyala kembali
-  // dan menutup tahap yang sedang diisi — tepat setelah pengguna mengetik satu
-  // kolom di dalamnya.
   React.useEffect(() => {
     setNilai(kpr || {});
     tersimpanRef.current = { ...(kpr || {}) };
@@ -241,6 +296,20 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
   const terbuka = dibuka ?? TAHAP[indeksAktif]?.kunci;
   const catatan = peringatan(nilai);
 
+  // Total DP dihitung di layar juga, bukan menunggu jawaban server: angkanya
+  // harus berubah pada ketukan yang sama dengan yang mengubah penyusunnya.
+  const totalDp = useMemo(() => {
+    // `Number(null)` adalah 0, bukan NaN — memeriksa keterisian lewat
+    // Number.isFinite() akan menganggap kolom kosong sebagai nol, dan baris
+    // lama yang totalnya pernah diketik tangan akan tampil Rp 0 meski
+    // ringkasan tahapnya menunjukkan angka sebenarnya.
+    const isi = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+    const a = isi(nilai.nominal_dp) ? Number(nilai.nominal_dp) : null;
+    const b = isi(nilai.biaya_tambahan_tanah) ? Number(nilai.biaya_tambahan_tanah) : null;
+    if (a === null && b === null) return nilai.nominal_total_dp ?? "";
+    return (a ?? 0) + (b ?? 0);
+  }, [nilai.nominal_dp, nilai.biaya_tambahan_tanah, nilai.nominal_total_dp]);
+
   /**
    * Simpan per bidang saat fokus meninggalkannya.
    *
@@ -254,9 +323,11 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
     if (String(asal ?? "") === String(baru ?? "")) return;
 
     setMenyimpan(key);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("customer_kpr")
-      .upsert({ customer_id: customerId, [key]: baru, updated_at: new Date().toISOString() }, { onConflict: "customer_id" });
+      .upsert({ customer_id: customerId, [key]: baru, updated_at: new Date().toISOString() }, { onConflict: "customer_id" })
+      .select()
+      .maybeSingle();
     setMenyimpan(null);
 
     if (error) {
@@ -267,21 +338,84 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
       return;
     }
 
-    tersimpanRef.current = { ...tersimpanRef.current, [key]: baru };
+    // Baris dibaca kembali karena trigger ikut menulis: Total DP dihitung di
+    // server, dan tanpa membacanya kembali layar akan menampilkan total lama
+    // sampai halaman dimuat ulang.
+    const baris = data || { ...tersimpanRef.current, [key]: baru };
+    const sebelum = tersimpanRef.current;
+    tersimpanRef.current = { ...baris };
+
+    // Hanya kolom yang TIDAK sedang disentuh pengguna yang ikut diperbarui.
+    //
+    // Penyimpanan berjalan per kolom dan tidak menunggu: seseorang yang
+    // mengisi Nominal DP lalu langsung pindah ke Biaya Tanah akan menerima
+    // jawaban simpanan pertama di tengah ketikan kedua. Menimpa seluruh baris
+    // akan menghapus apa yang baru saja ia tulis — kesalahan yang tampak
+    // seperti papan tik yang rusak, bukan seperti bug.
+    setNilai((v) => {
+      const gabung = { ...v };
+      for (const k of Object.keys(baris)) {
+        const belumDisentuh = String(v[k] ?? "") === String(sebelum[k] ?? "");
+        if (k === key || belumDisentuh) gabung[k] = baris[k];
+      }
+      return gabung;
+    });
     setTersimpan(key);
     setTimeout(() => setTersimpan((k) => (k === key ? null : k)), 1800);
-    onChange?.({ ...nilai, [key]: baru });
+    onChange?.(baris);
   }
 
   function ubah(key, value) {
     setNilai((v) => ({ ...v, [key]: value }));
   }
 
+  /** BRIEF §Bank: "Setelah Proses Dokumen sudah lengkap Tambahkan pilihan Klik proses bank". */
+  async function kirimKeBank() {
+    setProsesBank(true);
+    const { data, error } = await supabase.rpc("tandai_proses_bank", { p_customer_id: customerId });
+    setProsesBank(false);
+    if (error) {
+      // Pesan RPC sudah berbahasa Indonesia dan menyebut dokumen mana yang
+      // kurang, jadi ditampilkan apa adanya.
+      toast.gagal(error.message);
+      return;
+    }
+    const baris = { ...nilai, proses_bank_at: data, tanggal_masuk_bank: nilai.tanggal_masuk_bank || new Date().toISOString().slice(0, 10) };
+    tersimpanRef.current = { ...tersimpanRef.current, ...baris };
+    setNilai(baris);
+    toast.sukses("Berkas dinyatakan lengkap dan diproses ke bank.");
+    onChange?.(baris);
+  }
+
   function renderBidang(b) {
     const v = nilai[b.key] ?? "";
     const gaya = { ...inputStyle, ...(editable ? null : { background: "#F4F6FA", color: TEXT_MID }) };
 
-    if (b.tipe === "bi") {
+    if (b.tipe === "hitung") {
+      return (
+        <div
+          style={{
+            ...inputStyle,
+            background: PRIMARY_SOFT,
+            color: TEXT_DARK,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <span>{rupiah(totalDp)}</span>
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: TEXT_MID }}>otomatis</span>
+        </div>
+      );
+    }
+
+    if (b.tipe === "bi" || b.tipe === "pilih") {
+      const opsi =
+        b.tipe === "bi"
+          ? [["menunggu", "Menunggu hasil"], ["lolos", "Lolos"], ["tidak_lolos", "Tidak lolos"]]
+          : b.opsi;
       return (
         <select
           value={v}
@@ -292,10 +426,12 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
           }}
           style={gaya}
         >
-          <option value="">Belum diperiksa</option>
-          <option value="menunggu">Menunggu hasil</option>
-          <option value="lolos">Lolos</option>
-          <option value="tidak_lolos">Tidak lolos</option>
+          <option value="">{b.tipe === "bi" ? "Belum diperiksa" : "— belum ditentukan —"}</option>
+          {opsi.map(([nilaiOpsi, label]) => (
+            <option key={nilaiOpsi} value={nilaiOpsi}>
+              {label}
+            </option>
+          ))}
         </select>
       );
     }
@@ -324,18 +460,21 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
 
     if (b.tipe === "rupiah") {
       return (
-        <input
-          // type="text" + inputMode: angka besar jadi terbaca ("45.000.000"),
-          // sementara papan tik ponsel tetap membuka mode angka.
-          type="text"
-          inputMode="numeric"
-          value={rupiahInput(v)}
+        <InputRupiah
+          value={v}
           disabled={!editable}
-          onChange={(e) => ubah(b.key, angkaDariRupiah(e.target.value))}
-          onBlur={(e) => simpanBidang(b.key, angkaDariRupiah(e.target.value))}
-          style={gaya}
+          pilihanCepat={editable ? b.cepat : undefined}
+          onChange={(n) => ubah(b.key, n)}
+          onBlur={(_e, n) => simpanBidang(b.key, n)}
         />
       );
+    }
+
+    // BRIEF §Saringan Awal: "Bagian Catatan kalau tidak bisa di kosongkan di
+    // strip (-)". Strip hanya muncul saat kolomnya tidak sedang diisi — sebuah
+    // "-" yang harus dihapus dulu sebelum mengetik justru menambah pekerjaan.
+    if (b.strip && !editable) {
+      return <div style={{ ...gaya, background: "#F4F6FA", color: TEXT_MID }}>{atauStrip(v)}</div>;
     }
 
     return (
@@ -343,6 +482,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
         type={b.tipe}
         value={v}
         disabled={!editable}
+        placeholder={b.strip ? "-" : undefined}
         onChange={(e) => ubah(b.key, e.target.value)}
         onBlur={(e) => simpanBidang(b.key, e.target.value)}
         style={gaya}
@@ -362,7 +502,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
               {i > 0 && (
                 <div
                   aria-hidden="true"
-                  style={{ flex: 1, height: 2, background: selesai ? PRIMARY : BORDER, marginTop: 12, minWidth: 14 }}
+                  style={{ flex: 1, height: 2, background: selesai ? PRIMARY : BORDER, marginTop: 12, minWidth: 12 }}
                 />
               )}
               <button
@@ -414,8 +554,6 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
         })}
       </div>
 
-      {/* Peringatan. Tanggal SP3K expired sudah lama tersimpan tetapi tidak
-          pernah dipakai untuk apa pun — inilah gunanya. */}
       {catatan.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
           {catatan.map((c, i) => (
@@ -505,10 +643,10 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
               </button>
 
               {buka && (
-                <div style={{ padding: "0 15px 15px" }}>
+                <div style={{ padding: "0 15px 15px", display: "flex", flexDirection: "column", gap: 14 }}>
                   <div className="rg-3">
                     {t.bidang.map((b) => (
-                      <div key={b.key}>
+                      <div key={b.key} style={b.lebar === 2 ? { gridColumn: "span 2" } : undefined}>
                         <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
                           {b.label}
                           {menyimpan === b.key && <span style={{ fontWeight: 500, color: TEXT_MID }}> · menyimpan…</span>}
@@ -518,6 +656,81 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
                       </div>
                     ))}
                   </div>
+
+                  {t.catatan && <div style={{ fontSize: 11.5, color: TEXT_MID, lineHeight: 1.5 }}>{t.catatan}</div>}
+
+                  {t.lampiran?.map((l) => (
+                    <LampiranTahap
+                      key={l.slot}
+                      slot={l.slot}
+                      customerId={customerId}
+                      label={l.label}
+                      hint={l.hint}
+                      editable={editable}
+                    />
+                  ))}
+
+                  {t.pembayaran && (
+                    <div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: TEXT_MID, marginBottom: 7, letterSpacing: "0.02em" }}>
+                        KWITANSI &amp; BUKTI TRANSFER
+                      </div>
+                      <VerifikasiPembayaran
+                        customerId={customerId}
+                        jenis={t.pembayaran}
+                        editable={editable}
+                        onChange={() => setSegarBerkas((v) => v + 1)}
+                      />
+                    </div>
+                  )}
+
+                  {t.berkasBank && (
+                    <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14 }}>
+                      <BerkasBankPanel
+                        key={segarBerkas}
+                        customerId={customerId}
+                        bank={nilai.nama_bank}
+                        editable={editable}
+                        onChange={() => setSegarBerkas((v) => v + 1)}
+                      />
+
+                      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap" }}>
+                        {nilai.proses_bank_at ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: POSITIVE }}>
+                            <Check size={14} aria-hidden="true" />
+                            Berkas sudah diproses ke bank · {tanggal(nilai.proses_bank_at)}
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={kirimKeBank}
+                              disabled={!editable || prosesBank}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 7,
+                                border: "none",
+                                background: editable ? ACCENT : BORDER,
+                                color: "#fff",
+                                borderRadius: 999,
+                                padding: "10px 18px",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: editable && !prosesBank ? "pointer" : "default",
+                              }}
+                            >
+                              <Send size={14} aria-hidden="true" />
+                              {prosesBank ? "Memproses…" : "Proses Bank"}
+                            </button>
+                            <span style={{ fontSize: 11.5, color: TEXT_MID, lineHeight: 1.45, maxWidth: 380 }}>
+                              Menyatakan berkas lengkap dan diserahkan ke bank. Ditolak selama masih ada dokumen wajib
+                              yang belum diunggah.
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -548,6 +761,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange }) {
           <textarea
             value={nilai.kendala ?? ""}
             disabled={!editable}
+            placeholder="-"
             onChange={(e) => ubah("kendala", e.target.value)}
             onBlur={(e) => simpanBidang("kendala", e.target.value)}
             style={{ ...inputStyle, minHeight: 62, resize: "vertical", fontFamily: "inherit", ...(editable ? null : { background: "#F4F6FA", color: TEXT_MID }) }}

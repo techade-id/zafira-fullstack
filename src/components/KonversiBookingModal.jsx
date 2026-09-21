@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { List, Map as MapIcon } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useToast } from "../context/ToastContext";
-import { rupiah, rupiahInput, angkaDariRupiah, telepon } from "../lib/format";
+import { rupiah, telepon } from "../lib/format";
+import InputRupiah from "./InputRupiah";
 import SiteplanPicker from "./SiteplanPicker";
 import {
   Modal,
@@ -201,14 +202,14 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai })
             <label htmlFor="kv-nominal" style={labelGaya}>
               Booking Fee
             </label>
-            <input
+            {/* BRIEF §Leads mengeluhkan booking fee yang harus diketik satu
+                digit per kali. Di sinilah nominalnya benar-benar dimasukkan,
+                jadi di sinilah singkatan dan terbilangnya paling berguna. */}
+            <InputRupiah
               id="kv-nominal"
-              type="text"
-              inputMode="numeric"
-              placeholder="mis. 5.000.000"
-              value={rupiahInput(nominal)}
-              onChange={(e) => setNominal(angkaDariRupiah(e.target.value))}
-              style={inputStyle}
+              value={nominal}
+              onChange={setNominal}
+              pilihanCepat={[3e6, 5e6, 7e6, 10e6]}
             />
           </div>
           <div>

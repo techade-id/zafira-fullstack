@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import DaftarPage from "./pages/DaftarPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProspekPage from "./pages/ProspekPage";
+import FollowUpPage from "./pages/FollowUpPage";
 import PembayaranPage from "./pages/PembayaranPage";
 import KonsumenPage from "./pages/KonsumenPage";
 import KonsumenDetailPage from "./pages/KonsumenDetailPage";
@@ -60,6 +61,7 @@ export default function App() {
 
             {[
               ["prospek", <ProspekPage />],
+              ["follow-up", <FollowUpPage />],
               ["pembayaran", <PembayaranPage />],
               ["konsumen", <KonsumenPage />],
               ["pemberkasan", <PemberkasanPage />],

@@ -136,6 +136,7 @@ export function lockReason(customer) {
 const ALL_ROUTES = [
   "/",
   "/prospek",
+  "/follow-up",
   "/konsumen",
   "/pemberkasan",
   "/pembayaran",
@@ -160,10 +161,11 @@ const ROUTES_BY_ROLE = {
   admin: ALL_ROUTES,
   pengawas: ALL_ROUTES,
   supervisor_marketing: ALL_ROUTES.filter((r) => !["/data-agen", "/pengaturan-bisnis", "/log-aktivitas"].includes(r)),
-  sales: ["/", "/prospek", "/konsumen", "/pembayaran", "/pembatalan", "/reminder", "/target", "/siteplan", "/komplain", "/cari"],
+  sales: ["/", "/prospek", "/follow-up", "/konsumen", "/pembayaran", "/pembatalan", "/reminder", "/target", "/siteplan", "/komplain", "/cari"],
   admin_marketing: [
     "/",
     "/prospek",
+    "/follow-up",
     "/konsumen",
     "/pemberkasan",
     "/pembayaran",

@@ -12,6 +12,7 @@ import {
   HardHat,
   ClipboardList,
   MessageSquareWarning,
+  MessageSquare,
   BarChart2,
   Megaphone,
   LogOut,
@@ -42,6 +43,7 @@ const navSections = [
     title: "Penjualan",
     items: [
       { to: "/prospek", icon: Target, label: "Leads" },
+      { to: "/follow-up", icon: MessageSquare, label: "Follow Up Leads" },
       { to: "/konsumen", icon: Users, label: "Konsumen" },
       { to: "/pemberkasan", icon: FolderOpen, label: "Papan Berkas" },
       { to: "/pembayaran", icon: Wallet, label: "Pembayaran" },

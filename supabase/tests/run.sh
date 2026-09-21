@@ -81,9 +81,15 @@ fi
 # Sebuah berkas uji bisa terhenti di tengah jalan bila ada pernyataan tak
 # terduga yang gagal. Itu dicatat sebagai kegagalan, tetapi berkas berikutnya
 # tetap dijalankan supaya satu masalah tidak menyembunyikan sisanya.
+# Pola `0[2-9]_` yang lama berhenti diam-diam pada berkas uji kesepuluh:
+# berkas baru tetap ada di direktori, tidak pernah dijalankan, dan suite tetap
+# hijau. Sekarang semua berkas bernomor ikut, kecuali kerangka dan ringkasan.
 echo "▸ Menjalankan uji"
 aborted=0
-for f in "$TESTS"/0[2-9]_*.sql; do
+for f in "$TESTS"/[0-9][0-9]_*.sql; do
+  case "$(basename "$f")" in
+    00_*|01_*|99_*) continue ;;
+  esac
   if run_sql "$f"; then
     echo "  ✓ $(basename "$f")"
   else

@@ -19,16 +19,44 @@ import {
   NEGATIVE,
   BORDER,
 } from "../components/ui";
-import { Users, Handshake, TrendingUp, Home, Wallet, MessageSquareWarning, FolderCheck, Lock } from "lucide-react";
+import { Users, Handshake, TrendingUp, Home, Wallet, MessageSquareWarning, FolderCheck, Lock, ChevronDown } from "lucide-react";
 
 const DAY_LABELS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
+/**
+ * BRIEF §Dashboard: "menginginkan filter yang lebih spesifik berdasarkan bulan
+ * berjalan (mis. beberapa prospect bulan ini, berapa booking, berapa akad)".
+ *
+ * Bulan berjalan didahulukan dan menjadi bawaan. "Semua" tetap ada, tetapi ia
+ * bukan pertanyaan yang ditanyakan setiap pagi — yang ditanyakan setiap pagi
+ * adalah bulan ini sudah sampai mana.
+ */
 const RANGES = [
-  { key: "all", label: "Semua" },
+  { key: "month", label: "Bulan ini" },
   { key: "7", label: "7 hari" },
   { key: "30", label: "30 hari" },
-  { key: "month", label: "Bulan ini" },
+  { key: "all", label: "Semua" },
   { key: "custom", label: "Kustom" },
+];
+
+/**
+ * Hitungan per prosedur — BRIEF §Dashboard: "Untuk bagian filter prosedurnya
+ * berapa, lalu bookingnya berapa dll yang berada di dashboard".
+ *
+ * Dihitung dari tanggal peristiwanya, bukan tanggal prospek dibuat: akad bulan
+ * ini nyaris tidak pernah berasal dari prospek bulan ini.
+ */
+const PROSEDUR = [
+  { key: "prospek_baru", label: "Prospek Baru" },
+  { key: "follow_up", label: "Follow Up" },
+  { key: "survei", label: "Survei" },
+  { key: "bi_checking", label: "BI-Checking" },
+  { key: "booking", label: "Booking" },
+  { key: "masuk_bank", label: "Masuk Bank" },
+  { key: "sp3k", label: "SP3K Terbit" },
+  { key: "akad", label: "Akad" },
+  { key: "serah_terima", label: "Serah Terima" },
+  { key: "batal", label: "Batal", negatif: true },
 ];
 
 function iso(d) {
@@ -124,6 +152,98 @@ function FunnelStrip({ stages, total }) {
 }
 
 /**
+ * Hitungan per prosedur pada periode terpilih.
+ *
+ * BRIEF §Dashboard meminta dua hal sekaligus: "prosedurnya berapa, bookingnya
+ * berapa dll", dan tampilan yang lebih ringkas. Sepuluh kartu statistik penuh
+ * akan mengingkari yang kedua demi yang pertama — jadi bentuknya satu deret
+ * angka rapat, bukan sepuluh kotak. Semua terbaca dalam satu pandangan, dan
+ * tingginya kurang dari satu kartu.
+ */
+function StripProsedur({ periode, label }) {
+  if (!periode) return null;
+  return (
+    <Card style={{ padding: "14px 16px" }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: TEXT_MID, letterSpacing: "0.03em", marginBottom: 11 }}>
+        PROSEDUR · {label.toUpperCase()}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 0 }}>
+        {PROSEDUR.map((x, i) => (
+          <div
+            key={x.key}
+            style={{
+              flex: "1 1 96px",
+              minWidth: 96,
+              padding: "2px 12px",
+              borderLeft: i === 0 ? "none" : `1px solid ${BORDER}`,
+            }}
+          >
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {x.label}
+            </div>
+            <div style={{ fontSize: 19, fontWeight: 700, color: x.negatif && Number(periode[x.key]) > 0 ? NEGATIVE : TEXT_DARK, letterSpacing: "-0.02em" }}>
+              {Number(periode[x.key] || 0)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Seksi yang bisa dilipat.
+ *
+ * BRIEF §Dashboard: "Dibuatkan lebih ringkas lagi untuk tampilan, mis. bagian
+ * Item di minimize lagi."
+ *
+ * Yang dilipat adalah laporan yang dibaca sesekali — funnel, durasi tahap,
+ * rekap berkas, tabel per agen. Yang tidak pernah dilipat adalah pekerjaan
+ * hari ini dan angka periode: menyembunyikannya di balik satu klik berarti
+ * dashboard hanya berguna bagi orang yang sudah tahu harus menekan apa.
+ * Ringkasannya tetap terbaca pada judul saat terlipat, sehingga melipat tidak
+ * sama dengan kehilangan.
+ */
+function Seksi({ judul, ringkas, awalTerbuka = false, children }) {
+  const [buka, setBuka] = useState(awalTerbuka);
+  return (
+    <Card style={{ padding: buka ? undefined : "14px 18px" }}>
+      <button
+        onClick={() => setBuka((v) => !v)}
+        aria-expanded={buka}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          border: "none",
+          background: "none",
+          padding: 0,
+          cursor: "pointer",
+          textAlign: "left",
+          font: "inherit",
+          marginBottom: buka ? 14 : 0,
+        }}
+      >
+        <span style={{ fontSize: 15, fontWeight: 600, color: TEXT_DARK }}>{judul}</span>
+        {!buka && ringkas && (
+          <span style={{ fontSize: 12, color: TEXT_MID, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {ringkas}
+          </span>
+        )}
+        <ChevronDown
+          size={16}
+          color={TEXT_MID}
+          aria-hidden="true"
+          style={{ marginLeft: "auto", flexShrink: 0, transform: buka ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}
+        />
+      </button>
+      {buka && children}
+    </Card>
+  );
+}
+
+/**
  * Kartu laporan yang relevan per peran.
  *
  * Sebelumnya ketujuh peran melihat sepuluh kartu yang sama. Sales tidak
@@ -150,7 +270,7 @@ export default function DashboardPage() {
   const [payments, setPayments] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [error, setError] = useState("");
-  const [range, setRange] = useState("all");
+  const [range, setRange] = useState("month");
   const [custom, setCustom] = useState({ from: "", to: "" });
 
   useEffect(() => {
@@ -193,6 +313,9 @@ export default function DashboardPage() {
   ];
 
   const perAgent = (s.by_agent || []).map((a) => ({ name: a.name, leads: Number(a.leads), deals: Number(a.deals) }));
+
+  const periode = s.periode || null;
+  const labelPeriode = RANGES.find((r) => r.key === range)?.label || "Periode ini";
 
   const berkasRecap = (s.berkas_recap || []).map((b) => ({ ...b, lama_hari: b.lama_hari == null ? null : Number(b.lama_hari) }));
   const berkasSummary = (s.berkas_summary || []).map((b) => ({ label: b.label, value: Number(b.value) }));
@@ -277,16 +400,13 @@ export default function DashboardPage() {
         <StatCard icon={Home} label="Unit Tersedia" value={unitsAvailable} sub={unitsTotal ? `dari ${unitsTotal} unit` : "belum ada unit"} />
       </div>
 
+      <StripProsedur periode={periode} label={labelPeriode} />
+
       {funnel.length > 0 && (
-        <Card>
-          <SectionTitle
-            title="Funnel Penjualan"
-            action={
-              <span style={{ fontSize: 12, color: TEXT_MID }}>
-                New Lead → Warm → Hot → Booking → KPR → Akad → Aftersales
-              </span>
-            }
-          />
+        <Seksi
+          judul="Funnel Penjualan"
+          ringkas={`${totalLeads} prospek · New Lead → Warm → Hot → Booking → KPR → Akad → Aftersales`}
+        >
           <FunnelStrip stages={funnel} total={totalLeads} />
 
           {handover && (
@@ -311,31 +431,40 @@ export default function DashboardPage() {
               </span>
             </div>
           )}
-        </Card>
+        </Seksi>
       )}
 
       <div className="chart-row">
-        <Card>
-          <SectionTitle title="Prospek Masuk" action={<span style={{ fontSize: 12, color: TEXT_MID }}>7 hari terakhir</span>} />
+        <Seksi judul="Prospek Masuk" ringkas="7 hari terakhir" awalTerbuka>
           <BarChart data={weekData} highlightIndex={highlightIndex} />
-        </Card>
+        </Seksi>
 
         {kartu.finance && (
-        <Card>
-          <SectionTitle title="Antrean Finance" />
+        <Seksi
+          judul="Antrean Finance"
+          ringkas={finance ? `${finance.siap_verifikasi ?? finance.menunggu_jumlah} siap diverifikasi` : ""}
+          awalTerbuka
+        >
           {!finance ? (
             <div style={{ fontSize: 13, color: TEXT_MID }}>
               Jalankan <code>migration_010_dashboard_and_ads.sql</code> untuk menampilkan ringkasan ini.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ padding: "14px 16px", background: Number(finance.menunggu_jumlah) > 0 ? ACCENT_SOFT : PRIMARY_SOFT, borderRadius: 14 }}>
-                <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 6 }}>Menunggu verifikasi</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: Number(finance.menunggu_jumlah) > 0 ? ACCENT_DARK : TEXT_DARK }}>
-                  {finance.menunggu_jumlah}
+              {/* Dua lapis sejak migrasi 017: yang buktinya sudah lengkap
+                  adalah pekerjaan Finance hari ini; yang belum berbukti masih
+                  pekerjaan Admin Marketing, dan menggabungkan keduanya membuat
+                  angka di kartu ini tidak bisa ditindaklanjuti siapa pun. */}
+              <div style={{ padding: "14px 16px", background: Number(finance.siap_verifikasi ?? finance.menunggu_jumlah) > 0 ? ACCENT_SOFT : PRIMARY_SOFT, borderRadius: 14 }}>
+                <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 6 }}>Siap diverifikasi — bukti transfer lengkap</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: Number(finance.siap_verifikasi ?? finance.menunggu_jumlah) > 0 ? ACCENT_DARK : TEXT_DARK }}>
+                  {finance.siap_verifikasi ?? finance.menunggu_jumlah}
                   <span style={{ fontSize: 13, fontWeight: 500, color: TEXT_MID }}> pembayaran</span>
                 </div>
-                <div style={{ fontSize: 12.5, color: TEXT_MID, marginTop: 3 }}>{rupiah(finance.menunggu_nominal)}</div>
+                <div style={{ fontSize: 12.5, color: TEXT_MID, marginTop: 3 }}>
+                  {rupiah(finance.menunggu_nominal)} total belum tervalidasi
+                  {finance.tanpa_bukti != null && ` · ${finance.tanpa_bukti} belum ada bukti transfer`}
+                </div>
               </div>
 
               <div style={{ padding: "14px 16px", background: PRIMARY_SOFT, borderRadius: 14 }}>
@@ -352,13 +481,12 @@ export default function DashboardPage() {
               )}
             </div>
           )}
-        </Card>
+        </Seksi>
         )}
       </div>
 
       {kartu.kprDurasi && (
-      <Card>
-        <SectionTitle title="Rata-rata Durasi per Tahap KPR" action={<span style={{ fontSize: 12, color: TEXT_MID }}>dalam hari</span>} />
+      <Seksi judul="Rata-rata Durasi per Tahap KPR" ringkas="dalam hari">
         <div className="rg-4">
           {stageDurations.map((s) => (
             <div key={s.label} style={{ padding: "14px 16px", background: PRIMARY_SOFT, borderRadius: 14 }}>
@@ -370,16 +498,12 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
-      </Card>
+      </Seksi>
       )}
 
       {kartu.berkas && (
       <div className="chart-row">
-        <Card>
-          <SectionTitle
-            title="Konsumen Sedang Mengumpulkan Berkas"
-            action={<span style={{ fontSize: 12, color: TEXT_MID }}>{berkasRecap.length} konsumen berjalan</span>}
-          />
+        <Seksi judul="Konsumen Sedang Mengumpulkan Berkas" ringkas={`${berkasRecap.length} konsumen berjalan`}>
           <DataTable
             emptyLabel="Tidak ada konsumen yang sedang dalam proses berkas."
             columns={[
@@ -408,10 +532,9 @@ export default function DashboardPage() {
             ]}
             rows={berkasRecap}
           />
-        </Card>
+        </Seksi>
 
-        <Card>
-          <SectionTitle title="Progres Berkas" />
+        <Seksi judul="Progres Berkas" ringkas={`${berkasSummary.length} tahap`}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {berkasSummary.length === 0 && <div style={{ fontSize: 13, color: TEXT_MID }}>Belum ada data berkas.</div>}
             {berkasSummary.map((b) => (
@@ -422,15 +545,11 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </Card>
+        </Seksi>
       </div>
       )}
 
-      <Card>
-        <SectionTitle
-          title="Jumlah Sumber Leads"
-          action={<span style={{ fontSize: 12, color: TEXT_MID }}>{totalLeads} prospek pada periode ini</span>}
-        />
+      <Seksi judul="Jumlah Sumber Leads" ringkas={`${totalLeads} prospek pada periode ini`}>
         {sourceRows.length === 0 && <div style={{ fontSize: 13, color: TEXT_MID }}>Belum ada data sumber leads.</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
           {sourceRows.map((x) => (
@@ -447,7 +566,7 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
-      </Card>
+      </Seksi>
 
       <div className="rg-2">
         <Card>
@@ -485,8 +604,7 @@ export default function DashboardPage() {
 
       {kartu.agen && (
       <div className="rg-2">
-        <Card>
-          <SectionTitle title="Performa per Agen" />
+        <Seksi judul="Performa per Agen" ringkas={`${perAgent.length} agen`}>
           <DataTable
             emptyLabel="Belum ada data agen."
             columns={[
@@ -501,9 +619,8 @@ export default function DashboardPage() {
             ]}
             rows={perAgent}
           />
-        </Card>
-        <Card>
-          <SectionTitle title="Konversi Sumber Leads → Deal" />
+        </Seksi>
+        <Seksi judul="Konversi Sumber Leads → Deal" ringkas={`${sourceRows.length} sumber`}>
           <DataTable
             emptyLabel="Belum ada data sumber leads."
             columns={[
@@ -514,7 +631,7 @@ export default function DashboardPage() {
             ]}
             rows={sourceRows}
           />
-        </Card>
+        </Seksi>
       </div>
       )}
     </div>

@@ -8,10 +8,84 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
 import { segarkanNotifikasi } from "../lib/useNotifications";
-import { rupiah, rupiahInput, angkaDariRupiah, tanggal, labelJenisBayar } from "../lib/format";
+import { rupiah, tanggal, labelJenisBayar, labelStatus } from "../lib/format";
+import InputRupiah from "../components/InputRupiah";
 import { Card, PageTitle, PrimaryButton, Badge, DataTable, BORDER, DeleteButton, EditButton, RowActions, TEXT_MID, TEXT_DARK, ACCENT, ACCENT_DARK, NEGATIVE, ReadOnlyBanner, inputStyle } from "../components/ui";
 
 const PAYMENT_TYPES = ["booking", "dp", "dana_talangan", "termin", "pelunasan", "lainnya"];
+
+/**
+ * Unggah bukti transfer — dan dengan itu, minta verifikasi Finance.
+ *
+ * BRIEF §Leads: "Tambahkan Section Upload Bukti Pembayaran" dan "Tambahkan Fase
+ * Menunggu verifikasi sebelum di Konfirmasi oleh finance … termasuk Booking,
+ * misalnya kwitansi harus masuk ke tahap verifikasi ke Finance untuk
+ * memvalidasi."
+ *
+ * Bukti transfer datang dari konsumen dan diunggah Admin Marketing; kuitansi
+ * resmi ditandatangani perusahaan dan hanya boleh datang dari Finance. Fase di
+ * antara keduanya — "menunggu verifikasi" — sebelumnya tidak ada, sehingga
+ * Finance tidak punya cara membedakan pembayaran yang buktinya sudah lengkap
+ * dari yang baru sekadar dicatat.
+ */
+function UnggahBukti({ row, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handlePick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError("");
+
+    const { path, error: upErr } = await uploadFile("payment-proofs", row.customer_id, file);
+    if (upErr) {
+      setError(upErr.message);
+      setBusy(false);
+      return;
+    }
+
+    // Status dan bukti dikirim bersama: trigger guard_payment_verification
+    // hanya mengizinkan perpindahan ke 'menunggu_verifikasi' bila buktinya ikut
+    // dalam baris yang sama.
+    const { error: dbErr } = await supabase
+      .from("payments")
+      .update({ bukti_transfer_url: path, status: "menunggu_verifikasi" })
+      .eq("id", row.id);
+
+    setBusy(false);
+    if (dbErr) {
+      setError(dbErr.message);
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <div>
+      <label
+        style={{
+          display: "inline-block",
+          border: `1px solid ${BORDER}`,
+          background: "#fff",
+          color: TEXT_DARK,
+          borderRadius: 9,
+          padding: "5px 11px",
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: busy ? "default" : "pointer",
+          whiteSpace: "nowrap",
+        }}
+        title="Unggah bukti transfer dari konsumen dan kirim ke antrean verifikasi Finance"
+      >
+        {busy ? "Mengunggah…" : row.bukti_transfer_url ? "Ganti Bukti" : "+ Bukti Transfer"}
+        <input type="file" accept="image/*,application/pdf" onChange={handlePick} disabled={busy} style={{ display: "none" }} />
+      </label>
+      {error && <div style={{ fontSize: 11, color: NEGATIVE, marginTop: 4, whiteSpace: "normal", maxWidth: 200 }}>{error}</div>}
+    </div>
+  );
+}
 
 /**
  * Finance-only verification (PRD §3.2, REVISI §2.2).
@@ -159,11 +233,16 @@ export default function PembayaranPage() {
     if (url) window.open(url, "_blank");
   }
 
+  async function viewProof(path) {
+    const url = await getSignedUrl("payment-proofs", path);
+    if (url) window.open(url, "_blank");
+  }
+
   return (
     <div>
       <PageTitle
         title="Riwayat Pembayaran"
-        subtitle="Monitoring penagihan — booking, DP, dana talangan, termin, pelunasan"
+        subtitle="Monitoring penagihan — setiap pembayaran melewati bukti transfer, lalu verifikasi Finance"
         action={<PrimaryButton subject="payment" onClick={() => setShowForm((v) => !v)}>+ Catat Pembayaran</PrimaryButton>}
       />
 
@@ -171,7 +250,8 @@ export default function PembayaranPage() {
 
       {!canVerify && (
         <div style={{ fontSize: 12, color: TEXT_MID, marginBottom: 14, lineHeight: 1.5 }}>
-          Pemisahan wewenang: pembayaran boleh dicatat di sini, tetapi verifikasi dan unggah kuitansi resmi adalah wewenang Finance.
+          Pemisahan wewenang: pembayaran dan bukti transfernya boleh dicatat di sini, tetapi verifikasi dan kuitansi resmi
+          adalah wewenang Finance. Mengunggah bukti transfer memindahkan pembayaran ke antrean verifikasi mereka.
         </div>
       )}
 
@@ -198,16 +278,12 @@ export default function PembayaranPage() {
               </select>
             </Bidang>
             <Bidang label="Nominal" wajib>
-              {/* Pemisah ribuan hidup: `type="number"` menampilkan 350000000
-                  polos, dan salah satu nol yang terlewat di sini adalah
-                  kesalahan yang mahal. */}
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="mis. 5.000.000"
-                value={rupiahInput(form.amount)}
-                onChange={(e) => setForm({ ...form, amount: angkaDariRupiah(e.target.value) })}
-                style={inputStyle}
+              {/* Singkatan, pilihan cepat, dan terbilang — BRIEF §Leads
+                  mengeluhkan nominal yang harus diketik satu digit per kali. */}
+              <InputRupiah
+                value={form.amount}
+                onChange={(v) => setForm({ ...form, amount: v })}
+                pilihanCepat={form.payment_type === "booking" ? [3e6, 5e6, 7e6, 10e6] : undefined}
               />
             </Bidang>
             <Bidang label="Tanggal Pembayaran">
@@ -250,7 +326,8 @@ export default function PembayaranPage() {
               key: "status",
               label: "Semua status",
               options: [
-                { value: "menunggu", label: "Menunggu verifikasi" },
+                { value: "menunggu", label: "Bukti transfer belum ada" },
+                { value: "menunggu_verifikasi", label: "Menunggu verifikasi Finance" },
                 { value: "terverifikasi", label: "Terverifikasi" },
               ],
             },
@@ -283,8 +360,50 @@ export default function PembayaranPage() {
                       }}
                     />
                   );
-                return <Badge value="menunggu" />;
+                // Dua keadaan yang berbeda artinya bagi orang yang bukan
+                // Finance: satu masih pekerjaannya, satu lagi sudah bukan.
+                return (
+                  <span
+                    style={{ fontSize: 11.5, fontWeight: 600, color: row.status === "menunggu_verifikasi" ? ACCENT_DARK : TEXT_MID }}
+                    title={
+                      row.status === "menunggu_verifikasi"
+                        ? "Bukti transfer sudah dikirim — menunggu verifikasi pembayaran dari Finance"
+                        : "Unggah bukti transfer untuk mengirimnya ke antrean Finance"
+                    }
+                  >
+                    {labelStatus(row.status)}
+                  </span>
+                );
               },
+            },
+            {
+              key: "bukti_transfer_url",
+              label: "Bukti Transfer",
+              sortable: false,
+              // BRIEF §Leads: "Tambahkan Section Upload Bukti Pembayaran".
+              render: (row) => (
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  {row.bukti_transfer_url && (
+                    <button
+                      onClick={() => viewProof(row.bukti_transfer_url)}
+                      style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Lihat
+                    </button>
+                  )}
+                  {row.status !== "terverifikasi" && canWrite(profile, "payment") && (
+                    <UnggahBukti
+                      row={row}
+                      onDone={() => {
+                        fetchData();
+                        segarkanNotifikasi();
+                        toast.sukses("Bukti transfer terkirim — menunggu verifikasi pembayaran dari Finance.");
+                      }}
+                    />
+                  )}
+                  {!row.bukti_transfer_url && row.status === "terverifikasi" && <span style={{ color: TEXT_MID, fontSize: 12 }}>-</span>}
+                </div>
+              ),
             },
             {
               key: "proof_url",

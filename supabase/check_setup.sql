@@ -34,7 +34,11 @@ where n.nspname = 'public'
     -- migration_011
     'me', 'is_aktif', 'approve_user', 'deactivate_user',
     -- migration_012
-    'on_field_project', 'sync_field_progress'
+    'on_field_project', 'sync_field_progress',
+    -- migration_017
+    'lead_temperature', 'lead_temperature_from_text', 'apply_lead_temperature',
+    'refresh_lead_temperature', 'kpr_hitung_total_dp', 'kelengkapan_berkas',
+    'tandai_proses_bank', 'customer_sync_penghasilan'
   )
 
 union all
@@ -45,7 +49,9 @@ from (values ('leads'), ('lead_activities'), ('customers'), ('customer_kpr'), ('
              ('customer_transfers'), ('app_settings'), ('holidays'), ('project_tasks'),
              ('task_evaluations'), ('units'), ('projects'), ('contractors'),
              ('complaints'), ('ads_analytics'), ('activity_logs'),
-             ('ads_campaigns'), ('partners')) v(name)
+             ('ads_campaigns'), ('partners'),
+             -- migration_017
+             ('berkas_lampiran')) v(name)
 left join pg_tables t on t.schemaname = 'public' and t.tablename = v.name
 
 union all
@@ -59,7 +65,14 @@ from (values ('customers', 'locked_at'), ('customers', 'handover_state'),
              ('leads', 'partner_id'), ('leads', 'username_sosmed'),
              ('payments', 'proof_url'),
              ('ads_analytics', 'campaign_id'),
-             ('field_reports', 'reporter_id')) v(tbl, col)
+             ('field_reports', 'reporter_id'),
+             -- migration_017
+             ('leads', 'organik_detail'), ('leads', 'tanggal_survei'),
+             ('leads', 'bi_checking_status'),
+             ('customers', 'penghasilan'),
+             ('customer_kpr', 'tanggal_survei'), ('customer_kpr', 'proses_bank_at'),
+             ('customer_kpr', 'bphtb_status'), ('customer_kpr', 'shm_balik_nama'),
+             ('payments', 'bukti_transfer_url')) v(tbl, col)
 left join information_schema.columns c
   on c.table_schema = 'public' and c.table_name = v.tbl and c.column_name = v.col
 
@@ -70,6 +83,12 @@ from pg_enum e join pg_type ty on ty.oid = e.enumtypid where ty.typname = 'user_
 union all
 select 'TAHAP LEAD', string_agg(e.enumlabel, ', ' order by e.enumsortorder), ''
 from pg_enum e join pg_type ty on ty.oid = e.enumtypid where ty.typname = 'lead_status'
+
+union all
+-- Sejak migration_017 ada tiga status, bukan dua. Tanpa 'menunggu_verifikasi'
+-- bukti transfer tidak punya tempat untuk menunggu Finance.
+select 'STATUS BAYAR', string_agg(e.enumlabel, ', ' order by e.enumsortorder), ''
+from pg_enum e join pg_type ty on ty.oid = e.enumtypid where ty.typname = 'payment_status'
 
 union all
 select 'ROLE TERPAKAI', p.role::text, count(*)::text
@@ -104,6 +123,8 @@ select 'ISI DATA', x.nama, x.jml::text from (
   union all select 'customer_kpr', count(*) from customer_kpr
   union all select 'payments', count(*) from payments
   union all select 'payments terverifikasi', count(*) from payments where status = 'terverifikasi'
+  union all select 'payments menunggu verifikasi', count(*) from payments where status::text = 'menunggu_verifikasi'
+  union all select 'berkas_lampiran', count(*) from berkas_lampiran
   union all select 'units', count(*) from units
   union all select 'projects', count(*) from projects
   union all select 'project_tasks', count(*) from project_tasks

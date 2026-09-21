@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock } from "lucide-react";
+import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock, MessageSquare } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -146,8 +146,12 @@ export default function PanelProspek({
                 )}
 
                 <div style={{ display: "flex", gap: 8, marginTop: 9, flexWrap: "wrap" }}>
-                  <button onClick={onUbahTahap} style={sekunder}>
-                    Ubah Tahap
+                  {/* Bukan lagi "Ubah Tahap": suhu prospek ditentukan sistem
+                      dari riwayat follow-up (BRIEF §Leads), jadi yang bisa
+                      dilakukan di sini adalah menuliskan apa yang terjadi. */}
+                  <button onClick={onUbahTahap} style={sekunder} title="Catat hasil follow-up dan jadwalkan langkah berikutnya">
+                    <MessageSquare size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
+                    Catat Follow Up
                   </button>
                   <button onClick={onUbahData} style={sekunder}>
                     <Pencil size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
