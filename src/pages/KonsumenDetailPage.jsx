@@ -21,6 +21,7 @@ import {
   TEXT_DARK,
   PRIMARY,
   PRIMARY_SOFT,
+  SURFACE,
   ACCENT_DARK,
   ReadOnlyBanner,
   LockBanner,
