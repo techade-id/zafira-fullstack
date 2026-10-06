@@ -431,7 +431,7 @@ select test.eq_query(
 -- pasti dikembalikan — sementara daftarnya di layar masih menandainya merah.
 select test.affects(
   'Satu dokumen wajib ditolak bank',
-  $$update customer_documents set status = 'ditolak'
+  $$update customer_documents set status = 'ditolak', alasan_ditolak = 'Ditolak bank: KTP buram'
      where customer_id = (select id from customers where lead_id = '10000000-0000-0000-0000-0000000000c1')
        and doc_type = 'KTP Pemohon'$$,
   1);

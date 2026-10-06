@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, ExternalLink, X, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ExternalLink, X, FileText, Check, Ban } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { jenisBerkas } from "../lib/berkas";
-import { Modal, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PAGE_BG } from "./ui";
+import { Modal, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PAGE_BG, POSITIVE, NEGATIVE, ACCENT_DARK } from "./ui";
 
 /**
  * Pratinjau berkas di dalam aplikasi.
@@ -13,28 +13,60 @@ import { Modal, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PAGE_BG } from "./ui";
  * pernah bersebelahan dengan daftarnya. Di sini berkas dibuka di tempat,
  * dan ← → berpindah ke berkas berikutnya.
  *
- * Item: { bucket, path, judul, keterangan, nama }
+ * Item: { bucket, path, judul, keterangan, nama, verifikasi? }
+ *
+ * `verifikasi` — { keadaan, setuju(): Promise<bool>, tolak(): Promise<bool> }
+ * — menampilkan tombol Verifikasi/Tolak di bawah berkas. Memeriksa berkas
+ * dan memutuskannya terjadi di layar yang sama: tidak ada lagi menutup
+ * pratinjau, mencari barisnya, lalu memilih status dari dropdown.
  */
+
+const LABEL_KEADAAN = {
+  terverifikasi: { label: "Terverifikasi", warna: POSITIVE },
+  menunggu: { label: "Menunggu verifikasi", warna: ACCENT_DARK },
+  ditolak: { label: "Ditolak", warna: NEGATIVE },
+};
 export default function PratinjauBerkas({ daftar, indeks, open, onClose, onPindah }) {
   const item = daftar[indeks] || null;
   const [url, setUrl] = useState(null);
   const [memuat, setMemuat] = useState(false);
   const [gagal, setGagal] = useState(false);
+  // Keputusan yang diambil di layar ini. Daftarnya salinan saat pratinjau
+  // dibuka, jadi tanpa ini status berkas yang baru diverifikasi tetap
+  // terbaca "menunggu" ketika pengguna kembali ke berkas itu dengan ←.
+  const [keputusan, setKeputusan] = useState({});
+  const [memutus, setMemutus] = useState(false);
   const wadah = useRef(null);
+
+  useEffect(() => {
+    if (open) setKeputusan({});
+  }, [open]);
 
   // Penampil PDF bawaan browser merebut fokus begitu iframe-nya selesai
   // dimuat, dan sejak itu Escape serta ← → tertelan di dalam iframe —
-  // pratinjau tidak bisa ditutup atau digeser dari keyboard. Fokus diambil
-  // kembali beberapa kali karena penampilnya memfokuskan diri tidak tepat
-  // pada saat onLoad. Klik pengguna di dalam PDF tetap dihormati: yang diambil
-  // kembali hanya fokus yang direbut tanpa diminta, dalam detik pertama.
+  // pratinjau tidak bisa ditutup atau digeser dari keyboard. Rebutannya tidak
+  // terjadi tepat pada onLoad, jadi yang dipasang adalah jendela 1,5 detik:
+  // setiap kali fokus pindah ke iframe dalam rentang itu, fokus dikembalikan.
+  // Di luar rentang itu fokus di dalam PDF adalah pilihan pengguna sendiri.
+  const batasRebut = useRef(0);
   function rebutFokus() {
-    for (const ms of [0, 150, 500, 1000]) {
+    batasRebut.current = Date.now() + 1500;
+    kembalikanFokus();
+  }
+  function kembalikanFokus() {
+    if (Date.now() > batasRebut.current) return;
+    for (const ms of [0, 50]) {
       setTimeout(() => {
-        if (document.activeElement?.tagName === "IFRAME" && !wadah.current?.dataset.diklik) wadah.current?.focus();
+        if (document.activeElement?.tagName === "IFRAME") wadah.current?.focus();
       }, ms);
     }
   }
+  useEffect(() => {
+    if (!open) return undefined;
+    // Jendela induk kehilangan fokus tepat saat iframe merebutnya.
+    window.addEventListener("blur", kembalikanFokus);
+    return () => window.removeEventListener("blur", kembalikanFokus);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open || !item) return undefined;
@@ -42,7 +74,6 @@ export default function PratinjauBerkas({ daftar, indeks, open, onClose, onPinda
     setUrl(null);
     setGagal(false);
     setMemuat(true);
-    if (wadah.current) delete wadah.current.dataset.diklik;
     supabase.storage
       .from(item.bucket)
       .createSignedUrl(item.path, 3600)
@@ -117,9 +148,6 @@ export default function PratinjauBerkas({ daftar, indeks, open, onClose, onPinda
       <div
         ref={wadah}
         tabIndex={-1}
-        onPointerDown={() => {
-          if (wadah.current) wadah.current.dataset.diklik = "1";
-        }}
         style={{
           outline: "none",
           position: "relative",
@@ -170,9 +198,67 @@ export default function PratinjauBerkas({ daftar, indeks, open, onClose, onPinda
           </>
         )}
       </div>
+      {item.verifikasi && (
+        <BarisKeputusan
+          keadaan={keputusan[item.path] || item.verifikasi.keadaan}
+          memutus={memutus}
+          onSetuju={async () => {
+            setMemutus(true);
+            const ok = await item.verifikasi.setuju();
+            setMemutus(false);
+            if (!ok) return;
+            setKeputusan((k) => ({ ...k, [item.path]: "terverifikasi" }));
+            // Lanjut ke berkas berikutnya yang masih menunggu — memeriksa
+            // sembilan berkas adalah sembilan keputusan berturut-turut.
+            const berikut = daftar.findIndex((d, i) => i > indeks && d.verifikasi && (keputusan[d.path] || d.verifikasi.keadaan) === "menunggu");
+            if (berikut >= 0) onPindah(berikut);
+          }}
+          onTolak={async () => {
+            const ok = await item.verifikasi.tolak();
+            if (ok) setKeputusan((k) => ({ ...k, [item.path]: "ditolak" }));
+          }}
+        />
+      )}
     </Modal>
   );
 }
+
+function BarisKeputusan({ keadaan, memutus, onSetuju, onTolak }) {
+  const k = LABEL_KEADAAN[keadaan] || LABEL_KEADAAN.menunggu;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between", flexWrap: "wrap", marginTop: 14 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: k.warna }}>
+        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: k.warna }} />
+        {k.label}
+      </span>
+      <div style={{ display: "flex", gap: 8 }}>
+        {keadaan !== "ditolak" && (
+          <button onClick={onTolak} disabled={memutus} style={{ ...tombolKeputusan, color: NEGATIVE, borderColor: "#F2D3D1" }}>
+            <Ban size={14} aria-hidden="true" /> Tolak
+          </button>
+        )}
+        {keadaan !== "terverifikasi" && (
+          <button onClick={onSetuju} disabled={memutus} style={{ ...tombolKeputusan, background: POSITIVE, borderColor: POSITIVE, color: "#fff" }}>
+            <Check size={14} aria-hidden="true" /> {memutus ? "Menyimpan…" : "Verifikasi"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const tombolKeputusan = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  border: `1px solid ${BORDER}`,
+  background: SURFACE,
+  borderRadius: 999,
+  padding: "9px 16px",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 /**
  * `const [bukaPratinjau, pratinjau] = usePratinjau();`

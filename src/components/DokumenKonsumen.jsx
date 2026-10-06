@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Image as ImageIcon, Upload, Plus, Check } from "lucide-react";
+import { FileText, Image as ImageIcon, Upload, Plus, Check, Ban } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -9,6 +9,7 @@ import { useSyaratBerkas, cocokkanBerkas } from "../lib/useSyaratBerkas";
 import { unggahBerkasBank, unggahLampiran, unggahBuktiTransfer, unggahKuitansi, dengarBerkas, jenisBerkas } from "../lib/berkas";
 import { rupiah, tanggal, labelJenisBayar, labelStatus } from "../lib/format";
 import { usePratinjau } from "./PratinjauBerkas";
+import { useVerifikasiBerkas } from "./VerifikasiBerkas";
 import { LAMPIRAN_TAHAP } from "./KprStepper";
 import { Card, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_DARK, POSITIVE, NEGATIVE } from "./ui";
 
@@ -32,6 +33,20 @@ const IDENTITAS = /\b(ktp|kk)\b|kartu keluarga|e-?ktp/i;
 
 const PAGAR = "image/*,application/pdf";
 
+const tombolPutus = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  border: `1px solid ${BORDER}`,
+  background: "#fff",
+  borderRadius: 9,
+  padding: "5px 9px",
+  fontSize: 11.5,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
 /** Status sebuah berkas, sebagai kata dan warna — bukan kata dasar dari database. */
 const STATUS = {
   terverifikasi: { label: "Terverifikasi", warna: POSITIVE },
@@ -47,6 +62,7 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
   const bolehVerifikasi = canWrite(profile, "payment_verify");
   const { syarat } = useSyaratBerkas(bank);
   const [bukaPratinjau, pratinjau] = usePratinjau();
+  const v = useVerifikasiBerkas();
 
   const [dokumen, setDokumen] = useState([]);
   const [lampiran, setLampiran] = useState([]);
@@ -104,6 +120,7 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
           tanggal: b.doc?.uploaded_at,
           path: b.doc?.file_url || null,
           wajib: b.wajib,
+          doc: b.doc,
         })),
       ...rekap.ekstra.map((d) => ({
         kunci: `d-${d.id}`,
@@ -113,6 +130,7 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
         catatan: "di luar daftar syarat",
         tanggal: d.uploaded_at,
         path: d.file_url || null,
+        doc: d,
       })),
     ];
     const bankAda = bankDaftar
@@ -123,6 +141,8 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
         path: b.path,
         judul: b.judul,
         keterangan: [STATUS[b.keadaan]?.label, tanggal(b.tanggal)].filter(Boolean).join(" · "),
+        // Yang berwenang memutuskan langsung dari pratinjau, sambil melihat berkasnya.
+        verifikasi: v.boleh && b.doc ? { keadaan: b.keadaan, setuju: () => v.verifikasi(b.doc), tolak: () => v.tolak(b.doc) } : undefined,
       }));
     const bankOpsionalKosong = bankBaris.filter((b) => b.keadaan === "belum" && !b.wajib);
 
@@ -166,7 +186,7 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
     }));
 
     return { bankDaftar, bankAda, bankOpsionalKosong, kemajuan, lampiranAda, slotKosong, bayarAda, belumTerverifikasi, komplainAda };
-  }, [rekap, lampiran, bayar, komplain]);
+  }, [rekap, lampiran, bayar, komplain, v.boleh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const semua = useMemo(
     () => [...susunan.bankAda, ...susunan.lampiranAda, ...susunan.bayarAda, ...susunan.komplainAda],
@@ -216,17 +236,36 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
               kosong={!b.path}
               judul={b.judul}
               status={STATUS[b.keadaan]}
-              keterangan={[b.catatan, b.tanggal ? tanggal(b.tanggal) : null].filter(Boolean).join(" · ")}
+              keterangan={[
+                // Alasan penolakan lebih dulu: itulah yang harus diperbaiki.
+                b.keadaan === "ditolak" && b.doc?.alasan_ditolak ? `“${b.doc.alasan_ditolak}”` : null,
+                b.catatan,
+                b.tanggal ? tanggal(b.tanggal) : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               jenis={b.path ? jenisBerkas(b.path) : null}
               onBuka={b.path ? () => buka(b.kunci) : null}
               aksi={
-                editable && (
-                  <TombolUnggah
-                    label={b.path ? "Ganti" : "Unggah"}
-                    utama={!b.path || b.keadaan === "ditolak"}
-                    sibuk={sibuk === `bank-${b.docType}`}
-                    onPilih={(f) => unggahBank(b.docType, f)}
-                  />
+                v.boleh && b.doc && b.keadaan === "menunggu" ? (
+                  <span style={{ display: "inline-flex", gap: 5, flexShrink: 0 }}>
+                    <button onClick={() => v.tolak(b.doc)} disabled={v.sibuk === b.doc.id} style={{ ...tombolPutus, color: NEGATIVE, borderColor: "#F2D3D1" }} aria-label={`Tolak ${b.judul}`} title="Tolak">
+                      <Ban size={12} aria-hidden="true" />
+                    </button>
+                    <button onClick={() => v.verifikasi(b.doc)} disabled={v.sibuk === b.doc.id} style={{ ...tombolPutus, color: "#fff", background: POSITIVE, borderColor: POSITIVE }}>
+                      <Check size={12} aria-hidden="true" />
+                      {v.sibuk === b.doc.id ? "…" : "Verifikasi"}
+                    </button>
+                  </span>
+                ) : (
+                  editable && (
+                    <TombolUnggah
+                      label={b.path ? (b.keadaan === "ditolak" ? "Unggah ulang" : "Ganti") : "Unggah"}
+                      utama={!b.path || b.keadaan === "ditolak"}
+                      sibuk={sibuk === `bank-${b.docType}`}
+                      onPilih={(f) => unggahBank(b.docType, f)}
+                    />
+                  )
                 )
               }
             />
@@ -325,6 +364,7 @@ export default function DokumenKonsumen({ konsumen, bank, editable }) {
       )}
 
       {pratinjau}
+      {v.elemen}
     </Card>
   );
 }

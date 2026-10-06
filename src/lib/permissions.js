@@ -66,6 +66,9 @@ const WRITE_MATRIX = {
   customer: ["admin", "sales", "admin_marketing"],
   kpr: ["admin", "admin_marketing", "sales"],
   document: ["admin", "admin_marketing", "sales"],
+  // Memverifikasi/menolak berkas — guard_document_verification (migrasi 021).
+  // Sales mengunggah, tetapi tidak memutuskan berkasnya sendiri.
+  document_verify: ["admin", "admin_marketing"],
   payment: ["admin", "finance", "admin_marketing", "sales"],
   payment_verify: ["admin", "finance"],
   cancellation: ["admin", "admin_marketing", "finance", "sales"],

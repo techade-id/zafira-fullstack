@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FileText, Upload, Check, AlertTriangle, Landmark } from "lucide-react";
+import { FileText, Upload, Check, AlertTriangle, Landmark, Ban } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { unggahBerkasBank, dengarBerkas, kabarkanBerkas } from "../lib/berkas";
 import { usePratinjau } from "./PratinjauBerkas";
+import { useVerifikasiBerkas } from "./VerifikasiBerkas";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
@@ -21,8 +22,6 @@ import {
   POSITIVE,
   NEGATIVE,
 } from "./ui";
-
-const STATUS_DOK = ["menunggu", "terverifikasi", "ditolak"];
 
 /**
  * Daftar berkas bank — yang kurang di atas, yang sudah ada di bawah.
@@ -49,6 +48,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
   const [memuat, setMemuat] = useState(true);
   const [unggah, setUnggah] = useState(null);
   const [bukaPratinjau, pratinjau] = usePratinjau();
+  const v = useVerifikasiBerkas();
 
   async function muat() {
     if (!customerId) return;
@@ -98,16 +98,6 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
     onChange?.();
   }
 
-  async function ubahStatus(id, status) {
-    const { error } = await supabase.from("customer_documents").update({ status }).eq("id", id);
-    if (error) {
-      toast.gagal(`Status dokumen gagal diubah: ${error.message}`);
-      return;
-    }
-    kabarkanBerkas(customerId);
-    onChange?.();
-  }
-
   async function hapus(id) {
     const { error } = await supabase.from("customer_documents").delete().eq("id", id);
     if (error) {
@@ -120,8 +110,17 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
 
   // Semua dokumen yang ada bisa dilihat berurutan dengan ← →.
   const adaBerkas = useMemo(
-    () => bernomor.filter((b) => b.doc?.file_url).map((b) => ({ bucket: "customer-documents", path: b.doc.file_url, judul: b.doc_type, keterangan: b.keadaan })),
-    [bernomor]
+    () =>
+      bernomor
+        .filter((b) => b.doc?.file_url)
+        .map((b) => ({
+          bucket: "customer-documents",
+          path: b.doc.file_url,
+          judul: b.doc_type,
+          keterangan: b.keadaan,
+          verifikasi: v.boleh ? { keadaan: b.keadaan, setuju: () => v.verifikasi(b.doc), tolak: () => v.tolak(b.doc) } : undefined,
+        })),
+    [bernomor, v.boleh] // eslint-disable-line react-hooks/exhaustive-deps
   );
   function buka(path) {
     bukaPratinjau(adaBerkas, Math.max(0, adaBerkas.findIndex((x) => x.path === path)));
@@ -223,7 +222,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
               unggah={unggah === b.doc_type}
               onUnggah={(f) => kirim(b, f)}
               onBuka={buka}
-              onStatus={ubahStatus}
+              verif={v}
               onHapus={bolehHapus ? hapus : null}
             />
           ))}
@@ -240,7 +239,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
               unggah={unggah === b.doc_type}
               onUnggah={(f) => kirim(b, f)}
               onBuka={buka}
-              onStatus={ubahStatus}
+              verif={v}
               onHapus={bolehHapus ? hapus : null}
             />
           ))}
@@ -257,7 +256,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
               unggah={unggah === b.doc_type}
               onUnggah={(f) => kirim(b, f)}
               onBuka={buka}
-              onStatus={ubahStatus}
+              verif={v}
               onHapus={bolehHapus ? hapus : null}
             />
           ))}
@@ -270,6 +269,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
         </div>
       )}
       {pratinjau}
+      {v.elemen}
     </div>
   );
 }
@@ -294,7 +294,7 @@ function Bagian({ judul, sorot, children }) {
   );
 }
 
-function BarisBerkas({ baris, editable, unggah, onUnggah, onBuka, onStatus, onHapus }) {
+function BarisBerkas({ baris, editable, unggah, onUnggah, onBuka, verif, onHapus }) {
   const ditolak = baris.keadaan === "ditolak";
   const belum = baris.keadaan === "belum";
   const warna =
@@ -343,7 +343,7 @@ function BarisBerkas({ baris, editable, unggah, onUnggah, onBuka, onStatus, onHa
         <div style={{ fontSize: 11, color: warna, marginTop: 2 }}>
           {belum
             ? baris.catatan || "Belum diunggah"
-            : `${baris.keadaan}${baris.doc?.uploaded_at ? ` · ${tanggalWaktu(baris.doc.uploaded_at)}` : ""}`}
+            : `${baris.keadaan}${ditolak && baris.doc?.alasan_ditolak ? ` — “${baris.doc.alasan_ditolak}”` : ""}${baris.doc?.uploaded_at ? ` · ${tanggalWaktu(baris.doc.uploaded_at)}` : ""}`}
         </div>
       </div>
 
@@ -354,19 +354,29 @@ function BarisBerkas({ baris, editable, unggah, onUnggah, onBuka, onStatus, onHa
         </button>
       )}
 
-      {baris.doc && editable && (
-        <select
-          value={baris.doc.status}
-          onChange={(e) => onStatus(baris.doc.id, e.target.value)}
-          aria-label={`Status dokumen ${baris.doc_type}`}
-          style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "4px 8px", fontSize: 11.5 }}
+      {/* Hanya Admin dan Admin Marketing (document_verify). Dulu ini dropdown
+          yang terbuka juga bagi Sales — pengunggah bisa memverifikasi
+          berkasnya sendiri. */}
+      {baris.doc && verif.boleh && baris.keadaan !== "ditolak" && (
+        <button
+          onClick={() => verif.tolak(baris.doc)}
+          disabled={verif.sibuk === baris.doc.id}
+          aria-label={`Tolak ${baris.doc_type}`}
+          title="Tolak"
+          style={{ ...gayaKecil, color: NEGATIVE, borderColor: "#F2D3D1", display: "inline-flex", alignItems: "center" }}
         >
-          {STATUS_DOK.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          <Ban size={11} aria-hidden="true" />
+        </button>
+      )}
+      {baris.doc && verif.boleh && baris.keadaan !== "terverifikasi" && (
+        <button
+          onClick={() => verif.verifikasi(baris.doc)}
+          disabled={verif.sibuk === baris.doc.id}
+          style={{ ...gayaKecil, color: "#fff", background: POSITIVE, borderColor: POSITIVE, display: "inline-flex", alignItems: "center", gap: 4 }}
+        >
+          <Check size={11} aria-hidden="true" />
+          {verif.sibuk === baris.doc.id ? "…" : "Verifikasi"}
+        </button>
       )}
 
       {editable && (

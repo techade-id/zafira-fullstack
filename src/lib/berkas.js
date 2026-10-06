@@ -105,6 +105,23 @@ export async function unggahKuitansi(pembayaran, file) {
 }
 
 /**
+ * Memverifikasi atau menolak sebuah berkas syarat bank. Penolakan wajib
+ * beralasan; siapa dan kapan dicatat trigger guard_document_verification
+ * (migration_021), yang juga menolak siapa pun selain Admin/Admin Marketing.
+ */
+export async function putuskanBerkas(doc, status, alasan = null) {
+  const { data, error } = await supabase
+    .from("customer_documents")
+    .update({ status, alasan_ditolak: status === "ditolak" ? alasan : null })
+    .eq("id", doc.id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Keputusan tidak tersimpan — Anda tidak punya akses untuk berkas ini." };
+  kabarkan(doc.customer_id);
+  return { error: null };
+}
+
+/**
  * Mencatat pembayaran, sekalian dengan bukti transfernya bila ada.
  *
  * Tanpa bukti → 'menunggu'. Dengan bukti → 'menunggu_verifikasi', langsung di
