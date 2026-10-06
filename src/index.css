@@ -42,23 +42,185 @@ input:focus, select:focus, textarea:focus {
 
 /* ---------- App shell (sidebar + topbar) ---------- */
 
-/* Sidebar geometry lives here (not inline) so the mobile media query can
-   override it — inline styles would otherwise always win. */
+/* Cangkang aplikasi memiliki tinggi jendela dan tidak pernah menggulir sendiri.
+   Sidebar adalah kolom bertinggi tetap; yang bergerak hanya .app-scroll di
+   kanannya. Di CRM yang hampir setiap layarnya berupa tabel panjang, menu yang
+   ikut hilang ke atas adalah ongkos gulir yang paling mahal: untuk berpindah
+   modul pengguna harus menggulir balik ke puncak lebih dulu. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  display: flex;
+  overflow: hidden;
+  background: #f4f6fa;
+  color: #111b2e;
+}
+
+/* Geometri sidebar tinggal di sini (bukan inline) supaya media query ponsel
+   bisa menimpanya — gaya inline selalu menang. */
 .app-sidebar {
-  position: sticky;
-  top: 14px;
-  height: calc(100vh - 28px);
+  width: 252px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0a1d42 0%, #0c2450 100%);
   margin: 14px 0 14px 14px;
-  border-radius: 20px;
-  transition: transform 0.22s ease;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px -28px rgba(10, 29, 66, 0.8);
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.sidebar-overlay {
-  display: none;
+/* Mode ikon: label dilepas, lebar menyusut, isi halaman dapat ruang lebih. */
+.app-sidebar.rail {
+  width: 86px;
 }
 
-.menu-toggle {
-  display: none;
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 14px 12px;
+  min-width: 0;
+}
+
+.app-sidebar.rail .sidebar-head {
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 10px 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(226, 87, 31, 0.18);
+  color: #e2571f;
+}
+
+.brand-text {
+  min-width: 0;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-sub {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+}
+
+.sidebar-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.74);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.rail-toggle {
+  display: flex;
+}
+
+.app-nav {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 12px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.app-sidebar.rail .app-nav {
+  padding: 2px 10px 10px;
+}
+
+.app-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.app-nav:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.nav-section {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+  padding: 16px 13px 7px;
+}
+
+/* Pengganti judul kelompok saat menu diciutkan: pemisahnya tetap ada, hanya
+   namanya yang tidak muat. */
+.nav-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 12px 8px;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.74);
+  text-decoration: none;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item.rail {
+  justify-content: center;
+  padding: 11px 0;
 }
 
 /* The sidebar sits on navy, so hover states are lightened, not darkened. */
@@ -67,8 +229,264 @@ input:focus, select:focus, textarea:focus {
   color: #ffffff;
 }
 
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.11);
+  color: #ffffff;
+  font-weight: 600;
+}
+
 .nav-item.active:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Deep-orange rail marks the active page — PRD §2.1 gives the accent to active
+   progress, and it survives greyscale printing. Tingginya dianimasikan supaya
+   perpindahan halaman terbaca sebagai gerakan, bukan kedipan. */
+.nav-rail-mark {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 0 3px 3px 0;
+  background: #e2571f;
+  transform: translateY(-50%);
+  transition: height 0.18s ease;
+}
+
+.nav-item.active .nav-rail-mark {
+  height: 20px;
+}
+
+.nav-item.rail .nav-rail-mark {
+  left: -10px;
+}
+
+/* Label melayang untuk mode ikon. Di-portal ke <body>, jadi tidak terpotong
+   oleh daftar menu yang menggulir. */
+.rail-tip {
+  position: fixed;
+  z-index: 70;
+  transform: translateY(-50%);
+  background: #0a1d42;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 10px 24px -12px rgba(10, 29, 66, 0.9);
+}
+
+.sidebar-foot {
+  padding: 10px 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar.rail .user-card {
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 6px;
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2571f;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.user-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: 12.8px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-role {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn:hover {
+  background: rgba(226, 87, 31, 0.28);
+  color: #ffffff;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Satu-satunya wilayah yang menggulir. overscroll-behavior menahan gulirannya
+   di sini, jadi mencapai ujung daftar tidak menyeret halaman di belakangnya. */
+.app-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d5dce8 transparent;
+}
+
+.app-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+
+.app-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scroll::-webkit-scrollbar-thumb {
+  background: #d5dce8;
+  border-radius: 999px;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+}
+
+.app-scroll::-webkit-scrollbar-thumb:hover {
+  background: #b9c3d4;
+  background-clip: padding-box;
+}
+
+/* Topbar menempel di puncak wilayah gulir: isi halaman lewat di bawahnya,
+   buram, dan garis bawah baru muncul setelah benar-benar ada yang tergulir —
+   sehingga bayangan itu berarti "masih ada di atas", bukan sekadar hiasan. */
+.topbar-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(244, 246, 250, 0.82);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.topbar-wrap.scrolled {
+  border-bottom-color: #e3e8f0;
+  box-shadow: 0 10px 24px -20px rgba(10, 29, 66, 0.6);
+}
+
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .topbar-wrap {
+    background: #f4f6fa;
+  }
+}
+
+.topbar {
+  padding: 18px 26px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topbar-heading {
+  min-width: 0;
+}
+
+.topbar-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.topbar-heading h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.topbar-search {
+  width: 340px;
+}
+
+.menu-open-btn {
+  background: #ffffff;
+  border: 1px solid #e3e8f0;
+  border-radius: 13px;
+  padding: 10px;
+  cursor: pointer;
+  color: #111b2e;
+  flex-shrink: 0;
+}
+
+/* Identitas sudah tampil di kaki sidebar; di desktop keping ini akan jadi
+   pengulangan. Ia kembali muncul persis ketika sidebar menjadi laci tertutup. */
+.avatar-chip {
+  display: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #0f2a5c;
+  color: #ffffff;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.app-content {
+  padding: 6px 26px 32px;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+.menu-toggle {
+  display: none;
 }
 
 /* Inline search is the desktop affordance; the toggle takes over below 980px. */
@@ -84,9 +502,10 @@ input:focus, select:focus, textarea:focus {
   .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
+    width: 276px;
     height: 100%;
     margin: 0;
-    border-radius: 0;
+    border-radius: 0 22px 22px 0;
     z-index: 40;
     transform: translateX(-105%);
   }
@@ -99,11 +518,22 @@ input:focus, select:focus, textarea:focus {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(10, 29, 66, 0.5);
+    background: rgba(10, 29, 66, 0.45);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     z-index: 30;
+    animation: overlay-masuk 0.18s ease-out;
   }
 
   .menu-toggle {
+    display: flex;
+  }
+
+  .rail-toggle {
+    display: none;
+  }
+
+  .avatar-chip {
     display: flex;
   }
 
@@ -118,23 +548,29 @@ input:focus, select:focus, textarea:focus {
 
   .mobile-search {
     display: block;
+    padding: 0 14px 14px;
   }
 
   .app-content {
-    padding: 0 14px 20px !important;
+    padding: 4px 14px 26px;
   }
 
   .topbar {
-    padding: 14px !important;
+    padding: 12px 14px;
   }
 
-  .topbar-greeting h1 {
-    font-size: 17px !important;
+  .topbar-heading h1 {
+    font-size: 16.5px;
   }
 
-  .topbar-greeting p {
+  .topbar-eyebrow {
     display: none;
   }
+}
+
+@keyframes overlay-masuk {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 560px) {
@@ -146,7 +582,21 @@ input:focus, select:focus, textarea:focus {
   }
 
   .topbar-actions .avatar-chip {
-    display: none !important;
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .nav-item,
+  .nav-rail-mark,
+  .topbar-wrap,
+  .sidebar-icon-btn {
+    transition: none;
+  }
+
+  .sidebar-overlay.open {
+    animation: none;
   }
 }
 

@@ -78,7 +78,9 @@
       "Bash(perl -0pi -e 's|\\(<TabDokumen\\\\n\\\\s+dokumen=\\\\{dokumen\\\\}\\\\n\\\\s+customerId=\\\\{konsumen\\\\.id\\\\}\\)|$1\\\\n          bank={kpr?.nama_bank}|' src/pages/KonsumenDetailPage.jsx)",
       "Bash(perl -0pi -e 's|import KonsumenDetailPage from \"./pages/KonsumenDetailPage\";|import KonsumenDetailPage from \"./pages/KonsumenDetailPage\";\\\\nimport PemberkasanPage from \"./pages/PemberkasanPage\";|' src/App.jsx)",
       "Bash(perl -0pi -e 's|\\\\Q[\"konsumen\", <KonsumenPage />],\\\\E|[\"konsumen\", <KonsumenPage />],\\\\n              [\"pemberkasan\", <PemberkasanPage />],|' src/App.jsx)",
-      "Bash(psql -d zafira_probe -c \"select bagian, label, coalesce\\(detail,''\\) d from test.results where not lulus\")"
+      "Bash(psql -d zafira_probe -c \"select bagian, label, coalesce\\(detail,''\\) d from test.results where not lulus\")",
+      "Bash(pkill -f \"vite\" -n)",
+      "Bash(lsof -ti:5173)"
     ]
   }
 }
