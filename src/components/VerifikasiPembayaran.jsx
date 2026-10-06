@@ -3,12 +3,13 @@ import { Wallet, Upload, Check, Clock, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { unggahBuktiTransfer, unggahKuitansi, dengarBerkas } from "../lib/berkas";
 import { usePratinjau } from "./PratinjauBerkas";
+import ModalPembayaran from "./ModalPembayaran";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
 import { segarkanNotifikasi } from "../lib/useNotifications";
 import { rupiah, tanggal, labelJenisBayar } from "../lib/format";
-import { BORDER, SURFACE, TEXT_MID, TEXT_DARK, POSITIVE, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE } from "./ui";
+import { BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, POSITIVE, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE } from "./ui";
 
 /**
  * Pembayaran sebuah tahap, beserta jalur verifikasinya.
@@ -33,6 +34,8 @@ export default function VerifikasiPembayaran({ customerId, jenis, editable = tru
   const { profile } = useAuth();
   const toast = useToast();
   const bolehVerifikasi = canWrite(profile, "payment_verify");
+  const bolehCatat = canWrite(profile, "payment");
+  const [catat, setCatat] = useState(false);
 
   const [rows, setRows] = useState([]);
   const [memuat, setMemuat] = useState(true);
@@ -101,11 +104,25 @@ export default function VerifikasiPembayaran({ customerId, jenis, editable = tru
     return <div style={{ fontSize: 12, color: TEXT_MID }}>Memuat pembayaran…</div>;
   }
 
+  // Dicatat dari sini, bukan lagi "catat di modul Pembayaran": keluar dari
+  // tahap ini untuk memilih nama konsumen yang sama dari daftar seluruh
+  // konsumen adalah tempat salah catat paling mudah terjadi.
+  const tombolCatat = bolehCatat && (
+    <button onClick={() => setCatat(true)} style={{ ...gayaKecil, color: PRIMARY, borderStyle: "dashed", borderColor: "#C7D3EA", background: "#FBFCFE" }}>
+      + Catat {labelJenisBayar(jenis)}
+      {rows.length > 0 ? " lagi" : ""}
+    </button>
+  );
+  const modal = (
+    <ModalPembayaran open={catat} konsumen={{ id: customerId }} jenisAwal={jenis} onClose={() => setCatat(false)} />
+  );
+
   if (rows.length === 0) {
     return (
-      <div style={{ fontSize: 12, color: TEXT_MID, lineHeight: 1.5, border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "11px 13px" }}>
-        Belum ada {labelJenisBayar(jenis)} yang dicatat. Catat di modul Pembayaran — barisnya akan muncul di sini beserta
-        jalur verifikasinya.
+      <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between", flexWrap: "wrap", fontSize: 12, color: TEXT_MID, lineHeight: 1.5, border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "11px 13px" }}>
+        <span>Belum ada {labelJenisBayar(jenis)} yang dicatat.</span>
+        {tombolCatat}
+        {modal}
       </div>
     );
   }
@@ -218,6 +235,10 @@ export default function VerifikasiPembayaran({ customerId, jenis, editable = tru
           </div>
         );
       })}
+      {/* DP sering dicicil: pembayaran berikutnya dicatat dari tempat yang sama. */}
+      {tombolCatat && <div>{tombolCatat}</div>}
+      {modal}
+      {pratinjau}
     </div>
   );
 }

@@ -104,6 +104,57 @@ export async function unggahKuitansi(pembayaran, file) {
   return { error: null };
 }
 
+/**
+ * Mencatat pembayaran, sekalian dengan bukti transfernya bila ada.
+ *
+ * Tanpa bukti → 'menunggu'. Dengan bukti → 'menunggu_verifikasi', langsung di
+ * antrean Finance. Untuk selain Finance trigger guard_payment_verification
+ * menegakkan hal yang sama di server; status dikirim eksplisit supaya baris
+ * yang dicatat Finance sendiri pun tidak berstatus 'menunggu' padahal
+ * buktinya sudah ada.
+ */
+export async function catatPembayaran({ customer_id, payment_type, amount, payment_date, notes, file }) {
+  let bukti = null;
+  if (file) {
+    const { path, error: upErr } = await uploadFile("payment-proofs", customer_id, file);
+    if (upErr) return { error: `Gagal mengunggah bukti: ${upErr.message}` };
+    bukti = path;
+  }
+  const { data, error } = await supabase
+    .from("payments")
+    .insert({
+      customer_id,
+      payment_type,
+      amount,
+      payment_date,
+      notes: notes || null,
+      bukti_transfer_url: bukti,
+      status: bukti ? "menunggu_verifikasi" : "menunggu",
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: `Gagal menyimpan pembayaran: ${error.message}` };
+  kabarkan(customer_id);
+  return { error: null, id: data?.id || null };
+}
+
+/** Koreksi jenis, nominal, tanggal, atau catatan. Status tidak pernah disentuh dari sini. */
+export async function ubahPembayaran(pembayaran, patch) {
+  const { data, error } = await supabase.from("payments").update(patch).eq("id", pembayaran.id).select("id");
+  if (error) return { error: `Gagal menyimpan: ${error.message}` };
+  // RLS yang menolak tidak melempar galat — pembaruannya mengenai nol baris.
+  if (!data?.length) return { error: "Perubahan tidak tersimpan — Anda tidak punya akses untuk mengubah pembayaran ini." };
+  kabarkan(pembayaran.customer_id);
+  return { error: null };
+}
+
+export async function hapusPembayaran(pembayaran) {
+  const { error } = await supabase.from("payments").delete().eq("id", pembayaran.id);
+  if (error) return { error };
+  kabarkan(pembayaran.customer_id);
+  return { error: null };
+}
+
 /** "gambar" | "pdf" | "lain", dari nama berkas atau path-nya. */
 export function jenisBerkas(nama) {
   const n = String(nama || "").toLowerCase();

@@ -130,6 +130,17 @@ function keTanggal(nilai) {
 }
 
 /** "2026-01-12" → "12 Jan 2026" */
+/**
+ * Tanggal hari ini menurut jam perangkat, "YYYY-MM-DD".
+ *
+ * Bukan new Date().toISOString().slice(0, 10): itu tanggal UTC, yang pada
+ * tujuh jam pertama setiap hari di WIB masih menunjuk hari kemarin.
+ */
+export function hariIni() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function tanggal(nilai, { kosong = "-" } = {}) {
   const d = keTanggal(nilai);
   if (!d) return kosong;

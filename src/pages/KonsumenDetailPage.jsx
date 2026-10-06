@@ -4,7 +4,7 @@ import { ArrowLeft, Home, User, Wallet, ClipboardList, History } from "lucide-re
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { canEditBerkas, canEditCustomer, isLocked, lockReason, roleOf } from "../lib/permissions";
-import { rupiah, tanggal, tanggalWaktu, durasiHari, labelTahap, labelJenisBayar } from "../lib/format";
+import { rupiah, tanggal, durasiHari, labelTahap } from "../lib/format";
 import { useSyaratBerkas, cocokkanBerkas } from "../lib/useSyaratBerkas";
 import FollowUpTimeline from "../components/FollowUpTimeline";
 import KprStepper from "../components/KprStepper";
@@ -12,9 +12,9 @@ import DokumenKonsumen from "../components/DokumenKonsumen";
 import { dengarBerkas } from "../lib/berkas";
 import KontakAksi from "../components/KontakAksi";
 import DataDiriKonsumen from "../components/DataDiriKonsumen";
+import PembayaranKonsumen from "../components/PembayaranKonsumen";
 import {
   Card,
-  DataTable,
   Badge,
   EmptyState,
   BORDER,
@@ -273,7 +273,7 @@ export default function KonsumenDetailPage() {
         </div>
       )}
 
-      {tab === "pembayaran" && <TabPembayaran pembayaran={pembayaran} />}
+      {tab === "pembayaran" && <PembayaranKonsumen konsumen={konsumen} pembayaran={pembayaran} editable={bolehBerkas} />}
 
       {tab === "riwayat" && <FollowUpTimeline customerId={konsumen.id} leadId={konsumen.lead_id} title="Riwayat Konsumen" />}
     </div>
@@ -385,34 +385,4 @@ function Baris({ label, nilai }) {
 /* ============================================================
    Pembayaran
    ============================================================ */
-
-function TabPembayaran({ pembayaran }) {
-  const total = pembayaran.filter((p) => p.status === "terverifikasi").reduce((s, p) => s + Number(p.amount || 0), 0);
-
-  return (
-    <Card>
-      <DataTable
-        sortable
-        defaultSort={{ key: "payment_date", arah: "desc" }}
-        emptyIcon={Wallet}
-        emptyLabel="Belum ada pembayaran"
-        emptyHint="Pembayaran yang dicatat di modul Pembayaran akan muncul di sini."
-        columns={[
-          { key: "payment_type", label: "Jenis", render: (row) => labelJenisBayar(row.payment_type) },
-          { key: "amount", label: "Nominal", align: "right", sortValue: (row) => Number(row.amount), render: (row) => rupiah(row.amount) },
-          { key: "payment_date", label: "Tanggal", render: (row) => tanggal(row.payment_date) },
-          { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
-          { key: "created_at", label: "Dicatat", render: (row) => tanggalWaktu(row.created_at) },
-        ]}
-        rows={pembayaran}
-      />
-      {pembayaran.length > 0 && (
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: 13, display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: TEXT_MID }}>Total terverifikasi</span>
-          <b>{rupiah(total)}</b>
-        </div>
-      )}
-    </Card>
-  );
-}
 
