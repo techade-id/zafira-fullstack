@@ -4,15 +4,16 @@ import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock, MessageSquar
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { canWrite, roleOf } from "../lib/permissions";
+import { canWrite, roleOf, roleLabel } from "../lib/permissions";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { segarkanNotifikasi } from "../lib/useNotifications";
 import { tanggal, tanggalRelatif, selisihHari, labelTahap, rupiah } from "../lib/format";
 import KontakAksi from "./KontakAksi";
-import FollowUpTimeline from "./FollowUpTimeline";
+import FollowUpTimeline, { kabarkanRiwayat } from "./FollowUpTimeline";
 import {
   Drawer,
   Modal,
+  MenuAksi,
   PrimaryButton,
   Badge,
   BORDER,
@@ -90,6 +91,18 @@ export default function PanelProspek({
                   {sumberLabel && <span>{sumberLabel}</span>}
                 </div>
               </div>
+              {/* Aksi yang jarang dipakai tinggal di menu, bukan berdiri sebaris
+                  dengan aksi harian — terutama Batalkan, yang tidak bisa
+                  dibatalkan balik. */}
+              {mayWrite && !dibatalkan && (
+                <MenuAksi
+                  label="Aksi lain untuk prospek ini"
+                  items={[
+                    { label: "Alihkan ke agen lain", ikon: ArrowRightLeft, onClick: () => setAksi("alih") },
+                    { label: "Batalkan prospek", ikon: Ban, onClick: () => setAksi("batal"), pisah: true, rusak: true },
+                  ]}
+                />
+              )}
               <button
                 onClick={onClose}
                 aria-label="Tutup panel"
@@ -123,10 +136,19 @@ export default function PanelProspek({
                   <CalendarClock size={13} aria-hidden="true" />
                   {sisa == null ? "BELUM DIJADWALKAN" : tanggalRelatif(lead.tanggal_rencana).toUpperCase()}
                 </div>
-                <div style={{ fontSize: 12.5, color: TEXT_DARK, lineHeight: 1.5 }}>
-                  {lead.tanggal_rencana
-                    ? `${tanggal(lead.tanggal_rencana)}${lead.rencana_selanjutnya ? ` · ${lead.rencana_selanjutnya}` : ""}`
-                    : "Tentukan kapan prospek ini dihubungi lagi lewat Ubah Tahap."}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12.5, color: TEXT_DARK, lineHeight: 1.5, minWidth: 0, flex: "1 1 200px" }}>
+                    {lead.tanggal_rencana
+                      ? `${tanggal(lead.tanggal_rencana)}${lead.rencana_selanjutnya ? ` · ${lead.rencana_selanjutnya}` : ""}`
+                      : "Tentukan kapan prospek ini dihubungi lagi."}
+                  </div>
+                  {/* Langsung dari banner: inilah tindakan yang ia minta. */}
+                  {mayWrite && (sisa == null || sisa < 0) && (
+                    <button onClick={onUbahTahap} style={{ ...sekunder, padding: "7px 13px", background: SURFACE }}>
+                      <CalendarClock size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
+                      {sisa == null ? "Jadwalkan" : "Jadwalkan ulang"}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -157,22 +179,15 @@ export default function PanelProspek({
                     <Pencil size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
                     Ubah Data
                   </button>
-                  <button onClick={() => setAksi("alih")} style={sekunder}>
-                    <ArrowRightLeft size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
-                    Alihkan Agen
-                  </button>
                 </div>
-
-                <button onClick={() => setAksi("batal")} style={{ ...sekunder, marginTop: 9, color: NEGATIVE, borderColor: "#F2D3D1" }}>
-                  <Ban size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
-                  Batalkan Prospek
-                </button>
               </div>
             )}
 
             <Rincian lead={lead} sumberLabel={sumberLabel} />
 
-            <FollowUpTimeline leadId={lead.id} title="Riwayat" />
+            {/* Tanpa formulir catatan: mencatat follow-up lewat satu pintu,
+                tombol Catat Follow Up, supaya jadwal berikutnya ikut terisi. */}
+            <FollowUpTimeline leadId={lead.id} title="Riwayat" bisaCatat={false} />
           </div>
         </>
       </Drawer>
@@ -281,6 +296,7 @@ export function ModalBatal({ open, lead, onClose, onSelesai }) {
     }
     toast.sukses(`${lead.name} ditandai batal — alasannya tercatat.`);
     segarkanNotifikasi();
+    kabarkanRiwayat({ leadId: lead.id });
     onSelesai?.();
     onClose?.();
   }
@@ -403,6 +419,7 @@ export function ModalBatal({ open, lead, onClose, onSelesai }) {
 export function ModalAlih({ open, lead, onClose, onSelesai }) {
   const toast = useToast();
   const [agen, setAgen] = useState([]);
+  const [beban, setBeban] = useState(null);
   const [tujuan, setTujuan] = useState("");
   const [catatan, setCatatan] = useState("");
   const [kirim, setKirim] = useState(false);
@@ -420,7 +437,26 @@ export function ModalAlih({ open, lead, onClose, onSelesai }) {
       .eq("is_active", true)
       .order("full_name")
       .then(({ data }) => setAgen((data || []).filter((p) => p.id !== lead.assigned_to)));
+    // Dihitung di server (migration_019): RLS menyembunyikan prospek agen lain
+    // dari Sales. Sebelum migrasinya jalan, daftar tampil tanpa angka.
+    supabase.rpc("beban_agen").then(({ data, error }) => {
+      setBeban(error ? null : new Map((data || []).map((b) => [b.agen_id, b.aktif])));
+    });
   }, [open, lead]);
+
+  // Sales lebih dulu, dari yang paling longgar: pengalihan yang adil adalah
+  // pengalihan ke agen dengan antrean terpendek, bukan ke nama yang paling
+  // diingat. Peran lain tetap bisa dipilih, di bawahnya.
+  const urutAgen = [...agen].sort((a, b) => {
+    const sa = a.role === "sales" ? 0 : 1;
+    const sb = b.role === "sales" ? 0 : 1;
+    if (sa !== sb) return sa - sb;
+    if (beban) {
+      const selisih = (beban.get(a.id) || 0) - (beban.get(b.id) || 0);
+      if (selisih !== 0) return selisih;
+    }
+    return (a.full_name || "").localeCompare(b.full_name || "");
+  });
 
   async function jalankan() {
     if (!tujuan) {
@@ -440,6 +476,7 @@ export function ModalAlih({ open, lead, onClose, onSelesai }) {
       return;
     }
     toast.sukses(`${lead.name} dialihkan ke ${agen.find((a) => a.id === tujuan)?.full_name || "agen baru"}.`);
+    kabarkanRiwayat({ leadId: lead.id });
     onSelesai?.();
     onClose?.();
   }
@@ -463,12 +500,19 @@ export function ModalAlih({ open, lead, onClose, onSelesai }) {
           </label>
           <select id="alih-agen" value={tujuan} onChange={(e) => setTujuan(e.target.value)} style={inputStyle}>
             <option value="">— pilih —</option>
-            {agen.map((a) => (
+            {urutAgen.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.full_name}
+                {a.role !== "sales" ? ` (${roleLabel(a.role)})` : ""}
+                {beban ? ` — ${beban.get(a.id) || 0} prospek aktif` : ""}
               </option>
             ))}
           </select>
+          {beban && (
+            <div style={{ fontSize: 11.5, color: TEXT_MID, marginTop: 5 }}>
+              Diurutkan dari Sales dengan prospek aktif paling sedikit (belum booking, belum batal).
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 18 }}>

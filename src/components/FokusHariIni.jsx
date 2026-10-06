@@ -1,10 +1,10 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Snowflake, FileWarning, Landmark, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { roleOf, roleLabel } from "../lib/permissions";
+import { roleOf } from "../lib/permissions";
 import { useNotifications, LABEL_KATEGORI } from "../lib/useNotifications";
-import { Card, SectionTitle, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_SOFT, ACCENT_DARK, POSITIVE } from "./ui";
+import { Card, SectionTitle, BORDER_SOFT, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_SOFT, ACCENT_DARK, POSITIVE } from "./ui";
 
 /**
  * "Apa yang harus saya kerjakan hari ini?"
@@ -21,14 +21,6 @@ import { Card, SectionTitle, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIM
  * Angkanya datang dari my_notifications() — sumber yang sama dengan lonceng,
  * sehingga keduanya tidak mungkin berbeda.
  */
-
-const IKON = {
-  followup: Clock,
-  dingin: Snowflake,
-  sp3k: FileWarning,
-  mandek: Landmark,
-  verifikasi: Wallet,
-};
 
 /** Kategori yang relevan per peran, berurut menurut kepentingannya. */
 const PRIORITAS = {
@@ -74,11 +66,8 @@ export default function FokusHariIni() {
   if (memuat && total === 0) return null;
 
   return (
-    <Card>
-      <SectionTitle
-        title="Fokus Hari Ini"
-        action={<span style={{ fontSize: 12, color: TEXT_MID }}>{roleLabel(peran)}</span>}
-      />
+    <Card style={{ borderColor: BORDER_SOFT }}>
+      <SectionTitle title="Fokus Hari Ini" />
 
       {relevan.length === 0 ? (
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "6px 0 4px" }}>
@@ -92,7 +81,6 @@ export default function FokusHariIni() {
         <>
           <div className="rg-3" style={{ marginBottom: relevan.length > 0 ? 16 : 0 }}>
             {relevan.map((kategori) => {
-              const Ikon = IKON[kategori] || Clock;
               const n = jumlah.get(kategori);
               const mendesak = (items || []).some((i) => i.kategori === kategori && i.urgensi === "tinggi");
               return (
@@ -106,28 +94,13 @@ export default function FokusHariIni() {
                     textAlign: "left",
                     padding: "14px 15px",
                     borderRadius: 15,
-                    border: `1px solid ${mendesak ? "#F6CDB8" : BORDER}`,
+                    border: `1px solid ${mendesak ? "#F6CDB8" : BORDER_SOFT}`,
                     background: mendesak ? ACCENT_SOFT : SURFACE,
                     cursor: "pointer",
                     font: "inherit",
                     width: "100%",
                   }}
                 >
-                  <span
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 13,
-                      flexShrink: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: mendesak ? "#fff" : PRIMARY_SOFT,
-                      color: mendesak ? ACCENT_DARK : PRIMARY,
-                    }}
-                  >
-                    <Ikon size={18} />
-                  </span>
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ display: "block", fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: mendesak ? ACCENT_DARK : TEXT_DARK }}>
                       {n}
@@ -142,7 +115,7 @@ export default function FokusHariIni() {
 
           {/* Tiga teratas ditampilkan utuh — angka saja masih menuntut satu klik
               lagi untuk tahu siapa yang dimaksud. */}
-          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14 }}>
+          <div style={{ borderTop: `1px solid ${BORDER_SOFT}`, paddingTop: 14 }}>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: TEXT_MID, letterSpacing: "0.04em", marginBottom: 10 }}>
               PALING MENDESAK
             </div>
@@ -164,7 +137,7 @@ export default function FokusHariIni() {
                     padding: "9px 0",
                     cursor: "pointer",
                     font: "inherit",
-                    borderBottom: i < 2 ? `1px solid ${BORDER}` : "none",
+                    borderBottom: i < 2 ? `1px solid ${BORDER_SOFT}` : "none",
                   }}
                 >
                   <span
@@ -174,7 +147,7 @@ export default function FokusHariIni() {
                       borderRadius: "50%",
                       flexShrink: 0,
                       background: it.urgensi === "tinggi" ? ACCENT : PRIMARY_SOFT,
-                      border: it.urgensi === "tinggi" ? "none" : `1px solid ${BORDER}`,
+                      border: it.urgensi === "tinggi" ? "none" : `1px solid ${BORDER_SOFT}`,
                     }}
                     aria-hidden="true"
                   />

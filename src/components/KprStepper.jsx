@@ -21,6 +21,7 @@ import {
   POSITIVE,
   NEGATIVE,
   inputStyle,
+  PrimaryButton,
 } from "./ui";
 
 /**
@@ -64,6 +65,11 @@ function rasioRpc(k) {
 /** Nilai kosong ditulis strip, bukan dibiarkan hilang (BRIEF §Saringan Awal). */
 function atauStrip(v) {
   return v === null || v === undefined || String(v).trim() === "" ? "-" : v;
+}
+
+/** Pembanding draf dengan yang tersimpan: kosong, null, dan undefined dianggap sama. */
+function teks(v) {
+  return v === null || v === undefined ? "" : String(v);
 }
 
 const TAHAP = [
@@ -206,6 +212,32 @@ const TAHAP = [
   },
 ];
 
+/** Kolom yang disimpan oleh tombol Simpan sebuah tahap. Total DP dihitung server. */
+function kunciTahap(t) {
+  return t.bidang.filter((b) => b.tipe !== "hitung").map((b) => b.key);
+}
+
+/** Dua bidang yang tidak termasuk tahap mana pun, dengan tombol Simpan sendiri. */
+const KUNCI_LAIN = ["alamat_ktp", "kendala"];
+
+function BarisSimpan({ draf, sibuk, label, onBatal, onSimpan }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      {draf && !sibuk && (
+        <button
+          onClick={onBatal}
+          style={{ border: "none", background: "none", color: TEXT_MID, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "8px 10px" }}
+        >
+          Batal
+        </button>
+      )}
+      <PrimaryButton onClick={onSimpan} disabled={!draf || sibuk}>
+        {sibuk ? "Menyimpan…" : `Simpan ${label}`}
+      </PrimaryButton>
+    </div>
+  );
+}
+
 /** Peringatan yang selama ini tidak pernah dimunculkan meski datanya ada. */
 function peringatan(kpr) {
   const hasil = [];
@@ -262,39 +294,92 @@ function peringatan(kpr) {
   return hasil;
 }
 
-export default function KprStepper({ kpr, customerId, editable, onChange, onBerkasUbah }) {
+export default function KprStepper({ kpr, customerId, editable, onChange, onBerkasUbah, onDrafUbah }) {
   const toast = useToast();
   const banks = useBusinessSettings("bank");
   const progresBerkas = useBusinessSettings("progres_berkas");
 
+  // `nilai` adalah isian di layar (draf); `simpanan` adalah yang ada di
+  // database. Isian baru tersimpan saat tombol Simpan tahapnya ditekan.
   const [nilai, setNilai] = useState(kpr || {});
+  const [simpanan, setSimpanan] = useState(kpr || {});
   const [dibuka, setDibuka] = useState(null);
   const [menyimpan, setMenyimpan] = useState(null);
-  const [tersimpan, setTersimpan] = useState(null);
   const [prosesBank, setProsesBank] = useState(false);
   const [segarBerkas, setSegarBerkas] = useState(0);
 
-  // Cerminan nilai yang benar-benar ada di database. Membandingkan dengan prop
-  // `kpr` tidak cukup: prop itu ikut basi begitu induk memuat ulang karena
-  // sebab lain, dan sebuah kolom yang diubah lalu dikembalikan ke nilai
-  // semula akan dikira tidak berubah — sehingga nilai antaranya tertinggal.
+  // Cerminan nilai yang benar-benar ada di database, untuk kode async yang
+  // tidak boleh membaca `simpanan` dari render yang sudah lewat.
   const tersimpanRef = React.useRef({ ...(kpr || {}) });
+  const konsumenRef = React.useRef(customerId);
 
-  // Hanya berganti konsumen yang mengatur ulang keadaan.
+  /**
+   * Terapkan baris dari server ke layar tanpa menimpa draf.
+   *
+   * Hanya kolom yang tidak sedang diubah pengguna yang ikut diperbarui, ditambah
+   * kolom `paksa` — kolom milik tahap yang baru saja disimpan. Draf tahap lain
+   * yang belum disimpan tetap di layar.
+   */
+  function terapkanBaris(baris, paksa = []) {
+    const sebelum = tersimpanRef.current;
+    tersimpanRef.current = { ...sebelum, ...baris };
+    setSimpanan(tersimpanRef.current);
+    setNilai((v) => {
+      const gabung = { ...v };
+      for (const k of Object.keys(baris)) {
+        if (paksa.includes(k) || teks(v[k]) === teks(sebelum[k])) gabung[k] = baris[k];
+      }
+      return gabung;
+    });
+  }
+
+  // Berganti konsumen mengatur ulang semuanya. Baris baru dari induk untuk
+  // konsumen yang sama — induk memuat ulang setelah unggah berkas — diterapkan
+  // tanpa membuang draf.
   React.useEffect(() => {
-    setNilai(kpr || {});
-    tersimpanRef.current = { ...(kpr || {}) };
-    setDibuka(null);
+    if (konsumenRef.current !== customerId) {
+      konsumenRef.current = customerId;
+      tersimpanRef.current = { ...(kpr || {}) };
+      setSimpanan(tersimpanRef.current);
+      setNilai(kpr || {});
+      setDibuka(null);
+      return;
+    }
+    if (kpr) terapkanBaris(kpr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerId]);
+  }, [customerId, kpr]);
 
+  // Status tahap, ringkasan, dan peringatan dibaca dari yang tersimpan, bukan
+  // dari draf: sebuah tahap tidak boleh tampak selesai sebelum datanya benar-
+  // benar ada di database.
   const indeksAktif = useMemo(() => {
-    const belum = TAHAP.findIndex((t) => !t.selesai(nilai));
+    const belum = TAHAP.findIndex((t) => !t.selesai(simpanan));
     return belum === -1 ? TAHAP.length - 1 : belum;
-  }, [nilai]);
+  }, [simpanan]);
 
   const terbuka = dibuka ?? TAHAP[indeksAktif]?.kunci;
-  const catatan = peringatan(nilai);
+  const catatan = peringatan(simpanan);
+
+  const berubah = (keys) => keys.some((k) => teks(nilai[k]) !== teks(simpanan[k]));
+  const adaDraf = Boolean(editable) && (TAHAP.some((t) => berubah(kunciTahap(t))) || berubah(KUNCI_LAIN));
+  const drafBank = berubah(kunciTahap(TAHAP.find((t) => t.kunci === "bank")));
+
+  // Menutup atau memuat ulang tab browser membuang draf; browser yang bertanya.
+  React.useEffect(() => {
+    if (!adaDraf) return undefined;
+    const cegah = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", cegah);
+    return () => window.removeEventListener("beforeunload", cegah);
+  }, [adaDraf]);
+
+  React.useEffect(() => {
+    onDrafUbah?.(adaDraf);
+  }, [adaDraf, onDrafUbah]);
+
+  React.useEffect(() => () => onDrafUbah?.(false), [onDrafUbah]);
 
   // Total DP dihitung di layar juga, bukan menunggu jawaban server: angkanya
   // harus berubah pada ketukan yang sama dengan yang mengubah penyusunnya.
@@ -311,58 +396,49 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
   }, [nilai.nominal_dp, nilai.biaya_tambahan_tanah, nilai.nominal_total_dp]);
 
   /**
-   * Simpan per bidang saat fokus meninggalkannya.
+   * Simpan satu tahap lewat tombolnya — hanya kolom yang berubah yang dikirim.
    *
-   * Tombol "Simpan Progres KPR" tunggal yang lama berarti berpindah konsumen
-   * di tengah pengisian membuang seluruh isian tanpa peringatan apa pun.
+   * Draf bertahan saat tahap dilipat dan saat berpindah tab di halaman
+   * konsumen; menutup tab browser diperingatkan lebih dulu.
    */
-  async function simpanBidang(key, value) {
+  async function simpanKelompok(kelompok, label, keys) {
     if (!editable || !customerId) return;
-    const asal = tersimpanRef.current[key] ?? null;
-    const baru = value === "" ? null : value;
-    if (String(asal ?? "") === String(baru ?? "")) return;
+    const ubahan = {};
+    for (const k of keys) {
+      if (teks(nilai[k]) !== teks(tersimpanRef.current[k])) ubahan[k] = nilai[k] === "" ? null : nilai[k];
+    }
+    if (Object.keys(ubahan).length === 0) return;
 
-    setMenyimpan(key);
+    setMenyimpan(kelompok);
     const { data, error } = await supabase
       .from("customer_kpr")
-      .upsert({ customer_id: customerId, [key]: baru, updated_at: new Date().toISOString() }, { onConflict: "customer_id" })
+      .upsert({ customer_id: customerId, ...ubahan, updated_at: new Date().toISOString() }, { onConflict: "customer_id" })
       .select()
       .maybeSingle();
     setMenyimpan(null);
 
     if (error) {
-      // Nilai dikembalikan ke keadaan tersimpan, supaya layar tidak menampilkan
-      // sesuatu yang sebenarnya tidak ada di database.
-      setNilai((v) => ({ ...v, [key]: asal }));
-      toast.gagal(`Gagal menyimpan: ${error.message}`);
+      // Draf dibiarkan di layar: yang gagal penyimpanannya, bukan isiannya,
+      // dan pengguna cukup menekan Simpan lagi.
+      toast.gagal(`Gagal menyimpan ${label}: ${error.message}`);
       return;
     }
 
     // Baris dibaca kembali karena trigger ikut menulis: Total DP dihitung di
     // server, dan tanpa membacanya kembali layar akan menampilkan total lama
     // sampai halaman dimuat ulang.
-    const baris = data || { ...tersimpanRef.current, [key]: baru };
-    const sebelum = tersimpanRef.current;
-    tersimpanRef.current = { ...baris };
+    const baris = data || { ...tersimpanRef.current, ...ubahan };
+    terapkanBaris(baris, keys);
+    toast.sukses(`${label} tersimpan.`);
+    onChange?.(baris);
+  }
 
-    // Hanya kolom yang TIDAK sedang disentuh pengguna yang ikut diperbarui.
-    //
-    // Penyimpanan berjalan per kolom dan tidak menunggu: seseorang yang
-    // mengisi Nominal DP lalu langsung pindah ke Biaya Tanah akan menerima
-    // jawaban simpanan pertama di tengah ketikan kedua. Menimpa seluruh baris
-    // akan menghapus apa yang baru saja ia tulis — kesalahan yang tampak
-    // seperti papan tik yang rusak, bukan seperti bug.
+  function batalKelompok(keys) {
     setNilai((v) => {
       const gabung = { ...v };
-      for (const k of Object.keys(baris)) {
-        const belumDisentuh = String(v[k] ?? "") === String(sebelum[k] ?? "");
-        if (k === key || belumDisentuh) gabung[k] = baris[k];
-      }
+      for (const k of keys) gabung[k] = tersimpanRef.current[k] ?? "";
       return gabung;
     });
-    setTersimpan(key);
-    setTimeout(() => setTersimpan((k) => (k === key ? null : k)), 1800);
-    onChange?.(baris);
   }
 
   function ubah(key, value) {
@@ -390,15 +466,15 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
       .eq("customer_id", customerId)
       .maybeSingle();
 
-    const baris = segar || { ...nilai, proses_bank_at: data };
-    tersimpanRef.current = { ...tersimpanRef.current, ...baris };
-    setNilai((v) => ({ ...v, ...baris }));
+    const baris = segar || { ...tersimpanRef.current, proses_bank_at: data };
+    terapkanBaris(baris, ["proses_bank_at", "tanggal_masuk_bank"]);
     toast.sukses("Berkas dinyatakan lengkap dan diproses ke bank.");
     onChange?.(baris);
   }
 
-  function renderBidang(b) {
+  function renderBidang(b, sibuk) {
     const v = nilai[b.key] ?? "";
+    const mati = !editable || sibuk;
     const gaya = { ...inputStyle, ...(editable ? null : { background: "#F4F6FA", color: TEXT_MID }) };
 
     if (b.tipe === "hitung") {
@@ -427,15 +503,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
           ? [["menunggu", "Menunggu hasil"], ["lolos", "Lolos"], ["tidak_lolos", "Tidak lolos"]]
           : b.opsi;
       return (
-        <select
-          value={v}
-          disabled={!editable}
-          onChange={(e) => {
-            ubah(b.key, e.target.value);
-            simpanBidang(b.key, e.target.value);
-          }}
-          style={gaya}
-        >
+        <select value={v} disabled={mati} onChange={(e) => ubah(b.key, e.target.value)} style={gaya}>
           <option value="">{b.tipe === "bi" ? "Belum diperiksa" : "— belum ditentukan —"}</option>
           {opsi.map(([nilaiOpsi, label]) => (
             <option key={nilaiOpsi} value={nilaiOpsi}>
@@ -449,15 +517,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
     if (b.tipe === "bank" || b.tipe === "progres") {
       const opsi = b.tipe === "bank" ? banks : progresBerkas;
       return (
-        <select
-          value={v}
-          disabled={!editable}
-          onChange={(e) => {
-            ubah(b.key, e.target.value);
-            simpanBidang(b.key, e.target.value);
-          }}
-          style={gaya}
-        >
+        <select value={v} disabled={mati} onChange={(e) => ubah(b.key, e.target.value)} style={gaya}>
           <option value="">{b.tipe === "bank" ? "Pilih Bank" : "Pilih Progres"}</option>
           {withCurrentValue(opsi, v).map((o) => (
             <option key={o} value={o}>
@@ -470,13 +530,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
 
     if (b.tipe === "rupiah") {
       return (
-        <InputRupiah
-          value={v}
-          disabled={!editable}
-          pilihanCepat={editable ? b.cepat : undefined}
-          onChange={(n) => ubah(b.key, n)}
-          onBlur={(_e, n) => simpanBidang(b.key, n)}
-        />
+        <InputRupiah value={v} disabled={mati} pilihanCepat={editable ? b.cepat : undefined} onChange={(n) => ubah(b.key, n)} />
       );
     }
 
@@ -491,10 +545,9 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
       <input
         type={b.tipe}
         value={v}
-        disabled={!editable}
+        disabled={mati}
         placeholder={b.strip ? "-" : undefined}
         onChange={(e) => ubah(b.key, e.target.value)}
-        onBlur={(e) => simpanBidang(b.key, e.target.value)}
         style={gaya}
       />
     );
@@ -505,7 +558,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
       {/* Rel tahapan — satu pandangan untuk menjawab "sampai mana". */}
       <div className="kpr-rail" style={{ display: "flex", alignItems: "flex-start", marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
         {TAHAP.map((t, i) => {
-          const selesai = t.selesai(nilai);
+          const selesai = t.selesai(simpanan);
           const aktif = i === indeksAktif;
           return (
             <React.Fragment key={t.kunci}>
@@ -593,11 +646,14 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
       {/* Tahap. Yang selesai terlipat jadi satu baris, yang aktif terbuka. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {TAHAP.map((t, i) => {
-          const selesai = t.selesai(nilai);
+          const selesai = t.selesai(simpanan);
           const aktif = i === indeksAktif;
           const buka = terbuka === t.kunci;
           const mendatang = i > indeksAktif;
           const prasyarat = mendatang ? TAHAP[indeksAktif]?.label : null;
+          const keys = kunciTahap(t);
+          const draf = editable && berubah(keys);
+          const sibuk = menyimpan === t.kunci;
 
           return (
             <div
@@ -636,11 +692,17 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
                     </span>
                   )}
                   {mendatang && <Lock size={12} color={TEXT_MID} aria-label="belum sampai tahap ini" />}
+                  {draf && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: ACCENT_DARK, whiteSpace: "nowrap" }}>
+                      <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: ACCENT }} />
+                      belum disimpan
+                    </span>
+                  )}
                 </span>
 
                 {!buka && (
                   <span style={{ fontSize: 12, color: TEXT_MID, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "48%" }}>
-                    {selesai ? t.ringkas(nilai) : mendatang ? `Menunggu ${prasyarat}` : "Belum diisi"}
+                    {selesai ? t.ringkas(simpanan) : mendatang ? `Menunggu ${prasyarat}` : "Belum diisi"}
                   </span>
                 )}
 
@@ -659,15 +721,26 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
                       <div key={b.key} style={b.lebar === 2 ? { gridColumn: "span 2" } : undefined}>
                         <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
                           {b.label}
-                          {menyimpan === b.key && <span style={{ fontWeight: 500, color: TEXT_MID }}> · menyimpan…</span>}
-                          {tersimpan === b.key && <span style={{ fontWeight: 500, color: POSITIVE }}> · tersimpan</span>}
                         </label>
-                        {renderBidang(b)}
+                        {renderBidang(b, sibuk)}
                       </div>
                     ))}
                   </div>
 
                   {t.catatan && <div style={{ fontSize: 11.5, color: TEXT_MID, lineHeight: 1.5 }}>{t.catatan}</div>}
+
+                  {/* Tepat di bawah kolomnya: tombol ini menyimpan isian tahap,
+                      bukan lampiran dan kwitansi di bawahnya — keduanya
+                      tersimpan begitu diunggah. */}
+                  {editable && (
+                    <BarisSimpan
+                      draf={draf}
+                      sibuk={sibuk}
+                      label={t.label}
+                      onBatal={() => batalKelompok(keys)}
+                      onSimpan={() => simpanKelompok(t.kunci, t.label, keys)}
+                    />
+                  )}
 
                   {t.lampiran?.map((l) => (
                     <LampiranTahap
@@ -699,7 +772,7 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
                       <BerkasBankPanel
                         key={segarBerkas}
                         customerId={customerId}
-                        bank={nilai.nama_bank}
+                        bank={simpanan.nama_bank}
                         editable={editable}
                         onChange={() => {
                           setSegarBerkas((v) => v + 1);
@@ -711,36 +784,38 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
                       />
 
                       <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap" }}>
-                        {nilai.proses_bank_at ? (
+                        {simpanan.proses_bank_at ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: POSITIVE }}>
                             <Check size={14} aria-hidden="true" />
-                            Berkas sudah diproses ke bank · {tanggal(nilai.proses_bank_at)}
+                            Berkas sudah diproses ke bank · {tanggal(simpanan.proses_bank_at)}
                           </span>
                         ) : (
                           <>
                             <button
                               onClick={kirimKeBank}
-                              disabled={!editable || prosesBank}
+                              disabled={!editable || prosesBank || drafBank}
                               style={{
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 7,
                                 border: "none",
-                                background: editable ? ACCENT : BORDER,
+                                background: editable && !drafBank ? ACCENT : BORDER,
                                 color: "#fff",
                                 borderRadius: 999,
                                 padding: "10px 18px",
                                 fontSize: 13,
                                 fontWeight: 600,
-                                cursor: editable && !prosesBank ? "pointer" : "default",
+                                cursor: editable && !prosesBank && !drafBank ? "pointer" : "default",
                               }}
                             >
                               <Send size={14} aria-hidden="true" />
                               {prosesBank ? "Memproses…" : "Proses Bank"}
                             </button>
-                            <span style={{ fontSize: 11.5, color: TEXT_MID, lineHeight: 1.45, maxWidth: 380 }}>
-                              Menyatakan berkas lengkap dan diserahkan ke bank. Ditolak selama masih ada dokumen wajib
-                              yang belum diunggah.
+                            <span style={{ fontSize: 11.5, color: drafBank ? ACCENT_DARK : TEXT_MID, lineHeight: 1.45, maxWidth: 380 }}>
+                              {/* Server memeriksa dokumen terhadap bank yang tersimpan, bukan yang baru dipilih. */}
+                              {drafBank
+                                ? "Simpan perubahan tahap Bank lebih dulu."
+                                : "Menyatakan berkas lengkap dan diserahkan ke bank. Ditolak selama masih ada dokumen wajib yang belum diunggah."}
                             </span>
                           </>
                         )}
@@ -759,35 +834,40 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
         <div>
           <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
             Alamat KTP
-            {tersimpan === "alamat_ktp" && <span style={{ fontWeight: 500, color: POSITIVE }}> · tersimpan</span>}
           </label>
           <input
             value={nilai.alamat_ktp ?? ""}
-            disabled={!editable}
+            disabled={!editable || menyimpan === "lain"}
             onChange={(e) => ubah("alamat_ktp", e.target.value)}
-            onBlur={(e) => simpanBidang("alamat_ktp", e.target.value)}
             style={{ ...inputStyle, ...(editable ? null : { background: "#F4F6FA", color: TEXT_MID }) }}
           />
         </div>
         <div>
           <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 }}>
             Kendala atau Catatan
-            {tersimpan === "kendala" && <span style={{ fontWeight: 500, color: POSITIVE }}> · tersimpan</span>}
           </label>
           <textarea
             value={nilai.kendala ?? ""}
-            disabled={!editable}
+            disabled={!editable || menyimpan === "lain"}
             placeholder="-"
             onChange={(e) => ubah("kendala", e.target.value)}
-            onBlur={(e) => simpanBidang("kendala", e.target.value)}
             style={{ ...inputStyle, minHeight: 62, resize: "vertical", fontFamily: "inherit", ...(editable ? null : { background: "#F4F6FA", color: TEXT_MID }) }}
           />
         </div>
+        {editable && (
+          <BarisSimpan
+            draf={berubah(KUNCI_LAIN)}
+            sibuk={menyimpan === "lain"}
+            label="Alamat & Catatan"
+            onBatal={() => batalKelompok(KUNCI_LAIN)}
+            onSimpan={() => simpanKelompok("lain", "Alamat & Catatan", KUNCI_LAIN)}
+          />
+        )}
       </div>
 
       {editable && (
         <div style={{ fontSize: 11.5, color: TEXT_MID, marginTop: 12, lineHeight: 1.5 }}>
-          Perubahan tersimpan sendiri begitu Anda berpindah dari sebuah kolom — tidak ada tombol simpan yang perlu ditekan.
+          Isian baru tersimpan setelah tombol Simpan pada tahapnya ditekan. Lampiran dan bukti transfer tersimpan begitu diunggah.
         </div>
       )}
     </div>

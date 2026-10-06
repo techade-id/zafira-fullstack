@@ -21,7 +21,23 @@ import { Card, PrimaryButton, DeleteButton, BORDER, TEXT_MID, TEXT_DARK, PRIMARY
  * Peristiwa sistem ditandai berbeda dan tidak bisa dihapus: ia bukan catatan,
  * melainkan cerminan data di modul lain.
  */
-export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat Follow Up" }) {
+/**
+ * Dikirim setiap kali riwayat sebuah prospek atau konsumen bertambah dari
+ * luar komponen ini — Catat Follow Up, Alihkan, Batalkan. Tanpanya, riwayat
+ * di panel tetap menampilkan isi lama sampai panel dibuka ulang.
+ */
+export const EVENT_RIWAYAT = "riwayat-berubah";
+
+export function kabarkanRiwayat({ leadId = null, customerId = null }) {
+  window.dispatchEvent(new CustomEvent(EVENT_RIWAYAT, { detail: { leadId, customerId } }));
+}
+
+/**
+ * @param bisaCatat false menyembunyikan formulir catatan di atas riwayat —
+ *   dipakai panel prospek, yang mencatat lewat tombol Catat Follow Up agar
+ *   jadwal berikutnya ikut terisi.
+ */
+export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat Follow Up", bisaCatat = true }) {
   const { profile } = useAuth();
   const toast = useToast();
   const [catatan, setCatatan] = useState([]);
@@ -72,6 +88,15 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
   useEffect(() => {
     fetchRows();
   }, [fetchRows]);
+
+  useEffect(() => {
+    function segarkan(e) {
+      const d = e.detail || {};
+      if ((leadId && d.leadId === leadId) || (customerId && d.customerId === customerId)) fetchRows();
+    }
+    window.addEventListener(EVENT_RIWAYAT, segarkan);
+    return () => window.removeEventListener(EVENT_RIWAYAT, segarkan);
+  }, [fetchRows, leadId, customerId]);
 
   const gabungan = useMemo(() => {
     const semua = [
@@ -128,7 +153,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
         </div>
       </div>
 
-      {mayWrite && (
+      {mayWrite && bisaCatat && (
         <div style={{ marginBottom: 18 }}>
           <div className="rg-3" style={{ marginBottom: 10 }}>
             <input
@@ -226,6 +251,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
 
               {row.manual && (
                 <DeleteButton
+                  ikon
                   subject="followup_delete"
                   itemName={row.judul}
                   onDelete={() => supabase.from("lead_activities").delete().eq("id", row.asli.id)}

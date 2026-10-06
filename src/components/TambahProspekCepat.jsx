@@ -1,13 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
-import { useBusinessSettings } from "../lib/useBusinessSettings";
-import { segarkanNotifikasi } from "../lib/useNotifications";
-import { Modal, PrimaryButton, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY_SOFT, PRIMARY, NEGATIVE, inputStyle } from "./ui";
+import ModalProspek from "./ModalProspek";
+import { PRIMARY } from "./ui";
 
 /**
  * Menangkap prospek dalam hitungan detik, dari halaman mana pun.
@@ -18,95 +15,15 @@ import { Modal, PrimaryButton, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY_SOF
  * calon pembeli berdiri di depannya, tiga langkah itu sudah terlalu banyak —
  * dan prospek yang dicatat di kertas biasanya berhenti di kertas.
  *
- * Tombol ini duduk di header, jadi selalu satu ketukan jauhnya.
+ * Tombol ini duduk di header, jadi selalu satu ketukan jauhnya. Formulirnya
+ * sama dengan tombol "+ Prospek Baru" di halaman Leads (ModalProspek).
  */
 export default function TambahProspekCepat() {
   const { profile } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
-  const organik = useBusinessSettings("organik_kategori");
-
   const [buka, setBuka] = useState(false);
-  const [nama, setNama] = useState("");
-  const [telepon, setTelepon] = useState("");
-  const [sumber, setSumber] = useState("organik");
-  const [kategori, setKategori] = useState("");
-  const [detail, setDetail] = useState("");
-  const [kirim, setKirim] = useState(false);
-  const [galat, setGalat] = useState("");
-  const namaRef = useRef(null);
 
-  const boleh = canWrite(profile, "lead");
-
-  useEffect(() => {
-    if (!buka) return;
-    setNama("");
-    setTelepon("");
-    setSumber("organik");
-    setKategori(organik[0] || "");
-    setDetail("");
-    setGalat("");
-    setKirim(false);
-    // Fokus langsung ke nama: di lapangan, setiap ketukan tambahan berarti
-    // menahan calon pembeli menunggu.
-    setTimeout(() => namaRef.current?.focus(), 60);
-  }, [buka, organik]);
-
-  if (!boleh) return null;
-
-  async function simpan(lanjutkan) {
-    if (!nama.trim()) {
-      setGalat("Nama atau username wajib diisi.");
-      return;
-    }
-    // Sama seperti formulir lengkap: sumber Organik tanpa keterangan tidak
-    // memberi tahu siapa pun apa yang harus diulang (BRIEF §Leads).
-    if (sumber === "organik" && !detail.trim()) {
-      setGalat("Sumber Organik wajib disertai keterangan — mis. nama event.");
-      return;
-    }
-    setKirim(true);
-    setGalat("");
-
-    const { data, error } = await supabase
-      .from("leads")
-      .insert({
-        name: nama.trim(),
-        phone: telepon.trim() || null,
-        source_type: sumber,
-        organik_kategori: sumber === "organik" ? kategori || null : null,
-        organik_detail: sumber === "organik" ? detail.trim() || null : null,
-        // Prospek baru selalu Warm, ditetapkan sistem (BRIEF §Leads).
-        status: "warm",
-        // Tanpa ini RLS menyembunyikan baris dari orang yang baru saja membuatnya.
-        assigned_to: profile?.id || null,
-      })
-      .select("id")
-      .maybeSingle();
-
-    setKirim(false);
-    if (error) {
-      setGalat(error.message);
-      return;
-    }
-
-    toast.sukses(`${nama.trim()} tercatat sebagai prospek baru.`);
-    segarkanNotifikasi();
-
-    if (lanjutkan) {
-      // Di pameran, prospek datang berturut-turut. Formulir dikosongkan dan
-      // tetap terbuka supaya yang berikutnya tidak perlu membuka ulang.
-      setNama("");
-      setTelepon("");
-      setDetail("");
-      setGalat("");
-      namaRef.current?.focus();
-      return;
-    }
-
-    setBuka(false);
-    if (data?.id) navigate(`/prospek?sorot=${data.id}`);
-  }
+  if (!canWrite(profile, "lead")) return null;
 
   return (
     <>
@@ -132,140 +49,12 @@ export default function TambahProspekCepat() {
         <Plus size={19} />
       </button>
 
-      <Modal open={buka} labelledBy="cepat-judul" onClose={() => !kirim && setBuka(false)} width={430}>
-        <>
-          <div id="cepat-judul" style={{ fontSize: 17, fontWeight: 700, marginBottom: 5 }}>
-            Prospek Baru
-          </div>
-          <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 16, lineHeight: 1.55 }}>
-            Cukup nama dan nomor. Status awal Warm Lead, ditetapkan sistem.
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="cepat-nama" style={label}>
-              Nama / Username <span style={{ color: "#B93F0F" }}>*</span>
-            </label>
-            <input
-              id="cepat-nama"
-              ref={namaRef}
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && simpan(false)}
-              placeholder="mis. Budi Santoso"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="cepat-telp" style={label}>
-              Nomor Telepon
-            </label>
-            <input
-              id="cepat-telp"
-              type="tel"
-              inputMode="tel"
-              value={telepon}
-              onChange={(e) => setTelepon(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && simpan(false)}
-              placeholder="08…"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <span style={label}>Sumber</span>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[
-                { v: "organik", l: "Organik" },
-                { v: "ads", l: "Ads" },
-                { v: "freelance", l: "Freelance" },
-                { v: "kemitraan", l: "Kemitraan" },
-              ].map((s) => {
-                const aktif = sumber === s.v;
-                return (
-                  <button
-                    key={s.v}
-                    onClick={() => setSumber(s.v)}
-                    aria-pressed={aktif}
-                    style={{
-                      padding: "7px 14px",
-                      borderRadius: 999,
-                      border: `1px solid ${aktif ? PRIMARY : BORDER}`,
-                      background: aktif ? PRIMARY : SURFACE,
-                      color: aktif ? "#fff" : TEXT_MID,
-                      fontSize: 12.5,
-                      fontWeight: aktif ? 600 : 500,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {s.l}
-                  </button>
-                );
-              })}
-            </div>
-
-            {sumber === "organik" && (
-              <>
-                {organik.length > 0 && (
-                  <select value={kategori} onChange={(e) => setKategori(e.target.value)} aria-label="Kategori organik" style={{ ...inputStyle, marginTop: 9 }}>
-                    <option value="">Kategori organik</option>
-                    {organik.map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <input
-                  value={detail}
-                  onChange={(e) => setDetail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && simpan(false)}
-                  aria-label="Keterangan detail sumber organik"
-                  placeholder="Keterangan * — mis. Pameran Kota Tegal"
-                  style={{ ...inputStyle, marginTop: 9 }}
-                />
-              </>
-            )}
-
-            {sumber !== "organik" && (
-              <div style={{ fontSize: 11.5, color: TEXT_MID, marginTop: 8, lineHeight: 1.45, background: PRIMARY_SOFT, borderRadius: 10, padding: "8px 11px" }}>
-                Campaign atau mitra asalnya dipilih nanti dari halaman Leads.
-              </div>
-            )}
-          </div>
-
-          {galat && (
-            <div role="alert" style={{ fontSize: 12.5, color: NEGATIVE, marginBottom: 14 }}>
-              {galat}
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 9, justifyContent: "flex-end", flexWrap: "wrap" }}>
-            <button onClick={() => setBuka(false)} disabled={kirim} style={sekunder}>
-              Batal
-            </button>
-            <button onClick={() => simpan(true)} disabled={kirim} style={{ ...sekunder, borderColor: PRIMARY, color: PRIMARY }}>
-              Simpan &amp; tambah lagi
-            </button>
-            <PrimaryButton onClick={() => simpan(false)} disabled={kirim}>
-              {kirim ? "Menyimpan…" : "Simpan"}
-            </PrimaryButton>
-          </div>
-        </>
-      </Modal>
+      <ModalProspek
+        open={buka}
+        lead={null}
+        onClose={() => setBuka(false)}
+        onSaved={(id) => id && navigate(`/prospek?sorot=${id}`)}
+      />
     </>
   );
 }
-
-const label = { display: "block", fontSize: 11.5, fontWeight: 600, color: TEXT_MID, marginBottom: 5 };
-
-const sekunder = {
-  border: `1px solid ${BORDER}`,
-  background: SURFACE,
-  color: TEXT_DARK,
-  borderRadius: 999,
-  padding: "10px 16px",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};

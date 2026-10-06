@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { labelTahap } from "../lib/format";
+import { kabarkanRiwayat } from "./FollowUpTimeline";
 import { Modal, PrimaryButton, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE, inputStyle } from "./ui";
 
 /**
@@ -131,6 +132,7 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai }) {
       setGalat(errCatatan.message);
       return;
     }
+    kabarkanRiwayat({ leadId: lead.id });
 
     // `.select()` bukan hiasan: policy leads_update hanya mengenal admin dan
     // sales pemiliknya, sementara tombol "Catat Follow Up" juga diberikan

@@ -2,9 +2,12 @@
   box-sizing: border-box;
 }
 
+/* clip, bukan hidden: overflow-x: hidden pada html *dan* body menjadikan body
+   wadah gulir sendiri yang tidak pernah bergulir, sehingga position: sticky
+   pada sidebar menempel ke body itu, bukan ke layar, dan ikut tergulir. */
 html, body {
   margin: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
   background: #F4F6FA;
   -webkit-font-smoothing: antialiased;
 }
@@ -59,6 +62,14 @@ input:focus, select:focus, textarea:focus {
 
 .menu-toggle {
   display: none;
+}
+
+/* Hapus berbentuk ikon tetap redup sampai disentuh — baru di situ ia
+   menyatakan dirinya merusak. */
+.hapus-ikon:hover,
+.hapus-ikon:focus-visible {
+  color: #C2413B !important;
+  background: #FBE9E8 !important;
 }
 
 /* The sidebar sits on navy, so hover states are lightened, not darkened. */

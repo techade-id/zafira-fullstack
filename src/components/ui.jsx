@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, ChevronsUpDown, Search as SearchIcon, Inbox } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown, Search as SearchIcon, Inbox, Trash2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { isReadOnly, canWrite } from "../lib/permissions";
 import { labelUmum } from "../lib/format";
@@ -37,6 +37,7 @@ export const PAGE_BG = "#F4F6FA";        // page canvas
 export const SURFACE = "#ffffff";        // cards / panels
 
 export const BORDER = "#E3E8F0";
+export const BORDER_SOFT = "#ECEFF4";    // dashboard — kartu dibedakan oleh isian putih, bukan garis
 export const TEXT_DARK = "#111B2E";
 export const TEXT_MID = "#64748B";
 export const ON_PRIMARY = "rgba(255,255,255,0.74)";       // sidebar idle text
@@ -384,6 +385,19 @@ export function DataTable({
   React.useEffect(() => {
     setHalaman(0);
   }, [cari, urut, pilihFilter]);
+
+  // Baris yang disorot dibawa ke halamannya: prospek yang baru disimpan ketika
+  // pengguna sedang di halaman 3 tidak boleh disorot di halaman 1 tanpa
+  // terlihat. Sekali per sorotan — memuat ulang data tidak menyeret pengguna
+  // kembali dari halaman yang sengaja ia buka.
+  const sudahDilompati = React.useRef(null);
+  React.useEffect(() => {
+    if (!highlightId || !pageSize || sudahDilompati.current === highlightId) return;
+    const i = tersaring.findIndex((row) => row.id === highlightId);
+    if (i < 0) return;
+    sudahDilompati.current = highlightId;
+    setHalaman(Math.floor(i / pageSize));
+  }, [highlightId, tersaring, pageSize]);
 
   const tampil = pageSize ? tersaring.slice(halamanAman * pageSize, (halamanAman + 1) * pageSize) : tersaring;
 
@@ -853,11 +867,30 @@ export function friendlyDbError(error) {
  * melihatnya. Escape ditambahkan karena itu yang dicoba orang lebih dulu
  * sebelum mencari tombol Batal.
  */
+/**
+ * Dialog yang sedang terbuka, berurut dari bawah ke atas.
+ *
+ * Modal bisa dibuka dari dalam Drawer (panel prospek → Alihkan Agen). Kedua
+ * dialog memasang pendengar keyboard pada document, dan tanpa tumpukan ini
+ * Escape di modal ikut menutup panel di bawahnya — sementara Tab direbut dua
+ * perangkap sekaligus. Hanya dialog paling atas yang menanggapi keyboard.
+ */
+const tumpukanDialog = [];
+
 /** Perangkap fokus + Escape, dipakai bersama oleh Modal dan Drawer. */
 function usePerangkapFokus(open, kotak, onClose) {
+  // onClose dibaca lewat ref, bukan dijadikan dependensi efek. Pemanggil
+  // hampir selalu memberinya fungsi inline — identitasnya baru di setiap
+  // render — dan efek yang berjalan ulang memindahkan fokus ke bidang pertama
+  // dialog: mengetik "0812" di kolom kedua membuat "812" masuk ke kolom nama.
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   React.useEffect(() => {
     if (!open) return undefined;
 
+    const token = {};
+    tumpukanDialog.push(token);
     const fokusSebelumnya = document.activeElement;
     // Fokus awal ke dalam dialog, kalau tidak pembaca layar tetap membacakan
     // halaman di belakangnya.
@@ -865,9 +898,14 @@ function usePerangkapFokus(open, kotak, onClose) {
     (pertama || kotak.current)?.focus();
 
     function onKey(e) {
+      if (tumpukanDialog[tumpukanDialog.length - 1] !== token) return;
       if (e.key === "Escape") {
+        // Menu ⋯ yang sedang terbuka di dalam dialog menutup dirinya sendiri;
+        // Escape pertama tidak boleh ikut menutup dialognya.
+        const aktif = document.activeElement;
+        if (aktif?.closest?.('[role="menu"]') || (aktif?.getAttribute?.("aria-haspopup") === "menu" && aktif.getAttribute("aria-expanded") === "true")) return;
         e.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (e.key !== "Tab") return;
@@ -889,10 +927,11 @@ function usePerangkapFokus(open, kotak, onClose) {
 
     document.addEventListener("keydown", onKey, true);
     return () => {
+      tumpukanDialog.splice(tumpukanDialog.indexOf(token), 1);
       document.removeEventListener("keydown", onKey, true);
       if (fokusSebelumnya instanceof HTMLElement) fokusSebelumnya.focus();
     };
-  }, [open, kotak, onClose]);
+  }, [open, kotak]);
 }
 
 export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
@@ -910,7 +949,10 @@ export function Modal({ open, labelledBy, onClose, children, width = 420 }) {
       onClick={onClose}
       // whiteSpace is reset because the dialog is rendered inside a table cell
       // that sets nowrap, which would otherwise stop the text wrapping.
-      style={{ position: "fixed", inset: 0, background: "rgba(10,29,66,0.48)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 16, whiteSpace: "normal" }}
+      // zIndex di atas Drawer (65): modal yang dibuka dari panel samping harus
+      // tampil di depannya. Di bawahnya, setiap klik pada modal mengenai latar
+      // panel — panel tertutup, dan modalnya ikut hilang.
+      style={{ position: "fixed", inset: 0, background: "rgba(10,29,66,0.48)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70, padding: 16, whiteSpace: "normal" }}
     >
       <div
         ref={kotak}
@@ -1160,7 +1202,12 @@ export function ConfirmDialog({ open, title, message, warning, confirmLabel = "H
  * `onDelete` should return the Supabase `{ error }` shape; `warning` is for
  * spelling out what else disappears (cascades), which the user cannot see.
  */
-export function DeleteButton({ onDelete, onDone, itemName, warning, label = "Hapus", confirmLabel = "Hapus", subject }) {
+/**
+ * `ikon`: tampil sebagai ikon tempat sampah kecil, bukan tombol berlabel —
+ * untuk daftar seperti riwayat follow-up, tempat tombol Hapus di setiap baris
+ * tidak boleh sebobot aksi utamanya.
+ */
+export function DeleteButton({ onDelete, onDone, itemName, warning, label = "Hapus", confirmLabel = "Hapus", subject, ikon = false }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -1190,9 +1237,15 @@ export function DeleteButton({ onDelete, onDone, itemName, warning, label = "Hap
           setOpen(true);
         }}
         title={`Hapus ${itemName || ""}`.trim()}
-        style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: NEGATIVE, borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+        aria-label={ikon ? `Hapus ${itemName || ""}`.trim() : undefined}
+        className={ikon ? "hapus-ikon" : undefined}
+        style={
+          ikon
+            ? { border: "none", background: "none", color: TEXT_MID, borderRadius: 8, padding: 5, lineHeight: 0, cursor: "pointer", alignSelf: "flex-start", flexShrink: 0 }
+            : { border: `1px solid ${BORDER}`, background: SURFACE, color: NEGATIVE, borderRadius: 9, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }
+        }
       >
-        {label}
+        {ikon ? <Trash2 size={14} aria-hidden="true" /> : label}
       </button>
       <ConfirmDialog
         open={open}

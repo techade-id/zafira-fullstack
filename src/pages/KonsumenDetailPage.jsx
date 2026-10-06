@@ -22,6 +22,7 @@ import {
   PRIMARY,
   PRIMARY_SOFT,
   SURFACE,
+  ACCENT,
   ACCENT_DARK,
   ReadOnlyBanner,
   LockBanner,
@@ -62,6 +63,8 @@ export default function KonsumenDetailPage() {
   const [pembayaran, setPembayaran] = useState([]);
   const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState("");
+  const [kprDibuka, setKprDibuka] = useState(false);
+  const [kprDraf, setKprDraf] = useState(false);
 
   const muat = useCallback(async () => {
     setMemuat(true);
@@ -91,7 +94,14 @@ export default function KonsumenDetailPage() {
     muat();
   }, [muat]);
 
-  if (memuat) {
+  useEffect(() => {
+    if (tab === "kpr") setKprDibuka(true);
+  }, [tab]);
+
+  // Layar memuat hanya untuk konsumen yang belum tampil. Memuat ulang konsumen
+  // yang sama — setelah unggah berkas atau mencatat kontak — tidak boleh
+  // melepas KprStepper dari halaman, karena draf yang belum disimpan ikut hilang.
+  if (memuat && konsumen?.id !== id) {
     return <Card><div style={{ padding: 20, fontSize: 13, color: TEXT_MID }}>Memuat konsumen…</div></Card>;
   }
 
@@ -200,6 +210,13 @@ export default function KonsumenDetailPage() {
               <t.ikon size={14} aria-hidden="true" />
               {t.label}
               {t.kunci === "kpr" && dokumen.length > 0 && <Hitung n={dokumen.length} aktif={aktif} />}
+              {t.kunci === "kpr" && kprDraf && (
+                <span
+                  title="Ada perubahan Progres KPR yang belum disimpan"
+                  aria-label="belum disimpan"
+                  style={{ width: 7, height: 7, borderRadius: "50%", background: ACCENT, flexShrink: 0 }}
+                />
+              )}
               {t.kunci === "pembayaran" && pembayaran.length > 0 && <Hitung n={pembayaran.length} aktif={aktif} />}
             </button>
           );
@@ -218,10 +235,21 @@ export default function KonsumenDetailPage() {
         />
       )}
 
-      {tab === "kpr" && (
-        <Card>
-          <KprStepper kpr={kpr} customerId={konsumen.id} editable={bolehBerkas} onChange={setKpr} onBerkasUbah={muat} />
-        </Card>
+      {/* Tetap terpasang setelah pertama dibuka: draf KPR yang belum disimpan
+          tidak boleh hilang hanya karena pengguna melirik tab lain. */}
+      {(tab === "kpr" || kprDibuka) && (
+        <div hidden={tab !== "kpr"}>
+          <Card>
+            <KprStepper
+              kpr={kpr}
+              customerId={konsumen.id}
+              editable={bolehBerkas}
+              onChange={setKpr}
+              onBerkasUbah={muat}
+              onDrafUbah={setKprDraf}
+            />
+          </Card>
+        </div>
       )}
 
       {tab === "pembayaran" && <TabPembayaran pembayaran={pembayaran} />}
