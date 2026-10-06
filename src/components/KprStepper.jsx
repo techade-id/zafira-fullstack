@@ -212,6 +212,9 @@ const TAHAP = [
   },
 ];
 
+/** Semua slot lampiran, urut menurut tahapnya — dipakai juga oleh Dokumen Konsumen di Ringkasan. */
+export const LAMPIRAN_TAHAP = TAHAP.flatMap((t) => (t.lampiran || []).map((l) => ({ ...l, tahap: t.label })));
+
 /** Kolom yang disimpan oleh tombol Simpan sebuah tahap. Total DP dihitung server. */
 function kunciTahap(t) {
   return t.bidang.filter((b) => b.tipe !== "hitung").map((b) => b.key);

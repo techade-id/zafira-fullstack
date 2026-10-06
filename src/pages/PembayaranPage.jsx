@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Wallet } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
-import { uploadFile, getSignedUrl } from "../lib/storage";
+import { getSignedUrl } from "../lib/storage";
+import { unggahBuktiTransfer, unggahKuitansi } from "../lib/berkas";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
@@ -39,24 +40,12 @@ function UnggahBukti({ row, onDone }) {
     setBusy(true);
     setError("");
 
-    const { path, error: upErr } = await uploadFile("payment-proofs", row.customer_id, file);
-    if (upErr) {
-      setError(upErr.message);
-      setBusy(false);
-      return;
-    }
-
-    // Status dan bukti dikirim bersama: trigger guard_payment_verification
-    // hanya mengizinkan perpindahan ke 'menunggu_verifikasi' bila buktinya ikut
-    // dalam baris yang sama.
-    const { error: dbErr } = await supabase
-      .from("payments")
-      .update({ bukti_transfer_url: path, status: "menunggu_verifikasi" })
-      .eq("id", row.id);
-
+    // Aturannya (bucket, status, trigger guard_payment_verification) ada di
+    // lib/berkas.js — dipakai bersama dengan tahap KPR dan Dokumen Konsumen.
+    const { error: gagal } = await unggahBuktiTransfer(row, file);
     setBusy(false);
-    if (dbErr) {
-      setError(dbErr.message);
+    if (gagal) {
+      setError(gagal);
       return;
     }
     onDone();
@@ -104,21 +93,10 @@ function VerifyWithReceipt({ row, onDone }) {
     setBusy(true);
     setError("");
 
-    const { path, error: upErr } = await uploadFile("payment-receipts", row.customer_id, file);
-    if (upErr) {
-      setError(upErr.message);
-      setBusy(false);
-      return;
-    }
-
-    const { error: dbErr } = await supabase
-      .from("payments")
-      .update({ status: "terverifikasi", proof_url: path })
-      .eq("id", row.id);
-
+    const { error: gagal } = await unggahKuitansi(row, file);
     setBusy(false);
-    if (dbErr) {
-      setError(dbErr.message);
+    if (gagal) {
+      setError(gagal);
       return;
     }
     onDone();

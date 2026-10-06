@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Wallet, Upload, Check, Clock, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { uploadFile, getSignedUrl } from "../lib/storage";
+import { unggahBuktiTransfer, unggahKuitansi, dengarBerkas } from "../lib/berkas";
+import { usePratinjau } from "./PratinjauBerkas";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
@@ -36,6 +37,7 @@ export default function VerifikasiPembayaran({ customerId, jenis, editable = tru
   const [rows, setRows] = useState([]);
   const [memuat, setMemuat] = useState(true);
   const [sibuk, setSibuk] = useState(null);
+  const [bukaPratinjau, pratinjau] = usePratinjau();
 
   const muat = useCallback(async () => {
     if (!customerId) return;
@@ -54,33 +56,20 @@ export default function VerifikasiPembayaran({ customerId, jenis, editable = tru
     muat();
   }, [muat]);
 
+  // Bukti dan kuitansi bisa juga diunggah dari Dokumen Konsumen di Ringkasan.
+  useEffect(() => dengarBerkas(customerId, muat), [customerId, muat]);
+
   /** Unggah bukti transfer dan dengan itu meminta verifikasi Finance. */
   async function kirimBukti(row, file) {
     if (!file) return;
     setSibuk(row.id);
-    const { path, error: upErr } = await uploadFile("payment-proofs", customerId, file);
-    if (upErr) {
-      setSibuk(null);
-      toast.gagal(`Gagal mengunggah bukti: ${upErr.message}`);
-      return;
-    }
-    // Status dan bukti dikirim bersama: trigger guard_payment_verification
-    // hanya mengizinkan perpindahan ke 'menunggu_verifikasi' bila buktinya ikut
-    // dalam baris yang sama.
-    const { error } = await supabase
-      .from("payments")
-      .update({
-        bukti_transfer_url: path,
-        status: row.status === "terverifikasi" ? row.status : "menunggu_verifikasi",
-      })
-      .eq("id", row.id);
+    const { error } = await unggahBuktiTransfer(row, file);
     setSibuk(null);
     if (error) {
-      toast.gagal(`Gagal menyimpan bukti: ${error.message}`);
+      toast.gagal(error);
       return;
     }
     toast.sukses("Bukti transfer terkirim — menunggu verifikasi pembayaran dari Finance.");
-    muat();
     segarkanNotifikasi();
     onChange?.();
   }
@@ -89,31 +78,23 @@ export default function VerifikasiPembayaran({ customerId, jenis, editable = tru
   async function verifikasi(row, file) {
     if (!file) return;
     setSibuk(row.id);
-    const { path, error: upErr } = await uploadFile("payment-receipts", customerId, file);
-    if (upErr) {
-      setSibuk(null);
-      toast.gagal(`Gagal mengunggah kuitansi: ${upErr.message}`);
-      return;
-    }
-    const { error } = await supabase
-      .from("payments")
-      .update({ status: "terverifikasi", proof_url: path })
-      .eq("id", row.id);
+    const { error } = await unggahKuitansi(row, file);
     setSibuk(null);
     if (error) {
-      toast.gagal(`Gagal memverifikasi: ${error.message}`);
+      toast.gagal(error);
       return;
     }
     toast.sukses("Pembayaran terverifikasi dan kuitansi tersimpan.");
-    muat();
     segarkanNotifikasi();
     onChange?.();
   }
 
-  async function buka(bucket, path) {
-    const url = await getSignedUrl(bucket, path);
-    if (url) window.open(url, "_blank", "noopener");
-    else toast.gagal("Tautan berkas tidak dapat dibuka.");
+  function buka(bucket, path) {
+    const daftar = rows.flatMap((r) => [
+      r.bukti_transfer_url && { bucket: "payment-proofs", path: r.bukti_transfer_url, judul: `Bukti transfer ${labelJenisBayar(r.payment_type)}`, keterangan: `${rupiah(r.amount)} · ${tanggal(r.payment_date)}` },
+      r.proof_url && { bucket: "payment-receipts", path: r.proof_url, judul: `Kuitansi ${labelJenisBayar(r.payment_type)}`, keterangan: `${rupiah(r.amount)} · ${tanggal(r.payment_date)}` },
+    ].filter(Boolean));
+    bukaPratinjau(daftar, Math.max(0, daftar.findIndex((x) => x.bucket === bucket && x.path === path)));
   }
 
   if (memuat) {

@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Home, User, Wallet, ClipboardList, History } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
 import { canEditBerkas, canEditCustomer, isLocked, lockReason, roleOf } from "../lib/permissions";
 import { rupiah, tanggal, tanggalWaktu, durasiHari, labelTahap, labelJenisBayar } from "../lib/format";
 import { useSyaratBerkas, cocokkanBerkas } from "../lib/useSyaratBerkas";
 import FollowUpTimeline from "../components/FollowUpTimeline";
 import KprStepper from "../components/KprStepper";
+import DokumenKonsumen from "../components/DokumenKonsumen";
+import { dengarBerkas } from "../lib/berkas";
 import KontakAksi from "../components/KontakAksi";
-import InputRupiah from "../components/InputRupiah";
+import DataDiriKonsumen from "../components/DataDiriKonsumen";
 import {
   Card,
   DataTable,
@@ -53,6 +54,7 @@ const TAB = [
  */
 export default function KonsumenDetailPage() {
   const { id } = useParams();
+  const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
   const navigate = useNavigate();
 
@@ -64,6 +66,8 @@ export default function KonsumenDetailPage() {
   const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState("");
   const [kprDibuka, setKprDibuka] = useState(false);
+  // Tombol Ubah di daftar Konsumen membuka halaman ini dengan ?ubah=1.
+  const [mintaUbah, setMintaUbah] = useState(params.get("ubah") === "1");
   const [kprDraf, setKprDraf] = useState(false);
 
   const muat = useCallback(async () => {
@@ -97,6 +101,20 @@ export default function KonsumenDetailPage() {
   useEffect(() => {
     if (tab === "kpr") setKprDibuka(true);
   }, [tab]);
+
+  useEffect(() => {
+    if (params.get("ubah") !== "1") return;
+    setMintaUbah(true);
+    setTab("ringkasan");
+    // Parameternya dilepas, supaya memuat ulang halaman tidak membuka mode ubah lagi.
+    const p = new URLSearchParams(params);
+    p.delete("ubah");
+    setParams(p, { replace: true });
+  }, [params, setParams]);
+
+  // Lencana jumlah dokumen dan angka "Berkas Wajib" ikut segar setiap kali
+  // berkas berubah — dari tahap KPR maupun dari Dokumen Konsumen.
+  useEffect(() => dengarBerkas(id, muat), [id, muat]);
 
   // Layar memuat hanya untuk konsumen yang belum tampil. Memuat ulang konsumen
   // yang sama — setelah unggah berkas atau mencatat kontak — tidak boleh
@@ -223,17 +241,21 @@ export default function KonsumenDetailPage() {
         })}
       </div>
 
-      {tab === "ringkasan" && (
+      {/* Tetap terpasang saat berpindah tab: perubahan Data Diri yang belum
+          disimpan tidak boleh hilang hanya karena melirik tab lain. */}
+      <div hidden={tab !== "ringkasan"}>
         <TabRingkasan
           konsumen={konsumen}
           kpr={kpr}
           pembayaran={pembayaran}
           dokumen={dokumen}
           bolehUbah={canEditCustomer(profile, konsumen)}
+          bolehBerkas={bolehBerkas}
           onUbah={muat}
           onBuka={setTab}
+          awalUbah={mintaUbah}
         />
-      )}
+      </div>
 
       {/* Tetap terpasang setelah pertama dibuka: draf KPR yang belum disimpan
           tidak boleh hilang hanya karena pengguna melirik tab lain. */}
@@ -245,7 +267,6 @@ export default function KonsumenDetailPage() {
               customerId={konsumen.id}
               editable={bolehBerkas}
               onChange={setKpr}
-              onBerkasUbah={muat}
               onDrafUbah={setKprDraf}
             />
           </Card>
@@ -280,8 +301,7 @@ function Hitung({ n, aktif }) {
    Ringkasan
    ============================================================ */
 
-function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, bolehUbah, onUbah, onBuka }) {
-  const toast = useToast();
+function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, bolehUbah, bolehBerkas, awalUbah, onUbah, onBuka }) {
   const terverifikasi = pembayaran.filter((p) => p.status === "terverifikasi").reduce((s, p) => s + Number(p.amount || 0), 0);
   // "Menunggu" kini dua status: yang belum berbukti, dan yang buktinya sudah
   // dikirim ke Finance. Keduanya sama-sama belum menjadi uang yang diakui.
@@ -289,29 +309,6 @@ function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, bolehUbah, onUbah, o
   // Kelengkapan dihitung terhadap syarat bank yang berlaku, bukan daftar tetap.
   const { syarat } = useSyaratBerkas(kpr?.nama_bank);
   const rekap = useMemo(() => cocokkanBerkas(syarat, dokumen), [syarat, dokumen]);
-
-  const [penghasilan, setPenghasilan] = useState(konsumen.penghasilan ?? "");
-  const [simpan, setSimpan] = useState(null);
-
-  // BRIEF §Saringan Awal: penghasilan terverifikasi pindah ke sini dari tahap
-  // BI-Checking. Ia memang keterangan tentang orangnya, bukan hasil sebuah
-  // pemeriksaan — dan dipakai ulang di banyak tahap sesudahnya.
-  // Nilainya datang sebagai argumen, bukan dari state: InputRupiah baru
-  // mengurai singkatan ("5jt") pada saat blur, dan state belum sempat ikut.
-  async function simpanPenghasilan(nilai) {
-    const baru = nilai === "" || nilai === null || nilai === undefined ? null : Number(nilai);
-    if (String(baru ?? "") === String(konsumen.penghasilan ?? "")) return;
-    setSimpan("menyimpan");
-    const { error } = await supabase.from("customers").update({ penghasilan: baru }).eq("id", konsumen.id);
-    setSimpan(null);
-    if (error) {
-      setPenghasilan(konsumen.penghasilan ?? "");
-      toast.gagal(`Gagal menyimpan penghasilan: ${error.message}`);
-      return;
-    }
-    toast.sukses("Penghasilan tersimpan.");
-    onUbah?.();
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -325,38 +322,14 @@ function TabRingkasan({ konsumen, kpr, pembayaran, dokumen, bolehUbah, onUbah, o
         />
       </div>
 
-      <Card>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>Data Diri</div>
-        <div className="rg-3" style={{ rowGap: 14 }}>
-          <Baris label="Nama" nilai={konsumen.name} />
-          <Baris label="Telepon" nilai={konsumen.phone} />
-          <Baris label="Email" nilai={konsumen.email} />
-          <Baris label="Username Sosial Media" nilai={konsumen.username_sosmed} />
-          <Baris label="No. KTP" nilai={konsumen.ktp_number} />
-          <Baris label="Alamat" nilai={konsumen.address} />
-          <Baris label="Alamat KTP" nilai={kpr?.alamat_ktp} />
-          <Baris label="Unit" nilai={konsumen.units?.unit_code} />
-          <Baris label="Harga Unit" nilai={konsumen.units?.price ? rupiah(konsumen.units.price) : null} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11.5, color: TEXT_MID, marginBottom: 3 }}>
-              Penghasilan Terverifikasi / bulan
-              {simpan && <span style={{ color: TEXT_MID }}> · menyimpan…</span>}
-            </div>
-            {bolehUbah ? (
-              <InputRupiah
-                value={penghasilan}
-                onChange={setPenghasilan}
-                onBlur={(_e, n) => simpanPenghasilan(n)}
-                placeholder="mis. 5jt"
-              />
-            ) : (
-              <div style={{ fontSize: 13, color: konsumen.penghasilan ? TEXT_DARK : TEXT_MID }}>
-                {konsumen.penghasilan ? rupiah(konsumen.penghasilan) : "-"}
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Penghasilan kini ikut formulir Data Diri — tersimpan lewat tombol
+          Simpan, bukan lagi saat kolomnya ditinggalkan. BRIEF §Saringan Awal
+          memindahkannya ke sini dari tahap BI-Checking. */}
+      <DataDiriKonsumen konsumen={konsumen} kpr={kpr} bolehUbah={bolehUbah} awalUbah={awalUbah} onTersimpan={onUbah} />
+
+      {/* Seluruh berkas konsumen — KTP, berkas bank, lampiran tahap, bukti
+          pembayaran, foto komplain — terbaca dan bisa diunggah dari sini. */}
+      <DokumenKonsumen konsumen={konsumen} bank={kpr?.nama_bank} editable={bolehBerkas} />
 
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>

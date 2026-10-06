@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FileText, Upload, Check, AlertTriangle, Landmark } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { uploadFile, getSignedUrl } from "../lib/storage";
+import { unggahBerkasBank, dengarBerkas, kabarkanBerkas } from "../lib/berkas";
+import { usePratinjau } from "./PratinjauBerkas";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
@@ -47,6 +48,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
   const [dokumen, setDokumen] = useState([]);
   const [memuat, setMemuat] = useState(true);
   const [unggah, setUnggah] = useState(null);
+  const [bukaPratinjau, pratinjau] = usePratinjau();
 
   async function muat() {
     if (!customerId) return;
@@ -62,6 +64,8 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
 
   useEffect(() => {
     muat();
+    // Berkas bisa juga diunggah dari Dokumen Konsumen di tab Ringkasan.
+    return dengarBerkas(customerId, muat);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
@@ -84,22 +88,13 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
   async function kirim(baris, file) {
     if (!file) return;
     setUnggah(baris.doc_type);
-    const { path, error: upErr } = await uploadFile("customer-documents", customerId, file);
-    if (upErr) {
-      setUnggah(null);
-      toast.gagal(`Gagal mengunggah: ${upErr.message}`);
-      return;
-    }
-    const { error } = await supabase
-      .from("customer_documents")
-      .insert({ customer_id: customerId, doc_type: baris.doc_type, file_url: path, status: "menunggu" });
+    const { error } = await unggahBerkasBank(customerId, baris.doc_type, file);
     setUnggah(null);
     if (error) {
-      toast.gagal(`Gagal menyimpan dokumen: ${error.message}`);
+      toast.gagal(error);
       return;
     }
     toast.sukses(`${baris.doc_type} terunggah dan menunggu verifikasi.`);
-    muat();
     onChange?.();
   }
 
@@ -109,7 +104,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
       toast.gagal(`Status dokumen gagal diubah: ${error.message}`);
       return;
     }
-    muat();
+    kabarkanBerkas(customerId);
     onChange?.();
   }
 
@@ -119,14 +114,17 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
       toast.gagal(`Gagal menghapus: ${error.message}`);
       return;
     }
-    muat();
+    kabarkanBerkas(customerId);
     onChange?.();
   }
 
-  async function buka(path) {
-    const url = await getSignedUrl("customer-documents", path);
-    if (url) window.open(url, "_blank", "noopener");
-    else toast.gagal("Tautan dokumen tidak dapat dibuka.");
+  // Semua dokumen yang ada bisa dilihat berurutan dengan ← →.
+  const adaBerkas = useMemo(
+    () => bernomor.filter((b) => b.doc?.file_url).map((b) => ({ bucket: "customer-documents", path: b.doc.file_url, judul: b.doc_type, keterangan: b.keadaan })),
+    [bernomor]
+  );
+  function buka(path) {
+    bukaPratinjau(adaBerkas, Math.max(0, adaBerkas.findIndex((x) => x.path === path)));
   }
 
   if (rekap.baris.length === 0) {
@@ -271,6 +269,7 @@ export default function BerkasBankPanel({ customerId, bank, editable, onChange }
           Di luar daftar syarat: {rekap.ekstra.map((d) => d.doc_type).join(", ")}.
         </div>
       )}
+      {pratinjau}
     </div>
   );
 }

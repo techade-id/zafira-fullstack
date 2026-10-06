@@ -48,30 +48,12 @@ export default function KonsumenPage() {
 
   const emptyForm = { name: "", phone: "", email: "", username_sosmed: "", ktp_number: "", address: "", unit_id: "", lead_id: "" };
   const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   function resetForm() {
     setForm(emptyForm);
-    setEditingId(null);
     setShowForm(false);
-    setError("");
-  }
-
-  function startEdit(row) {
-    setForm({
-      name: row.name || "",
-      phone: row.phone || "",
-      email: row.email || "",
-      username_sosmed: row.username_sosmed || "",
-      ktp_number: row.ktp_number || "",
-      address: row.address || "",
-      unit_id: row.unit_id || "",
-      lead_id: row.lead_id || "",
-    });
-    setEditingId(row.id);
-    setShowForm(true);
     setError("");
   }
 
@@ -118,18 +100,20 @@ export default function KonsumenPage() {
       unit_id: form.unit_id || null,
       lead_id: form.lead_id || null,
     };
-    // Ownership and status are set on create only — editing must not reassign
-    // the customer to whoever happens to be editing, or reset their stage.
-    const { error: saveError } = editingId
-      ? await supabase.from("customers").update(payload).eq("id", editingId)
-      : await supabase.from("customers").insert({ ...payload, sales_agent_id: profile?.id || null, status: "proses" });
+    // Formulir ini hanya untuk konsumen baru. Mengubah data konsumen ada di
+    // kartunya sendiri (/konsumen/:id), tempat unit sengaja tidak bisa diganti:
+    // mengganti unit_id di sini dulu meninggalkan status unit lama dan baru
+    // di siteplan tanpa diperbarui.
+    const { error: saveError } = await supabase
+      .from("customers")
+      .insert({ ...payload, sales_agent_id: profile?.id || null, status: "proses" });
     setSaving(false);
     if (saveError) {
       setError(saveError.message);
       toast.gagal(`Gagal menyimpan: ${saveError.message}`);
       return;
     }
-    toast.sukses(editingId ? "Perubahan tersimpan." : `${payload.name} ditambahkan.`);
+    toast.sukses(`${payload.name} ditambahkan.`);
     resetForm();
     fetchAll();
   }
@@ -221,7 +205,7 @@ export default function KonsumenPage() {
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <PrimaryButton subject="customer" onClick={handleAddCustomer} disabled={saving}>
-              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Konsumen"}
+              {saving ? "Menyimpan..." : "Simpan Konsumen"}
             </PrimaryButton>
             <button onClick={resetForm} style={{ border: `1px solid ${BORDER}`, background: "#fff", color: TEXT_MID, borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               Batal
@@ -325,7 +309,7 @@ export default function KonsumenPage() {
                   <button onClick={() => navigate(`/konsumen/${row.id}`)} style={gayaBuka}>
                     Buka
                   </button>
-                  {canEditCustomer(profile, row) && <EditButton subject="customer" onClick={() => startEdit(row)} />}
+                  {canEditCustomer(profile, row) && <EditButton subject="customer" onClick={() => navigate(`/konsumen/${row.id}?ubah=1`)} />}
                   <DeleteButton
                     subject="customer_delete"
                     itemName={row.name}

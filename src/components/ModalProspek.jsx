@@ -501,7 +501,7 @@ function Judul({ children }) {
  * Nomor yang sudah tercatat. Prospek yang boleh dilihat pengguna ditampilkan
  * dengan nama dan tombol Buka; milik agen lain cukup disebut agennya.
  */
-function PeringatanGanda({ baris, onBuka }) {
+export function PeringatanGanda({ baris, onBuka }) {
   return (
     <div
       role="status"

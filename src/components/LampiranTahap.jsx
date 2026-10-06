@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Paperclip, FileText, Image as ImageIcon, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { uploadFile, getSignedUrl } from "../lib/storage";
+import { unggahLampiran, dengarBerkas, kabarkanBerkas, jenisBerkas } from "../lib/berkas";
+import { usePratinjau } from "./PratinjauBerkas";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
 import { canWrite } from "../lib/permissions";
@@ -42,6 +43,7 @@ export default function LampiranTahap({
   const [rows, setRows] = useState([]);
   const [memuat, setMemuat] = useState(true);
   const [unggah, setUnggah] = useState(false);
+  const [bukaPratinjau, pratinjau] = usePratinjau();
 
   const muat = useCallback(async () => {
     if (!customerId && !leadId) return;
@@ -59,37 +61,27 @@ export default function LampiranTahap({
     muat();
   }, [muat]);
 
+  // Lampiran bisa juga diunggah dari Dokumen Konsumen di tab Ringkasan.
+  useEffect(() => (customerId ? dengarBerkas(customerId, muat) : undefined), [customerId, muat]);
+
   async function kirim(file) {
     if (!file) return;
     setUnggah(true);
-    const folder = customerId || leadId;
-    const { path, error: upErr } = await uploadFile("berkas-lampiran", `${folder}/${slot}`, file);
-    if (upErr) {
-      setUnggah(false);
-      toast.gagal(`Gagal mengunggah: ${upErr.message}`);
-      return;
-    }
-    const { error } = await supabase.from("berkas_lampiran").insert({
-      slot,
-      customer_id: customerId || null,
-      lead_id: leadId || null,
-      file_url: path,
-      file_name: file.name,
-    });
+    const { error } = await unggahLampiran({ customerId: customerId || null, leadId: leadId || null, slot, file });
     setUnggah(false);
     if (error) {
-      toast.gagal(`Gagal menyimpan lampiran: ${error.message}`);
+      toast.gagal(error);
       return;
     }
     toast.sukses(`${label} terunggah.`);
-    muat();
+    // Untuk konsumen, event dari unggahLampiran sudah memuat ulang daftar ini.
+    if (!customerId) muat();
     onChange?.();
   }
 
-  async function buka(path) {
-    const url = await getSignedUrl("berkas-lampiran", path);
-    if (url) window.open(url, "_blank", "noopener");
-    else toast.gagal("Tautan lampiran tidak dapat dibuka.");
+  function buka(path) {
+    const daftar = rows.map((r) => ({ bucket: "berkas-lampiran", path: r.file_url, judul: label, keterangan: `${r.file_name || "Lampiran"} · ${tanggal(r.uploaded_at)}`, nama: r.file_name }));
+    bukaPratinjau(daftar, Math.max(0, daftar.findIndex((x) => x.path === path)));
   }
 
   async function hapus(row) {
@@ -98,7 +90,8 @@ export default function LampiranTahap({
       toast.gagal(`Gagal menghapus: ${error.message}`);
       return;
     }
-    muat();
+    if (customerId) kabarkanBerkas(customerId);
+    else muat();
     onChange?.();
   }
 
@@ -162,7 +155,7 @@ export default function LampiranTahap({
       {rows.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {rows.map((r) => {
-            const gambar = /\.(png|jpe?g|webp|gif|heic)$/i.test(r.file_name || r.file_url || "");
+            const gambar = jenisBerkas(r.file_name || r.file_url) === "gambar";
             const Ikon = gambar ? ImageIcon : FileText;
             return (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -217,6 +210,7 @@ export default function LampiranTahap({
           })}
         </div>
       )}
+      {pratinjau}
     </div>
   );
 }
