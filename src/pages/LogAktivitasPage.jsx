@@ -13,6 +13,8 @@ const ENTITY_LABELS = {
   cancellations: "Pembatalan",
   profiles: "Pengguna",
   units: "Unit",
+  siteplans: "Siteplan",
+  unit_holds: "Hold Kavling",
 };
 
 /** Field names are database columns; these are what the team calls them. */

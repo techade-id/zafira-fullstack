@@ -104,6 +104,15 @@ every KPR stage, and a waiting-for-Finance phase on every payment.
      It also adds `kelengkapan_berkas()` and `tandai_proses_bank()` behind the
      "Proses Bank" button, computes Total DP from its parts, and moves verified
      income to `customers.penghasilan`.
+   - **`migration_022_siteplan.sql`** — the Siteplan menu. Run it after 017 (it
+     redefines `convert_lead_to_customer()` and `my_notifications()` again).
+     Adds `siteplans` (several per project), `units.bentuk` plus marketing
+     attributes (land/building area, position, facing), `siteplan_fasilitas`,
+     `unit_holds` and `unit_minat`, and the RPCs behind the map, the editor and
+     the public page. It also moves the Kaligangsa geometry that used to be
+     hard-coded in `src/data/siteplanKaligangsa.js` into the database — any
+     project whose unit codes match it gets a vector siteplan automatically —
+     and turns old pins (`pos_x`/`pos_y`) into small clickable lots.
 
    Re-run `supabase/storage.sql` after 008 **and after 017**: it creates the
    `payment-receipts`, `payment-proofs` and `berkas-lampiran` buckets and
@@ -241,9 +250,22 @@ matching your `.env`.
   still missing.
 - **Pembatalan**: cancellation history per customer (reason, detail, who
   cancelled, when) — auto-marks the customer as `batal`.
-- **Siteplan Digital**: per-project siteplan image upload, click-to-place unit
-  pins (`pos_x`/`pos_y`) color-coded by status, click a pin for a modal with
-  linked customer + construction progress.
+- **Siteplan** (directly under Dashboard): one live map per siteplan, several
+  siteplans per project. Five map modes — sales status, KPR stage, payment,
+  construction progress, prospect interest — over the same data
+  (`siteplan_peta()`), with KPIs, sales velocity, stock per type/block, a
+  "needs attention" list, and a cross-siteplan comparison. Clicking a lot opens
+  its whole story and the actions that fit it: **hold** a lot for one prospect
+  (time-boxed, limits in Pengaturan Bisnis, enforced by the booking RPC), mark
+  interest, or go straight to booking. Lots are drawn in an in-browser
+  **editor**: drag along the front edge of a row, and it is split, numbered,
+  snapped to existing corners and angles. **Presentation mode** and a
+  **public link** (`/s/<token>`, no login, no buyer names) show availability
+  with a KPR simulator; stock lists go out as WhatsApp text, PDF price list or
+  PNG.
+- **Siteplan Digital** (Proyek group): the project team's read view of the
+  same siteplans — sales status or construction progress, click a lot for the
+  customer and progress.
 - **Kontraktor**: contractor CRUD plus 1–5 star evaluations per unit, with
   sort/filter by average score.
 - **Monitoring Lapangan**: a mobile-first page where the field team files a

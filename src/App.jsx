@@ -16,6 +16,8 @@ import PemberkasanPage from "./pages/PemberkasanPage";
 import PembatalanPage from "./pages/PembatalanPage";
 import ProyekPage from "./pages/ProyekPage";
 import SiteplanPage from "./pages/SiteplanPage";
+import SiteplanDigitalPage from "./pages/SiteplanDigitalPage";
+import SiteplanPublikPage from "./pages/SiteplanPublikPage";
 import KontraktorPage from "./pages/KontraktorPage";
 import RencanaProyekPage from "./pages/RencanaProyekPage";
 import KomplainPage from "./pages/KomplainPage";
@@ -37,6 +39,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/daftar" element={<DaftarPage />} />
+          {/* Siteplan untuk calon pembeli — sengaja di luar ProtectedRoute. */}
+          <Route path="/s/:token" element={<SiteplanPublikPage />} />
 
           <Route
             path="/"
@@ -68,6 +72,7 @@ export default function App() {
               ["pembatalan", <PembatalanPage />],
               ["proyek", <ProyekPage />],
               ["siteplan", <SiteplanPage />],
+              ["siteplan-digital", <SiteplanDigitalPage />],
               ["kontraktor", <KontraktorPage />],
               ["rencana-proyek", <RencanaProyekPage />],
               ["lapangan", <LapanganPage />],

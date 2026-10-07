@@ -38,7 +38,10 @@ where n.nspname = 'public'
     -- migration_017
     'lead_temperature', 'lead_temperature_from_text', 'apply_lead_temperature',
     'refresh_lead_temperature', 'kpr_hitung_total_dp', 'kelengkapan_berkas',
-    'tandai_proses_bank', 'customer_sync_penghasilan'
+    'tandai_proses_bank', 'customer_sync_penghasilan',
+    -- migration_022
+    'tahan_kavling', 'lepas_hold', 'perpanjang_hold', 'siteplan_peta',
+    'siteplan_minat_hitung', 'siteplan_penjualan_bulanan', 'simpan_kavling', 'siteplan_publik'
   )
 
 union all
@@ -51,7 +54,9 @@ from (values ('leads'), ('lead_activities'), ('customers'), ('customer_kpr'), ('
              ('complaints'), ('ads_analytics'), ('activity_logs'),
              ('ads_campaigns'), ('partners'),
              -- migration_017
-             ('berkas_lampiran')) v(name)
+             ('berkas_lampiran'),
+             -- migration_022
+             ('siteplans'), ('siteplan_fasilitas'), ('unit_holds'), ('unit_minat')) v(name)
 left join pg_tables t on t.schemaname = 'public' and t.tablename = v.name
 
 union all
@@ -72,7 +77,10 @@ from (values ('customers', 'locked_at'), ('customers', 'handover_state'),
              ('customers', 'penghasilan'),
              ('customer_kpr', 'tanggal_survei'), ('customer_kpr', 'proses_bank_at'),
              ('customer_kpr', 'bphtb_status'), ('customer_kpr', 'shm_balik_nama'),
-             ('payments', 'bukti_transfer_url')) v(tbl, col)
+             ('payments', 'bukti_transfer_url'),
+             -- migration_022
+             ('units', 'siteplan_id'), ('units', 'bentuk'), ('units', 'luas_tanah'),
+             ('units', 'posisi'), ('units', 'hadap')) v(tbl, col)
 left join information_schema.columns c
   on c.table_schema = 'public' and c.table_name = v.tbl and c.column_name = v.col
 
@@ -102,7 +110,7 @@ from profiles where not is_active
 
 union all
 select 'PENGATURAN', a.key, a.value
-from app_settings a where a.key = 'domain_email_diizinkan'
+from app_settings a where a.key in ('domain_email_diizinkan', 'hold_jam', 'hold_maks_per_sales')
 
 union all
 -- Indeks trigram adalah syarat pencarian Notes tetap cepat di puluhan ribu baris.

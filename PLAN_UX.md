@@ -802,7 +802,7 @@ A17, letak Masjid di antara kolom D, dan baris H9–H13 di bawah — semuanya co
 |---|---|
 | `tools/siteplan_ke_vektor.py` | pembangkit, dapat dijalankan ulang |
 | `public/siteplan-kaligangsa.svg` | SVG mandiri, tiap kavling `id="kav-<kode>"` |
-| `src/data/siteplanKaligangsa.js` | geometri untuk peta React (**dihasilkan otomatis, jangan disunting tangan**) |
+| `src/data/siteplanKaligangsa.js` | ~~geometri untuk peta React~~ — sejak §12 dipindah ke database (migrasi 022) |
 | `src/components/SiteplanVektor.jsx` | peta interaktif |
 
 Menjalankan ulang:
@@ -1065,3 +1065,44 @@ pemeriksa:
 dan klik baris sudah berfungsi, tetapi Batalkan Prospek dan Alihkan Agen akan
 menampilkan galat dari database. Sudah diperiksa langsung ke Supabase Anda —
 kedua RPC-nya memang belum ada di sana.
+
+---
+
+## 12. Siteplan sebagai pusat visual penjualan
+
+Menu **Siteplan** di bawah Dashboard (`/siteplan`); menu lama **Siteplan
+Digital** tetap di grup Proyek (`/siteplan-digital`) dan membaca data yang sama.
+Migrasi: `supabase/migration_022_siteplan.sql`, diuji `supabase/tests/15_siteplan.sql`.
+
+### 12.1 Data
+
+- `siteplans` — banyak siteplan per proyek; kanvas (lebar × tinggi), gambar
+  latar opsional, tautan publik (`publik_token`), nomor WA marketing.
+- `units.bentuk` — poligon kavling dalam satuan kanvas, plus `luas_tanah`,
+  `luas_bangunan`, `posisi` (hook/dekat fasum/jalan utama), `hadap`.
+- `unit_holds` — kavling ditahan untuk satu prospek sampai batas waktu
+  (`hold_jam`, `hold_maks_per_sales` di Pengaturan Bisnis). Booking atas kavling
+  yang ditahan untuk prospek lain ditolak `convert_lead_to_customer()`; hold
+  terlepas sendiri saat unit tidak lagi tersedia atau prospeknya batal.
+- `unit_minat` — prospek mana meminati kavling mana; jumlahnya terlihat semua
+  orang, namanya mengikuti RLS prospek.
+
+### 12.2 Halaman
+
+| Bagian | Isi |
+|---|---|
+| Angka utama | tersedia, ditahan, terjual + % terserap, nilai penjualan, laju per bulan dan perkiraan stok habis |
+| Peta | 5 mode warna (status, KPR, pembayaran, progres bangun, minat), saringan tipe/posisi/harga, cari kode atau nama |
+| Perlu perhatian | hold hampir habis, kavling diperebutkan tanpa hold, pembayaran menunggu Finance, booking fee tertunda, SP3K hampir kedaluwarsa, bangunan terlambat |
+| Panel kavling | atribut, hold, peminat, konsumen, tahap KPR, pembayaran, progres; aksi Tahan / Tandai minat / Booking |
+| Editor | tarik garis sepanjang sisi depan baris → kavling dibagi dan dinomori, menempel ke sudut dan kemiringan yang ada; pilih banyak, ubah atribut massal, putar, lepas dari peta |
+| Presentasi & publik | versi tanpa data pribadi, dengan simulasi KPR dan tombol tanya via WA |
+| Bagikan | tautan publik, teks stok untuk WhatsApp, PDF price list + peta, PNG |
+
+### 12.3 Warna
+
+Divalidasi dengan validator palet dataviz. Status: semua pasangan lolos CVD dan
+normal-vision (kavling mana pun bisa bertetangga) dan dibedakan juga oleh
+kecerahan; ditahan memakai garis putus-putus. Mode KPR, pembayaran, progres,
+dan minat: ramp ordinal satu warna, ujung terang ≥ 2:1 terhadap latar.
+

@@ -24,13 +24,13 @@ import { Card, SectionTitle, BORDER_SOFT, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY,
 
 /** Kategori yang relevan per peran, berurut menurut kepentingannya. */
 const PRIORITAS = {
-  sales: ["followup", "dingin"],
-  admin_marketing: ["sp3k", "mandek", "followup"],
+  sales: ["hold", "followup", "dingin"],
+  admin_marketing: ["hold", "sp3k", "mandek", "followup"],
   finance: ["verifikasi"],
   tim_lapangan: [],
   supervisor_marketing: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
   pengawas: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
-  admin: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
+  admin: ["verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
 };
 
 const SARAN = {
@@ -39,6 +39,7 @@ const SARAN = {
   sp3k: "Buka konsumen",
   mandek: "Buka konsumen",
   verifikasi: "Buka Pembayaran",
+  hold: "Buka Siteplan",
 };
 
 const RUTE_KATEGORI = {
@@ -47,6 +48,7 @@ const RUTE_KATEGORI = {
   sp3k: "/konsumen",
   mandek: "/konsumen",
   verifikasi: "/pembayaran",
+  hold: "/siteplan",
 };
 
 export default function FokusHariIni() {

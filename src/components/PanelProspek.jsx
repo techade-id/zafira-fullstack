@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock, MessageSquare } from "lucide-react";
+import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock, MessageSquare, Lock, Star, Map as MapIcon } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -8,6 +8,7 @@ import { canWrite, roleOf, roleLabel } from "../lib/permissions";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { segarkanNotifikasi } from "../lib/useNotifications";
 import { tanggal, tanggalRelatif, selisihHari, labelTahap, rupiah } from "../lib/format";
+import { sisaWaktu } from "../lib/siteplan";
 import KontakAksi from "./KontakAksi";
 import FollowUpTimeline, { kabarkanRiwayat } from "./FollowUpTimeline";
 import {
@@ -183,6 +184,8 @@ export default function PanelProspek({
               </div>
             )}
 
+            {!konsumenId && !dibatalkan && <KavlingProspek leadId={lead.id} />}
+
             <Rincian lead={lead} sumberLabel={sumberLabel} />
 
             {/* Tanpa formulir catatan: mencatat follow-up lewat satu pintu,
@@ -214,6 +217,80 @@ export default function PanelProspek({
         }}
       />
     </>
+  );
+}
+
+/**
+ * Kavling yang sedang ditahan dan diminati prospek ini (migrasi 022).
+ *
+ * Saat menelepon, yang perlu diingat sales bukan hanya siapa orangnya tetapi
+ * juga unit mana yang sudah dijanjikan kepadanya — dan sampai kapan.
+ */
+function KavlingProspek({ leadId }) {
+  const navigate = useNavigate();
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let aktif = true;
+    Promise.all([
+      supabase
+        .from("unit_holds")
+        .select("id, unit_id, berakhir, units(unit_code)")
+        .eq("lead_id", leadId)
+        .is("dilepas_at", null)
+        .gt("berakhir", new Date().toISOString()),
+      supabase.from("unit_minat").select("id, unit_id, units(unit_code, status)").eq("lead_id", leadId),
+    ]).then(([h, m]) => {
+      // Sebelum migrasi 022 kedua tabel belum ada — bagian ini cukup tidak tampil.
+      if (!aktif || h.error || m.error) return;
+      setData({ hold: h.data?.[0] || null, minat: (m.data || []).filter((x) => x.units) });
+    });
+    return () => {
+      aktif = false;
+    };
+  }, [leadId]);
+
+  if (!data) return null;
+  const ke = (unitId) => navigate(`/siteplan?sorot=${unitId}`);
+
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: TEXT_MID, letterSpacing: "0.04em", marginBottom: 9 }}>KAVLING</div>
+      {data.hold && (
+        <button
+          onClick={() => ke(data.hold.unit_id)}
+          style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", background: "#F1ECFA", border: "1px dashed #6D45B0", borderRadius: 12, padding: "9px 12px", marginBottom: 9, cursor: "pointer", font: "inherit" }}
+        >
+          <Lock size={14} color="#6D45B0" aria-hidden="true" />
+          <span style={{ flex: 1, fontSize: 12.5, color: TEXT_DARK }}>
+            Menahan <b>{data.hold.units?.unit_code}</b> · berakhir {sisaWaktu(data.hold.berakhir)} lagi
+          </span>
+          <ArrowRight size={13} color={TEXT_MID} aria-hidden="true" />
+        </button>
+      )}
+      {data.minat.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <Star size={13} color={ACCENT_DARK} aria-hidden="true" />
+          <span style={{ fontSize: 12, color: TEXT_MID }}>Berminat:</span>
+          {data.minat.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => ke(m.unit_id)}
+              title={m.units.status === "tersedia" ? "Masih tersedia" : `Sudah ${m.units.status}`}
+              style={{ ...sekunder, padding: "3px 10px", fontSize: 12, textDecoration: m.units.status === "tersedia" ? "none" : "line-through" }}
+            >
+              {m.units.unit_code}
+            </button>
+          ))}
+        </div>
+      )}
+      {!data.hold && !data.minat.length && (
+        <button onClick={() => navigate("/siteplan")} style={{ ...sekunder, padding: "6px 12px" }}>
+          <MapIcon size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
+          Pilih kavling di Siteplan
+        </button>
+      )}
+    </div>
   );
 }
 

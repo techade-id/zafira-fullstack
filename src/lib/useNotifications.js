@@ -117,4 +117,5 @@ export const LABEL_KATEGORI = {
   sp3k: "SP3K mendekati kedaluwarsa",
   mandek: "Berkas mengendap di bank",
   verifikasi: "Menunggu verifikasi",
+  hold: "Hold kavling segera berakhir",
 };

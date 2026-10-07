@@ -248,6 +248,39 @@ export default function PengaturanBisnisPage() {
         </div>
       </Card>
 
+      {/* Migrasi 022. `key` memasang ulang input saat nilainya selesai dimuat —
+          defaultValue hanya dibaca sekali. */}
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle title="Hold Kavling (Siteplan)" />
+        <div className="rg-4" style={{ marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Lama hold (jam)</div>
+            <input
+              key={`hold_jam-${appSettings.hold_jam ?? ""}`}
+              type="number"
+              min="1"
+              defaultValue={appSettings.hold_jam || "24"}
+              onBlur={(e) => Number(e.target.value) >= 1 && saveAppSetting("hold_jam", Math.round(Number(e.target.value)))}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Hold aktif maksimal per orang</div>
+            <input
+              key={`hold_maks-${appSettings.hold_maks_per_sales ?? ""}`}
+              type="number"
+              min="0"
+              defaultValue={appSettings.hold_maks_per_sales ?? "3"}
+              onBlur={(e) => Number(e.target.value) >= 0 && e.target.value !== "" && saveAppSetting("hold_maks_per_sales", Math.round(Number(e.target.value)))}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: TEXT_MID, lineHeight: 1.55 }}>
+          Hold menahan satu kavling untuk satu prospek sampai batas waktu ini, lalu terlepas otomatis. Batas jumlah mencegah satu orang menahan banyak kavling sekaligus (0 = tanpa batas; Admin tidak dibatasi). Hanya Admin dan Admin Marketing yang dapat melepas hold orang lain atau memperpanjangnya.
+        </div>
+      </Card>
+
       <Card style={{ marginBottom: 18 }}>
         <SectionTitle title="Kalender Libur" />
         <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>

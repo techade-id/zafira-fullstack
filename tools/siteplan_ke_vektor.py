@@ -9,8 +9,14 @@ Butuh Pillow, numpy, dan scipy:
     .venv/bin/python tools/siteplan_ke_vektor.py
 
 Keluaran:
-    public/siteplan-kaligangsa.svg   — SVG mandiri, untuk cetak dan rujukan
-    src/data/siteplanKaligangsa.js   — geometri untuk peta interaktif React
+    public/siteplan-kaligangsa.svg                  — SVG mandiri, untuk cetak dan rujukan
+    tools/keluaran/siteplan_kaligangsa_values.sql   — baris VALUES geometri kavling
+
+Sejak migration_022 geometri siteplan disimpan di database (units.bentuk) dan
+digambar lewat editor di halaman Siteplan — skrip ini tidak lagi diperlukan
+untuk siteplan baru. Ia dipertahankan untuk membangkitkan ulang geometri
+Kaligangsa dari gambar kerjanya: tempel hasilnya ke bagian 10 migration_022
+(daftar `geometri_kaligangsa`) bila gambar sumbernya berubah.
 
 KENAPA TIDAK DITELUSURI SEBAGAI KURVA (potrace dsb.)
 ----------------------------------------------------
@@ -209,7 +215,7 @@ def main():
         fasilitas.append({"kode": kode, "label": kode, "luas": "", "titik": titik(p), "pusat": pusat(p)})
 
     tulis_svg(W, H, unit, fasilitas)
-    tulis_js(W, H, unit, fasilitas, sudut)
+    tulis_sql(unit, fasilitas, sudut)
     print(f"{len(unit)} kavling · sudut {sudut:.2f}° · viewBox 0 0 {W} {H}")
     for b, j in sorted(HARAP_BLOK.items()):
         print(f"  blok {b}: {j}")
@@ -244,41 +250,15 @@ def tulis_svg(W, H, unit, fasilitas):
     (AKAR / "public" / "siteplan-kaligangsa.svg").write_text("\n".join(baris))
 
 
-def tulis_js(W, H, unit, fasilitas, sudut):
-    kav = "\n".join(
-        f'  {{ kode: "{u["kode"]}", blok: "{u["blok"]}", titik: "{u["titik"]}", '
-        f'pusat: [{u["pusat"][0]}, {u["pusat"][1]}] }},' for u in unit)
-    fas = "\n".join(
-        f'  {{ kode: "{f["kode"]}", label: "{f["label"]}", luas: "{f["luas"]}", '
-        f'titik: "{f["titik"]}", pusat: [{f["pusat"][0]}, {f["pusat"][1]}] }},' for f in fasilitas)
-    (AKAR / "src" / "data" / "siteplanKaligangsa.js").write_text(f'''/**
- * Geometri siteplan Perumahan Zafira Permai Kaligangsa — 158 kavling, blok A–H.
- *
- * DIHASILKAN OTOMATIS oleh tools/siteplan_ke_vektor.py dari assets/siteplan.jpeg.
- * Jangan disunting tangan; jalankan ulang skripnya bila gambar sumber berubah.
- *
- * Denahnya adalah gambar CAD dengan grid yang diputar {abs(sudut):.2f}°. Tiap kavling
- * dikenali sebagai daerah putih tertutup lalu diukur pada sumbu yang sudah
- * diluruskan, sehingga keluar sebagai segi empat presisi — bukan hasil
- * penelusuran kurva yang bergerigi dan tanpa identitas.
- *
- * `titik` berformat atribut `points` milik <polygon>, siap dipakai apa adanya.
- * `kode` cocok dengan units.unit_code di database.
- */
-
-export const SITEPLAN_VIEWBOX = "0 0 {W} {H}";
-
-export const SITEPLAN_KAVLING = [
-{kav}
-];
-
-export const SITEPLAN_FASILITAS = [
-{fas}
-];
-
-export const SITEPLAN_BLOK = ["A", "B", "C", "D", "E", "F", "G", "H"];
-''')
-
+def tulis_sql(unit, fasilitas, sudut):
+    """Baris VALUES untuk migration_022 §10 — format (kode, blok, bentuk)."""
+    keluaran = AKAR / "tools" / "keluaran"
+    keluaran.mkdir(exist_ok=True)
+    kav = ",\n".join(f"    ('{u['kode']}', '{u['blok']}', '{u['titik']}')" for u in unit)
+    fas = ",\n".join(f"    -- {f['label']}: '{f['titik']}'" for f in fasilitas)
+    (keluaran / "siteplan_kaligangsa_values.sql").write_text(
+        f"-- Dihasilkan tools/siteplan_ke_vektor.py — grid diputar {abs(sudut):.2f}°.\n"
+        f"-- Kavling ({len(unit)}):\n{kav};\n\n-- Fasilitas:\n{fas}\n")
 
 if __name__ == "__main__":
     main()

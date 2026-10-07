@@ -34,7 +34,7 @@ import {
  * tiga keputusan dan menjelaskan akibatnya sebelum dijalankan — pola yang sama
  * dengan konfirmasi hapus, karena konversi juga sulit dibatalkan.
  */
-export default function KonversiBookingModal({ lead, open, onClose, onSelesai }) {
+export default function KonversiBookingModal({ lead, open, onClose, onSelesai, unitAwal }) {
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -53,19 +53,22 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai })
     setKirim(false);
     setMode("peta");
     setMemuat(true);
+    // Dibuka dari Siteplan: kavlingnya sudah dipilih di peta, jangan ditanya lagi.
+    setUnitId(unitAwal || "");
     // Hanya unit tersedia yang ditawarkan. Menawarkan unit terjual lalu
     // menolaknya di server adalah cara paling membingungkan untuk menegakkan
-    // aturan yang sudah kita ketahui sejak awal.
-    supabase
-      .from("units")
-      .select("id, unit_code, block, type, price, projects(name)")
-      .eq("status", "tersedia")
-      .order("unit_code")
-      .then(({ data }) => {
-        setUnits(data || []);
-        setMemuat(false);
-      });
-  }, [open]);
+    // aturan yang sudah kita ketahui sejak awal. Aturan yang sama untuk unit
+    // yang sedang ditahan bagi prospek lain (migrasi 022) — sebelum migrasi
+    // itu tabel hold belum ada, dan galatnya cukup diabaikan.
+    Promise.all([
+      supabase.from("units").select("id, unit_code, block, type, price, projects(name)").eq("status", "tersedia").order("unit_code"),
+      supabase.from("unit_holds").select("unit_id, lead_id").is("dilepas_at", null).gt("berakhir", new Date().toISOString()),
+    ]).then(([{ data }, holds]) => {
+      const ditahanLain = new Set((holds.data || []).filter((h) => h.lead_id !== lead?.id).map((h) => h.unit_id));
+      setUnits((data || []).filter((u) => !ditahanLain.has(u.id)));
+      setMemuat(false);
+    });
+  }, [open, unitAwal, lead?.id]);
 
   const perBlok = useMemo(() => {
     const peta = new Map();
@@ -169,6 +172,7 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai })
           {mode === "peta" ? (
             <SiteplanPicker
               unitTerpilihId={unitId}
+              leadId={lead.id}
               onPilih={(u) => setUnitId((v) => (v === u.id ? "" : u.id))}
             />
           ) : (

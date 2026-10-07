@@ -6,6 +6,7 @@ import {
   Users,
   Building2,
   Map,
+  LayoutGrid,
   Wallet,
   FolderOpen,
   XCircle,
@@ -37,7 +38,10 @@ import { PRIMARY, PRIMARY_DARK, ACCENT, PAGE_BG, SURFACE, BORDER, TEXT_DARK, TEX
 const navSections = [
   {
     title: null,
-    items: [{ to: "/", icon: Home, label: "Dashboard", end: true }],
+    items: [
+      { to: "/", icon: Home, label: "Dashboard", end: true },
+      { to: "/siteplan", icon: Map, label: "Siteplan" },
+    ],
   },
   {
     title: "Penjualan",
@@ -56,7 +60,7 @@ const navSections = [
     title: "Proyek",
     items: [
       { to: "/proyek", icon: Building2, label: "Proyek" },
-      { to: "/siteplan", icon: Map, label: "Siteplan Digital" },
+      { to: "/siteplan-digital", icon: LayoutGrid, label: "Siteplan Digital" },
       { to: "/kontraktor", icon: HardHat, label: "Kontraktor" },
       { to: "/rencana-proyek", icon: ClipboardList, label: "Rencana Proyek" },
       { to: "/lapangan", icon: HardHatIcon, label: "Monitoring Lapangan" },

@@ -76,6 +76,13 @@ const WRITE_MATRIX = {
   config: ["admin", "pengawas"],
   target: ["admin", "pengawas"],
   project: ["admin", "pengawas", "admin_marketing"],
+  // Menggambar dan mengatur siteplan — siteplans_write / units_write (migrasi 022).
+  siteplan: ["admin", "pengawas", "admin_marketing"],
+  // tahan_kavling: can_write_sales() or can_write_berkas().
+  hold: ["admin", "sales", "admin_marketing"],
+  // Melepas hold orang lain dan memperpanjang — bukan Supervisor (REVISI §2.1).
+  hold_kelola: ["admin", "admin_marketing"],
+  minat: ["admin", "sales", "admin_marketing"],
   contractor: ["admin", "pengawas", "admin_marketing"],
   ads: ["admin", "pengawas", "admin_marketing"],
   // Pengawas mengaudit, tidak mengerjakan unit — cocokkan dengan
@@ -148,6 +155,7 @@ const ALL_ROUTES = [
   "/target",
   "/proyek",
   "/siteplan",
+  "/siteplan-digital",
   "/kontraktor",
   "/rencana-proyek",
   "/lapangan",
@@ -176,6 +184,7 @@ const ROUTES_BY_ROLE = {
     "/reminder",
     "/proyek",
     "/siteplan",
+    "/siteplan-digital",
     "/kontraktor",
     "/rencana-proyek",
     "/lapangan",
@@ -184,8 +193,10 @@ const ROUTES_BY_ROLE = {
     "/iklan",
     "/cari",
   ],
-  finance: ["/", "/konsumen", "/pemberkasan", "/pembayaran", "/pembatalan", "/laporan", "/cari"],
-  tim_lapangan: ["/", "/lapangan", "/rencana-proyek", "/komplain", "/siteplan", "/cari"],
+  // Finance membaca Siteplan dalam mode Pembayaran: siapa yang belum membayar
+  // terlihat sebagai peta, bukan hanya sebagai antrean.
+  finance: ["/", "/siteplan", "/konsumen", "/pemberkasan", "/pembayaran", "/pembatalan", "/laporan", "/cari"],
+  tim_lapangan: ["/", "/siteplan", "/lapangan", "/rencana-proyek", "/komplain", "/siteplan-digital", "/cari"],
 };
 
 export function allowedRoutes(profile) {

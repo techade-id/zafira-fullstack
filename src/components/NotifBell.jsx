@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Clock, Snowflake, FileWarning, Landmark, Wallet } from "lucide-react";
+import { Bell, Clock, Snowflake, FileWarning, Landmark, Wallet, Lock } from "lucide-react";
 import { useNotifications, LABEL_KATEGORI } from "../lib/useNotifications";
 import { SURFACE, BORDER, TEXT_DARK, TEXT_MID, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_DARK, RADIUS_SM } from "./ui";
 
@@ -10,6 +10,7 @@ const IKON = {
   sp3k: FileWarning,
   mandek: Landmark,
   verifikasi: Wallet,
+  hold: Lock,
 };
 
 /**
