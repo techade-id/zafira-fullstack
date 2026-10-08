@@ -119,8 +119,22 @@ from pg_indexes
 where schemaname = 'public' and indexdef ilike '%gin_trgm_ops%'
 
 union all
-select 'BUCKET', b.id, case when b.public then 'publik' else 'privat' end
-from storage.buckets b
+-- Ketujuh bucket yang dipakai aplikasi. Yang belum dibuat tertulis HILANG —
+-- unggahan ke sana gagal dengan "Bucket not found". Obatnya: jalankan ulang
+-- storage.sql.
+select 'BUCKET', w.id,
+       case
+         when b.id is null then 'HILANG — jalankan storage.sql'
+         else concat_ws(' · ',
+                case when b.public then 'publik' else 'privat' end,
+                case when b.file_size_limit is null then 'tanpa batas ukuran'
+                     else 'maks ' || (b.file_size_limit / 1048576) || ' MB' end,
+                array_to_string(b.allowed_mime_types, ', '))
+       end
+from (values ('siteplan-images'), ('customer-documents'), ('field-report-photos'),
+             ('complaint-photos'), ('payment-receipts'), ('payment-proofs'),
+             ('berkas-lampiran')) w(id)
+left join storage.buckets b on b.id = w.id
 
 union all
 select 'ISI DATA', x.nama, x.jml::text from (

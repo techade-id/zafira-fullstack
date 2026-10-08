@@ -129,7 +129,14 @@ export default function KomplainPage() {
     }
     setSaving(true);
     setError("");
-    const { path } = await uploadFile("complaint-photos", "complaints", photo);
+    const { path, error: upErr } = await uploadFile("complaint-photos", "complaints", photo);
+    // Foto yang gagal terunggah tidak boleh diam-diam hilang: komplainnya
+    // akan tersimpan tanpa bukti, dan tidak ada yang tahu sampai dicari.
+    if (upErr) {
+      setSaving(false);
+      setError(`Foto gagal diunggah: ${upErr.message}`);
+      return;
+    }
     const payload = {
       customer_id: form.customer_id || null,
       unit_id: form.unit_id || null,

@@ -45,7 +45,10 @@ $$;
 create table if not exists storage.buckets (
   id text primary key,
   name text,
-  public boolean default false
+  public boolean default false,
+  -- Sama dengan Supabase: batas per bucket, null = ikut batas global.
+  file_size_limit bigint,
+  allowed_mime_types text[]
 );
 
 create table if not exists storage.objects (

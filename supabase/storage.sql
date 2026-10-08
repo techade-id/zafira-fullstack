@@ -7,16 +7,29 @@
 -- ============================================================
 
 -- ---------- BUCKETS ----------
-insert into storage.buckets (id, name, public)
+-- Tujuh bucket, satu untuk setiap jenis unggahan di aplikasi. Bucket yang
+-- belum ada membuat unggahan gagal dengan "Bucket not found" — jalankan ulang
+-- berkas ini setiap kali daftarnya berubah, lalu periksa dengan
+-- check_setup.sql (bucket yang kurang tertulis HILANG).
+--
+-- Batasnya ditegakkan di server, sama dengan yang diterima formulir: paling
+-- besar 10 MB per berkas, gambar saja untuk foto, gambar atau PDF untuk
+-- dokumen. "do update", bukan "do nothing": bucket yang sudah ada sejak
+-- versi lama ikut mendapat batas yang sama, dan statusnya publik/privat
+-- dikembalikan ke yang semestinya.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
-  ('siteplan-images', 'siteplan-images', true),
-  ('customer-documents', 'customer-documents', false),
-  ('field-report-photos', 'field-report-photos', false),
-  ('complaint-photos', 'complaint-photos', false),
-  ('payment-receipts', 'payment-receipts', false),
-  ('payment-proofs', 'payment-proofs', false),
-  ('berkas-lampiran', 'berkas-lampiran', false)
-on conflict (id) do nothing;
+  ('siteplan-images',     'siteplan-images',     true,  10485760, array['image/*']),
+  ('customer-documents',  'customer-documents',  false, 10485760, array['image/*', 'application/pdf']),
+  ('field-report-photos', 'field-report-photos', false, 10485760, array['image/*']),
+  ('complaint-photos',    'complaint-photos',    false, 10485760, array['image/*']),
+  ('payment-receipts',    'payment-receipts',    false, 10485760, array['image/*', 'application/pdf']),
+  ('payment-proofs',      'payment-proofs',      false, 10485760, array['image/*', 'application/pdf']),
+  ('berkas-lampiran',     'berkas-lampiran',     false, 10485760, array['image/*', 'application/pdf'])
+on conflict (id) do update
+  set public             = excluded.public,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
 
 -- ---------- SITEPLAN IMAGES (public read, config managers write) ----------
 drop policy if exists "siteplan_images_read_all" on storage.objects;

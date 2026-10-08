@@ -168,7 +168,7 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
     const gagal = unggahan.findIndex((u) => u.error || !u.path);
     if (gagal >= 0) {
       setKirim(false);
-      setGalat(`Bukti "${bukti[gagal].name}" gagal diunggah: ${unggahan[gagal].error?.message || "coba lagi"}.`);
+      setGalat(`Bukti "${bukti[gagal].name}" gagal diunggah: ${unggahan[gagal].error?.message || "coba lagi."}`);
       return;
     }
 

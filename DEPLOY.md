@@ -1,7 +1,7 @@
 # Runbook Penerapan — Zafira Property CRM
 
 Seluruh verifikasi selama pengembangan berhenti di lapisan database: rantai
-migrasi dijalankan pada Postgres lokal dan 125 uji otomatis lulus. Yang belum
+migrasi dijalankan pada Postgres lokal dan 350 uji otomatis lulus. Yang belum
 pernah dilakukan adalah menjalankannya pada proyek Supabase sungguhan dan
 menelusuri UI di browser. Dokumen ini urutan untuk melakukannya.
 
@@ -21,7 +21,7 @@ lebih dulu: Supabase Dashboard → Database → Backups.
 
 ```bash
 git status          # pastikan tidak ada perubahan tertinggal
-npm run test:db     # 125 uji harus lulus sebelum menyentuh Supabase
+npm run test:db     # 350 uji harus lulus sebelum menyentuh Supabase
 npm run build       # build harus bersih
 ```
 
@@ -47,16 +47,34 @@ migration_009_pipeline.sql
 migration_010_dashboard_and_ads.sql
 migration_011_user_management.sql
 migration_012_lapangan.sql
+migration_013_crm_flow.sql
+migration_014_wa_templates.sql
+migration_015_pemberkasan.sql
+migration_016_pembatalan_prospek.sql
+migration_017_brief_revisi.sql
+migration_018_cek_nomor_prospek.sql
+migration_019_beban_agen.sql
+migration_020_sinkron_prospek_asal.sql
+migration_021_verifikasi_berkas.sql
+migration_022_siteplan.sql
+migration_023_followup_milik_sales.sql
+migration_024_followup_bukti.sql
 storage.sql
 ```
 
-Proyek yang sudah berjalan: mulai dari `migration_007`, lalu **jalankan ulang
-`storage.sql`** — isinya berubah (bucket `payment-receipts` dan policy yang
-memakai helper baru).
+Proyek yang sudah berjalan: jalankan migrasi yang belum pernah dijalankan,
+berurutan, lalu **selalu tutup dengan `storage.sql`**. Berkas itu aman
+dijalankan ulang kapan saja, dan setiap kali dijalankan ia memastikan
+**ketujuh bucket** ada beserta batasnya (maks 10 MB; gambar, atau gambar dan
+PDF) dan policy-nya. Bucket yang kurang membuat unggahan gagal dengan pesan
+"Tempat penyimpanan … belum dibuat" (dulu: "Bucket not found").
 
-Peringatan `WARNING: there is no transaction in progress` pada migrasi 005, 008
-dan 009 normal: itu efek `commit;` yang memang diperlukan sebelum nilai enum
-baru bisa dipakai.
+`storage.sql` wajib dijalankan **setelah** `migration_017`: policy-nya memakai
+helper yang baru ada sejak migrasi itu.
+
+Peringatan `WARNING: there is no transaction in progress` pada migrasi 002,
+005, 008, 009 dan 017 normal: itu efek `commit;` yang memang diperlukan
+sebelum nilai enum baru bisa dipakai.
 
 ## 2. Periksa hasilnya
 
@@ -67,7 +85,7 @@ Jalankan `supabase/check_setup.sql`. Yang harus Anda lihat:
 | `EKSTENSI pg_trgm` | muncul |
 | Baris bertanda `HILANG` | **tidak ada satu pun** |
 | `INDEX TRIGRAM` | 21 atau lebih |
-| `BUCKET` | 5 bucket, `payment-receipts` termasuk |
+| `BUCKET` | 7 baris, tidak satu pun `HILANG`, masing-masing `maks 10 MB` |
 | `ROLE TERSEDIA` | memuat sales, admin_marketing, finance, supervisor_marketing, pengawas |
 | `TAHAP LEAD` | memuat hot, booking, kpr, akad, aftersales |
 | `ROLE TERPAKAI` | tidak ada lagi `sales_agent` / `manager` / `administrasi` |
@@ -157,5 +175,8 @@ Settings → Environment Variables.
 | Dashboard menampilkan closing 0 | `migration_009`/`010` belum jalan |
 | Menonaktifkan pengguna tidak berefek | `migration_011` belum jalan |
 | Tombol muncul lalu ditolak saat diklik | `src/lib/permissions.js` tidak sinkron dengan policy — laporkan pesan errornya |
+| Unggah gagal: "Tempat penyimpanan … belum dibuat" / "Bucket not found" | Bucket belum ada — jalankan ulang `storage.sql`, lalu `check_setup.sql` |
+| Unggah gagal: "lebih dari 10 MB" / "Jenis berkas tidak diterima" | Batas bucket bekerja sebagaimana mestinya — kompres berkas, atau pakai gambar/PDF |
+| Simpan Follow Up gagal "Could not find the function catat_followup" | `migration_024` belum jalan |
 
 Console browser menampilkan seluruh error Supabase lengkap; buka saat menelusuri.
