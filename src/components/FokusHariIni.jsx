@@ -44,7 +44,9 @@ const SARAN = {
 
 const RUTE_KATEGORI = {
   followup: "/reminder",
-  dingin: "/prospek",
+  // Prospek yang mendingin ditangani di antrean follow-up, bukan di Leads
+  // yang kini hanya berisi data awal.
+  dingin: "/follow-up",
   sp3k: "/konsumen",
   mandek: "/konsumen",
   verifikasi: "/pembayaran",

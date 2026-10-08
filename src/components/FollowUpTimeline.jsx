@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Wallet, FileText, Landmark, KeyRound, Handshake } from "lucide-react";
+import { Wallet, FileText, Landmark, KeyRound, Handshake, Image as ImageIcon } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { canWrite } from "../lib/permissions";
 import { rupiah, tanggalWaktu, tanggal, labelJenisBayar } from "../lib/format";
+import { jenisBerkas } from "../lib/berkas";
+import { usePratinjau } from "./PratinjauBerkas";
 import { Card, PrimaryButton, DeleteButton, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, NEGATIVE, inputStyle } from "./ui";
 
 /**
@@ -37,6 +39,13 @@ export function kabarkanRiwayat({ leadId = null, customerId = null }) {
  *   dipakai panel prospek, yang mencatat lewat tombol Catat Follow Up agar
  *   jadwal berikutnya ikut terisi.
  */
+
+/** "YYYY-MM-DD" menurut jam perangkat — pembanding tanggal_followup. */
+function tanggalLokal(nilai) {
+  const d = new Date(nilai);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat Follow Up", bisaCatat = true }) {
   const { profile } = useAuth();
   const toast = useToast();
@@ -46,9 +55,15 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ activity: "", note: "", hasil: "" });
+  const [bukti, setBukti] = useState(new Map());
+  const [bukaPratinjau, pratinjau] = usePratinjau();
 
   const hasilOptions = useBusinessSettings("hasil_followup");
-  const mayWrite = canWrite(profile, "followup");
+  // Riwayat konsumen terbuka bagi semua yang memegangnya. Follow-up yang
+  // hanya milik prospek tidak dicatat dari sini sama sekali: ia wajib
+  // bertanggal dan berbukti (migrasi 024), jadi satu-satunya pintunya adalah
+  // Catat Follow Up.
+  const mayWrite = customerId ? canWrite(profile, "followup") : false;
 
   const fetchRows = useCallback(async () => {
     if (!leadId && !customerId) return;
@@ -83,6 +98,23 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
     setError("");
     setCatatan(aktivitas.data || []);
     setSistem(customerId ? peristiwaSistem(bayar?.data, dokumen?.data, kprRes?.data) : []);
+
+    // Bukti per catatan (migrasi 024). Sebelum migrasinya jalan kolom
+    // activity_id belum ada — riwayat tetap tampil, hanya tanpa bukti.
+    const ids = (aktivitas.data || []).map((r) => r.id);
+    const peta = new Map();
+    if (ids.length) {
+      const { data: lampiran, error: errLampiran } = await supabase
+        .from("berkas_lampiran")
+        .select("id, activity_id, file_url, file_name")
+        .in("activity_id", ids)
+        .order("uploaded_at");
+      for (const b of errLampiran ? [] : lampiran || []) {
+        if (!peta.has(b.activity_id)) peta.set(b.activity_id, []);
+        peta.get(b.activity_id).push(b);
+      }
+    }
+    setBukti(peta);
   }, [leadId, customerId]);
 
   useEffect(() => {
@@ -100,16 +132,22 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
 
   const gabungan = useMemo(() => {
     const semua = [
-      ...catatan.map((r) => ({
-        id: `a-${r.id}`,
-        waktu: r.created_at,
-        judul: r.activity,
-        label: r.hasil,
-        isi: r.note,
-        aktor: r.profiles?.full_name || "Sistem",
-        manual: true,
-        asli: r,
-      })),
+      ...catatan.map((r) => {
+        // Follow-up yang dicatat mundur diurutkan menurut kapan terjadinya,
+        // bukan kapan diketik.
+        const mundur = Boolean(r.tanggal_followup) && r.tanggal_followup !== tanggalLokal(r.created_at);
+        return {
+          id: `a-${r.id}`,
+          waktu: mundur ? `${r.tanggal_followup}T12:00:00` : r.created_at,
+          mundur,
+          judul: r.activity,
+          label: r.hasil,
+          isi: r.note,
+          aktor: r.profiles?.full_name || "Sistem",
+          manual: true,
+          asli: r,
+        };
+      }),
       ...sistem,
     ];
     return semua.sort((a, b) => new Date(b.waktu) - new Date(a.waktu));
@@ -244,8 +282,15 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
                 {row.isi && (
                   <div style={{ fontSize: 12.5, color: TEXT_MID, marginTop: 3, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{row.isi}</div>
                 )}
+                {row.manual && bukti.get(row.asli.id)?.length > 0 && (
+                  <BuktiCatatan daftar={bukti.get(row.asli.id)} judul={row.judul} onBuka={bukaPratinjau} />
+                )}
                 <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 4 }}>
-                  {row.manual ? `${row.aktor} · ${tanggalWaktu(row.waktu)}` : `Tercatat sistem · ${tanggal(row.waktu)}`}
+                  {!row.manual
+                    ? `Tercatat sistem · ${tanggal(row.waktu)}`
+                    : row.mundur
+                    ? `${row.aktor} · follow up ${tanggal(row.asli.tanggal_followup)} · dicatat ${tanggalWaktu(row.asli.created_at)}`
+                    : `${row.aktor} · ${tanggalWaktu(row.asli.created_at)}`}
                 </div>
               </div>
 
@@ -262,7 +307,45 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
           );
         })}
       </div>
+      {pratinjau}
     </Card>
+  );
+}
+
+/** Bukti sebuah catatan follow-up — klik untuk membuka pratinjaunya. */
+function BuktiCatatan({ daftar, judul, onBuka }) {
+  const item = daftar.map((b) => ({ bucket: "berkas-lampiran", path: b.file_url, judul: `Bukti — ${judul}`, keterangan: b.file_name || "Bukti", nama: b.file_name }));
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+      {daftar.map((b, i) => {
+        const Ikon = jenisBerkas(b.file_name || b.file_url) === "gambar" ? ImageIcon : FileText;
+        return (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => onBuka(item, i)}
+            title={b.file_name || "Buka bukti"}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              maxWidth: 200,
+              border: `1px solid ${BORDER}`,
+              background: PRIMARY_SOFT,
+              color: PRIMARY,
+              borderRadius: 8,
+              padding: "3px 9px",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <Ikon size={11} aria-hidden="true" style={{ flexShrink: 0 }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.file_name || `Bukti ${i + 1}`}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

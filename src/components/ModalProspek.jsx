@@ -11,8 +11,8 @@ import InputRupiah from "./InputRupiah";
 import { Modal, Field, PrimaryButton, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, ACCENT_SOFT, ACCENT_DARK } from "./ui";
 
 /**
- * Satu-satunya formulir prospek: tambah dan ubah, dari halaman Leads maupun
- * tombol + di header.
+ * Satu-satunya formulir prospek: tambah dan ubah, dari halaman Leads. Tombol
+ * + di header sudah dihapus — prospek baru hanya masuk lewat menu Leads.
  *
  * Sebelumnya ada dua. Formulir cepat di header tidak bisa memilih campaign
  * atau mitra ("dipilih nanti dari halaman Leads"), sehingga prospek Ads yang
@@ -65,9 +65,8 @@ const emptyForm = {
   kabupaten: "",
   kecamatan: "",
   kelurahan: "",
-  rencana_selanjutnya: "",
-  kategori_rencana: "",
-  tanggal_rencana: "",
+  // Jadwal follow-up sengaja tidak ada di sini: Leads hanya data awal, dan
+  // jadwal pertama dibuat Sales lewat Catat Follow Up di Follow Up Leads.
   notes: "",
 };
 
@@ -85,7 +84,6 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
   const toast = useToast();
   const navigate = useNavigate();
   const sources = useBusinessSettings("lead_source");
-  const followupCategories = useBusinessSettings("followup_category");
   const organikCategories = useBusinessSettings("organik_kategori");
 
   const [form, setForm] = useState(emptyForm);
@@ -189,9 +187,8 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
       kabupaten: form.kabupaten.trim() || null,
       kecamatan: form.kecamatan.trim() || null,
       kelurahan: form.kelurahan.trim() || null,
-      rencana_selanjutnya: form.rencana_selanjutnya.trim() || null,
-      kategori_rencana: form.kategori_rencana || null,
-      tanggal_rencana: form.tanggal_rencana || null,
+      // Kolom jadwal tidak dikirim sama sekali — bukan dikirim kosong — supaya
+      // mengoreksi data awal tidak menghapus jadwal yang sudah dibuat Sales.
       notes: form.notes.trim() || null,
     };
 
@@ -214,7 +211,7 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
     }
 
     const id = data?.id || lead?.id || null;
-    toast.sukses(ubah ? "Perubahan tersimpan." : `${payload.name} ditambahkan sebagai prospek — status awal Warm Lead.`);
+    toast.sukses(ubah ? "Perubahan tersimpan." : `${payload.name} ditambahkan — kini masuk antrean Follow Up Leads.`);
     segarkanNotifikasi();
     window.dispatchEvent(new CustomEvent(EVENT_TERSIMPAN, { detail: { id } }));
 
@@ -247,8 +244,8 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
       </div>
       <div style={{ fontSize: 12.5, color: TEXT_MID, marginBottom: 18, lineHeight: 1.55 }}>
         {ubah
-          ? "Tahap prospek tidak diubah di sini — ia dibaca sistem dari riwayat follow-up."
-          : "Cukup nama, nomor, dan sumbernya. Status awal Warm Lead, ditetapkan sistem."}
+          ? "Hanya data awal prospek. Status dan jadwal follow-up dikelola di menu Follow Up Leads."
+          : "Cukup nama, nomor, dan sumbernya. Tindak lanjutnya dikerjakan di menu Follow Up Leads."}
       </div>
 
       {/* PRD §4.1: three fields to capture a lead. Everything else waits
@@ -420,22 +417,8 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
             </Field>
           </div>
 
-          <Judul>Rencana &amp; Catatan</Judul>
+          <Judul>Lain-lain</Judul>
           <div className="rg-2" style={{ marginBottom: 4 }}>
-            <Field label="Kategori Rencana">
-              <select value={form.kategori_rencana} onChange={(e) => set("kategori_rencana", e.target.value)}>
-                <option value="">Pilih kategori</option>
-                {withCurrentValue(followupCategories, form.kategori_rencana).map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Tanggal Rencana">
-              <input type="date" value={form.tanggal_rencana} onChange={(e) => set("tanggal_rencana", e.target.value)} />
-            </Field>
-            <Field label="Rencana Selanjutnya" style={{ gridColumn: "1 / -1" }}>
-              <input value={form.rencana_selanjutnya} onChange={(e) => set("rencana_selanjutnya", e.target.value)} placeholder="mis. Survei lokasi hari Sabtu" />
-            </Field>
             <Field label="Sumber (label lama)" hint="Dipertahankan agar laporan historis tetap cocok.">
               <select value={form.source} onChange={(e) => set("source", e.target.value)}>
                 <option value="">—</option>

@@ -294,7 +294,8 @@ function KavlingProspek({ leadId }) {
   );
 }
 
-function Rincian({ lead, sumberLabel }) {
+/** Data awal prospek — dipakai juga oleh panel rincian di halaman Leads. */
+export function Rincian({ lead, sumberLabel }) {
   const baris = [
     ["Sumber", sumberLabel],
     ["Domisili", lead.kecamatan || lead.domisili],
@@ -513,7 +514,10 @@ export function ModalAlih({ open, lead, onClose, onSelesai }) {
       .select("id, full_name, role")
       .eq("is_active", true)
       .order("full_name")
-      .then(({ data }) => setAgen((data || []).filter((p) => p.id !== lead.assigned_to)));
+      // Hanya peran yang boleh menindaklanjuti prospek (migrasi 023): prospek
+      // yang dialihkan ke Admin Marketing atau Finance akan terdiam, karena
+      // tidak ada yang bisa mencatat follow-up-nya lagi.
+      .then(({ data }) => setAgen((data || []).filter((p) => p.id !== lead.assigned_to && canWrite(p, "followup_lead"))));
     // Dihitung di server (migration_019): RLS menyembunyikan prospek agen lain
     // dari Sales. Sebelum migrasinya jalan, daftar tampil tanpa angka.
     supabase.rpc("beban_agen").then(({ data, error }) => {
@@ -523,7 +527,7 @@ export function ModalAlih({ open, lead, onClose, onSelesai }) {
 
   // Sales lebih dulu, dari yang paling longgar: pengalihan yang adil adalah
   // pengalihan ke agen dengan antrean terpendek, bukan ke nama yang paling
-  // diingat. Peran lain tetap bisa dipilih, di bawahnya.
+  // diingat. Admin Sistem tetap bisa dipilih, di bawahnya.
   const urutAgen = [...agen].sort((a, b) => {
     const sa = a.role === "sales" ? 0 : 1;
     const sb = b.role === "sales" ? 0 : 1;

@@ -32,7 +32,6 @@ import { useAuth } from "../context/AuthContext";
 import { allowedRoutes, roleLabel } from "../lib/permissions";
 import GlobalSearch from "./GlobalSearch";
 import NotifBell from "./NotifBell";
-import TambahProspekCepat from "./TambahProspekCepat";
 import { PRIMARY, PRIMARY_DARK, ACCENT, PAGE_BG, SURFACE, BORDER, TEXT_DARK, TEXT_MID, ON_PRIMARY, ON_PRIMARY_FAINT } from "./ui";
 
 const navSections = [
@@ -303,8 +302,6 @@ export default function AppLayout() {
               title="Cari catatan"
               onClick={() => setMobileSearchOpen((v) => !v)}
             />
-
-            <TambahProspekCepat />
 
             <NotifBell />
 

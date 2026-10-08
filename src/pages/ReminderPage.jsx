@@ -3,11 +3,11 @@ import { Bell } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { canWrite } from "../lib/permissions";
 import { segarkanNotifikasi } from "../lib/useNotifications";
 import { tanggal, tanggalRelatif, selisihHari, labelTahap } from "../lib/format";
 import KontakAksi from "../components/KontakAksi";
+import CatatFollowUpModal from "../components/CatatFollowUpModal";
 import {
   Card,
   PageTitle,
@@ -38,12 +38,17 @@ import {
  * menyelesaikannya. Tidak ada cara menandai selesai, menjadwal ulang, atau
  * mencatat hasilnya, sehingga satu-satunya jalan menutup sebuah tugas adalah
  * berpura-pura tugas itu tidak pernah ada.
+ *
+ * "Selesai" membuka Catat Follow Up yang sama dengan di Follow Up Leads:
+ * setiap follow-up prospek wajib bertanggal dan berbukti (migrasi 024), jadi
+ * tidak boleh ada pintu kedua yang menutup tugas tanpa bukti.
  */
 
+/** Tanggal lokal perangkat, bukan UTC. */
 function tanggalPlus(hari) {
   const d = new Date();
   d.setDate(d.getDate() + hari);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function warnaSisa(n) {
@@ -57,7 +62,8 @@ export default function ReminderPage() {
   const toast = useToast();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [aksi, setAksi] = useState(null); // { lead, jenis: 'selesai' | 'jadwal' }
+  const [fuLead, setFuLead] = useState(null);
+  const [jadwalLead, setJadwalLead] = useState(null);
 
   const mayWrite = canWrite(profile, "lead");
 
@@ -119,10 +125,10 @@ export default function ReminderPage() {
       render: (row) =>
         mayWrite ? (
           <RowActions>
-            <button onClick={() => setAksi({ lead: row, jenis: "selesai" })} style={gayaSelesai} title="Catat hasilnya dan tutup tugas ini">
+            <button onClick={() => setFuLead(row)} style={gayaSelesai} title="Catat hasil dan buktinya, lalu jadwalkan langkah berikutnya">
               ✓ Selesai
             </button>
-            <button onClick={() => setAksi({ lead: row, jenis: "jadwal" })} style={gayaKecil} title="Pindahkan ke tanggal lain">
+            <button onClick={() => setJadwalLead(row)} style={gayaKecil} title="Pindahkan ke tanggal lain">
               ↻ Jadwal ulang
             </button>
             <DeleteButton
@@ -158,7 +164,7 @@ export default function ReminderPage() {
           <EmptyState
             icon={Bell}
             label="Belum ada follow-up terjadwal"
-            hint="Jadwal terisi sendiri setiap kali Anda mengubah tahap sebuah prospek — di situ sistem meminta kapan prospek itu dihubungi lagi."
+            hint="Jadwal terisi setiap kali follow-up dicatat — di situ sistem meminta kapan prospek itu dihubungi lagi."
           />
         </Card>
       )}
@@ -189,9 +195,19 @@ export default function ReminderPage() {
         </Bagian>
       )}
 
-      <AksiModal
-        aksi={aksi}
-        onClose={() => setAksi(null)}
+      <CatatFollowUpModal
+        lead={fuLead}
+        open={Boolean(fuLead)}
+        onClose={() => setFuLead(null)}
+        onSelesai={() => {
+          fetchData();
+          segarkanNotifikasi();
+        }}
+      />
+
+      <ModalJadwalUlang
+        lead={jadwalLead}
+        onClose={() => setJadwalLead(null)}
         onSelesai={() => {
           fetchData();
           segarkanNotifikasi();
@@ -227,56 +243,39 @@ function Bagian({ judul, jumlah, warna, keterangan, children }) {
 }
 
 /**
- * Menutup atau memindahkan sebuah tugas.
+ * Memindahkan sebuah tugas ke tanggal lain.
  *
- * "Selesai" selalu meminta hasil: sebuah follow-up yang ditutup tanpa jejak
- * tidak berbeda dengan follow-up yang dihapus.
+ * Bukan follow-up — tidak ada yang dihubungi — sehingga tidak meminta bukti.
+ * Pemindahannya tetap tercatat di riwayat, supaya jadwal yang terus mundur
+ * terlihat sebagai pola, bukan menghilang tanpa jejak.
  */
-function AksiModal({ aksi, onClose, onSelesai, profile, toast }) {
-  const hasilOptions = useBusinessSettings("hasil_followup");
-  const [hasil, setHasil] = useState("");
-  const [catatan, setCatatan] = useState("");
-  const [lagi, setLagi] = useState(true);
+function ModalJadwalUlang({ lead, onClose, onSelesai, profile, toast }) {
   const [tanggalBaru, setTanggalBaru] = useState("");
   const [rencana, setRencana] = useState("");
   const [kirim, setKirim] = useState(false);
   const [galat, setGalat] = useState("");
 
-  const lead = aksi?.lead;
-  const jenis = aksi?.jenis;
-
   useEffect(() => {
-    if (!aksi) return;
-    setHasil("");
-    setCatatan("");
-    setLagi(true);
+    if (!lead) return;
     setTanggalBaru(tanggalPlus(3));
-    setRencana(lead?.rencana_selanjutnya || "");
+    setRencana(lead.rencana_selanjutnya || "");
     setGalat("");
     setKirim(false);
-  }, [aksi, lead]);
+  }, [lead]);
 
   async function jalankan() {
-    if (jenis === "jadwal" && !tanggalBaru) {
+    if (!tanggalBaru) {
       setGalat("Tentukan tanggal barunya.");
-      return;
-    }
-    if (jenis === "selesai" && lagi && !tanggalBaru) {
-      setGalat("Tentukan kapan prospek ini dihubungi lagi, atau hapus centangnya.");
       return;
     }
 
     setKirim(true);
     setGalat("");
 
-    const patch =
-      jenis === "jadwal"
-        ? { tanggal_rencana: tanggalBaru, rencana_selanjutnya: rencana.trim() || null }
-        : lagi
-        ? { tanggal_rencana: tanggalBaru, rencana_selanjutnya: rencana.trim() || null }
-        : { tanggal_rencana: null };
-
-    const { error: errLead } = await supabase.from("leads").update(patch).eq("id", lead.id);
+    const { error: errLead } = await supabase
+      .from("leads")
+      .update({ tanggal_rencana: tanggalBaru, rencana_selanjutnya: rencana.trim() || null })
+      .eq("id", lead.id);
     if (errLead) {
       setKirim(false);
       setGalat(errLead.message);
@@ -286,91 +285,46 @@ function AksiModal({ aksi, onClose, onSelesai, profile, toast }) {
     const { error: errCatatan } = await supabase.from("lead_activities").insert({
       lead_id: lead.id,
       actor_id: profile?.id || null,
-      activity: jenis === "jadwal" ? "Follow-up dijadwal ulang" : "Follow-up selesai",
-      hasil: hasil || null,
-      note:
-        [
-          catatan.trim(),
-          jenis === "jadwal" ? `Dipindahkan ke ${tanggal(tanggalBaru)}` : lagi ? `Follow-up berikutnya ${tanggal(tanggalBaru)}` : "Tidak dijadwalkan lagi",
-        ]
-          .filter(Boolean)
-          .join("\n") || null,
+      activity: "Follow-up dijadwal ulang",
+      note: `Dipindahkan ke ${tanggal(tanggalBaru)}`,
     });
 
     setKirim(false);
 
     if (errCatatan) toast.gagal(`Tersimpan, tetapi catatannya gagal: ${errCatatan.message}`);
-    else toast.sukses(jenis === "jadwal" ? `Dipindahkan ke ${tanggal(tanggalBaru)}.` : `Follow-up ${lead.name} ditutup.`);
+    else toast.sukses(`Dipindahkan ke ${tanggal(tanggalBaru)}.`);
 
     onSelesai?.();
     onClose?.();
   }
 
-  if (!aksi || !lead) return null;
-
-  const judul = jenis === "jadwal" ? `Jadwal ulang — ${lead.name}` : `Tutup follow-up — ${lead.name}`;
+  if (!lead) return null;
 
   return (
-    <Modal open onClose={() => !kirim && onClose()} labelledBy="aksi-judul" width={470}>
+    <Modal open onClose={() => !kirim && onClose()} labelledBy="jadwal-judul" width={470}>
       <>
-        <div id="aksi-judul" style={{ fontSize: 17, fontWeight: 700, marginBottom: 5 }}>
-          {judul}
+        <div id="jadwal-judul" style={{ fontSize: 17, fontWeight: 700, marginBottom: 5 }}>
+          Jadwal ulang — {lead.name}
         </div>
         <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 18, lineHeight: 1.5 }}>
           Dijadwalkan {tanggal(lead.tanggal_rencana)} · {tanggalRelatif(lead.tanggal_rencana)}
           {lead.rencana_selanjutnya ? ` · ${lead.rencana_selanjutnya}` : ""}
         </div>
 
-        {jenis === "selesai" && (
-          <>
-            <div style={{ marginBottom: 14 }}>
-              <label htmlFor="rm-hasil" style={labelGaya}>
-                Hasil
-              </label>
-              <select id="rm-hasil" value={hasil} onChange={(e) => setHasil(e.target.value)} style={inputStyle}>
-                <option value="">— pilih —</option>
-                {withCurrentValue(hasilOptions, hasil).map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label htmlFor="rm-catatan" style={labelGaya}>
-                Catatan
-              </label>
-              <textarea
-                id="rm-catatan"
-                value={catatan}
-                onChange={(e) => setCatatan(e.target.value)}
-                placeholder="Apa yang terjadi pada follow-up ini?"
-                style={{ ...inputStyle, minHeight: 70, resize: "vertical", fontFamily: "inherit" }}
-              />
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14, cursor: "pointer" }}>
-              <input type="checkbox" checked={lagi} onChange={(e) => setLagi(e.target.checked)} />
-              Jadwalkan follow-up berikutnya
+        <div className="rg-2" style={{ marginBottom: 18 }}>
+          <div>
+            <label htmlFor="rm-tanggal" style={labelGaya}>
+              Tanggal
             </label>
-          </>
-        )}
-
-        {(jenis === "jadwal" || lagi) && (
-          <div className="rg-2" style={{ marginBottom: 18 }}>
-            <div>
-              <label htmlFor="rm-tanggal" style={labelGaya}>
-                Tanggal
-              </label>
-              <input id="rm-tanggal" type="date" value={tanggalBaru} onChange={(e) => setTanggalBaru(e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label htmlFor="rm-rencana" style={labelGaya}>
-                Yang akan dilakukan
-              </label>
-              <input id="rm-rencana" value={rencana} onChange={(e) => setRencana(e.target.value)} style={inputStyle} />
-            </div>
+            <input id="rm-tanggal" type="date" value={tanggalBaru} onChange={(e) => setTanggalBaru(e.target.value)} style={inputStyle} />
           </div>
-        )}
+          <div>
+            <label htmlFor="rm-rencana" style={labelGaya}>
+              Yang akan dilakukan
+            </label>
+            <input id="rm-rencana" value={rencana} onChange={(e) => setRencana(e.target.value)} style={inputStyle} />
+          </div>
+        </div>
 
         {galat && (
           <div role="alert" style={{ fontSize: 12.5, color: NEGATIVE, marginBottom: 14 }}>
@@ -383,7 +337,7 @@ function AksiModal({ aksi, onClose, onSelesai, profile, toast }) {
             Batal
           </button>
           <PrimaryButton onClick={jalankan} disabled={kirim}>
-            {kirim ? "Menyimpan…" : jenis === "jadwal" ? "Pindahkan" : "Tutup Follow-up"}
+            {kirim ? "Menyimpan…" : "Pindahkan"}
           </PrimaryButton>
         </div>
       </>

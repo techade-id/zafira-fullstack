@@ -72,7 +72,11 @@ const WRITE_MATRIX = {
   payment: ["admin", "finance", "admin_marketing", "sales"],
   payment_verify: ["admin", "finance"],
   cancellation: ["admin", "admin_marketing", "finance", "sales"],
+  // Catatan komunikasi dengan KONSUMEN — tetap terbuka setelah booking.
   followup: ["admin", "sales", "admin_marketing", "finance"],
+  // Follow-up atas PROSPEK adalah pekerjaan Sales (migrasi 023). Admin
+  // Marketing hanya melihat; ia memeriksa dan memverifikasi pemberkasan.
+  followup_lead: ["admin", "sales"],
   config: ["admin", "pengawas"],
   target: ["admin", "pengawas"],
   project: ["admin", "pengawas", "admin_marketing"],

@@ -113,6 +113,21 @@ every KPR stage, and a waiting-for-Finance phase on every payment.
      hard-coded in `src/data/siteplanKaligangsa.js` into the database — any
      project whose unit codes match it gets a vector siteplan automatically —
      and turns old pins (`pos_x`/`pos_y`) into small clickable lots.
+   - **`migration_023_followup_milik_sales.sql`** — follow-up on a *lead* is
+     Sales work. Narrows `lead_activities_insert`: Admin Marketing and Finance
+     may still log communication with a customer (`customer_id` set), but a
+     note attached only to a lead is written by Admin or the Sales who owns it.
+     Pairs with the Leads page becoming raw data only — every lead action now
+     lives in Follow Up Leads.
+   - **`migration_024_followup_bukti.sql`** — every lead follow-up is dated and
+     carries proof. Adds `lead_activities.tanggal_followup` (when the lead was
+     contacted; `created_at` stays as the audit time — back-dating allowed,
+     future dates rejected), `berkas_lampiran.activity_id` plus the `followup`
+     slot, and the `catat_followup()` RPC that saves the note, its proof and
+     the next schedule in one transaction. A "Survei Lokasi" follow-up also
+     fills the Saringan Awal survey date and files its photos under `survei`.
+     Status rules now read the follow-up date. Run it **before** deploying the
+     matching frontend — the Catat Follow Up dialog calls the new RPC.
 
    Re-run `supabase/storage.sql` after 008 **and after 017**: it creates the
    `payment-receipts`, `payment-proofs` and `berkas-lampiran` buckets and

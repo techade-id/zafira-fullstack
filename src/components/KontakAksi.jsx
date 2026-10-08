@@ -7,6 +7,7 @@ import { canWrite } from "../lib/permissions";
 import { useBusinessSettingsMap } from "../lib/useBusinessSettings";
 import { telepon, nomorWa } from "../lib/format";
 import { templateWa } from "../lib/waTemplates";
+import CatatFollowUpModal from "./CatatFollowUpModal";
 import { Modal, PrimaryButton, BORDER, SURFACE, TEXT_MID, TEXT_DARK, POSITIVE, PRIMARY, inputStyle } from "./ui";
 
 /**
@@ -38,15 +39,27 @@ export default function KontakAksi({
   const [catatan, setCatatan] = useState("");
   const [hasil, setHasil] = useState("Terhubung");
   const [simpan, setSimpan] = useState(false);
+  const [leadFu, setLeadFu] = useState(null);
 
   const templates = useBusinessSettingsMap("wa_template");
   const wa = nomorWa(phone);
-  const bolehCatat = canWrite(profile, "followup") && (leadId || customerId);
+  // Catatan pada konsumen terbuka bagi semua yang memegangnya; catatan yang
+  // hanya menempel pada prospek milik Sales (migrasi 023).
+  const bolehCatat = customerId ? canWrite(profile, "followup") : leadId ? canWrite(profile, "followup_lead") : false;
 
-  function bukaWa() {
+  async function bukaWa() {
     const pesan = templateWa(tahap, { nama, agen: profile?.full_name, unit, dariPengaturan: templates });
     window.open(`https://wa.me/${wa}?text=${encodeURIComponent(pesan)}`, "_blank", "noopener");
-    if (bolehCatat) setTanya(true);
+    if (!bolehCatat) return;
+    if (customerId) {
+      setTanya(true);
+      return;
+    }
+    // Follow-up prospek wajib bertanggal dan berbukti (migrasi 024), jadi
+    // yang ditawarkan bukan catatan singkat melainkan Catat Follow Up — dan
+    // screenshot percakapan yang baru saja terjadi adalah buktinya.
+    const { data } = await supabase.from("leads").select("*").eq("id", leadId).maybeSingle();
+    if (data) setLeadFu(data);
   }
 
   async function simpanCatatan() {
@@ -96,6 +109,13 @@ export default function KontakAksi({
       >
         <Phone size={14} />
       </a>
+
+      {/* Modal di-portal ke <body>, tetapi kliknya tetap merambat lewat pohon
+          React — tanpa penahan ini, klik di latar modal ikut membuka panel
+          baris tabel tempat tombol ini berada. */}
+      <span onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+        <CatatFollowUpModal lead={leadFu} open={Boolean(leadFu)} onClose={() => setLeadFu(null)} onSelesai={onCatat} aktivitasAwal="WhatsApp" />
+      </span>
 
       <Modal open={tanya} labelledBy="wa-catat-judul" onClose={() => !simpan && setTanya(false)} width={420}>
         <>
