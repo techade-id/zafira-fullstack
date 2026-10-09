@@ -77,6 +77,9 @@ const WRITE_MATRIX = {
   // Follow-up atas PROSPEK adalah pekerjaan Sales (migrasi 023). Admin
   // Marketing hanya melihat; ia memeriksa dan memverifikasi pemberkasan.
   followup_lead: ["admin", "sales"],
+  // Memutuskan pengajuan perubahan catatan follow-up (migrasi 025). Penulis
+  // mengajukan; hanya Admin Sistem yang menyetujui atau menolak.
+  catatan_putus: ["admin"],
   config: ["admin", "pengawas"],
   target: ["admin", "pengawas"],
   project: ["admin", "pengawas", "admin_marketing"],
@@ -169,6 +172,7 @@ const ALL_ROUTES = [
   "/data-agen",
   "/pengaturan-bisnis",
   "/log-aktivitas",
+  "/persetujuan",
   "/cari",
 ];
 

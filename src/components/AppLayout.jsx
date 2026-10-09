@@ -1,11 +1,14 @@
 import React, { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Home,
   Target,
   Users,
   Building2,
-  Map,
+  // Bukan "Map" polos: nama itu menutupi Map bawaan JavaScript, dan
+  // `new Map()` di komponen ini (angka di menu) lalu gagal dengan
+  // "Map is not a constructor" — seluruh aplikasi putih setelah login.
+  Map as MapIcon,
   LayoutGrid,
   Wallet,
   FolderOpen,
@@ -27,11 +30,15 @@ import {
   Asterisk,
   ScrollText,
   HardHat as HardHatIcon,
+  FileCheck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { allowedRoutes, roleLabel } from "../lib/permissions";
 import GlobalSearch from "./GlobalSearch";
 import NotifBell from "./NotifBell";
+import PopupPengajuan from "./PopupPengajuan";
+import PenjagaGalat from "./PenjagaGalat";
+import { useNotifications } from "../lib/useNotifications";
 import { PRIMARY, PRIMARY_DARK, ACCENT, PAGE_BG, SURFACE, BORDER, TEXT_DARK, TEXT_MID, ON_PRIMARY, ON_PRIMARY_FAINT } from "./ui";
 
 const navSections = [
@@ -39,7 +46,7 @@ const navSections = [
     title: null,
     items: [
       { to: "/", icon: Home, label: "Dashboard", end: true },
-      { to: "/siteplan", icon: Map, label: "Siteplan" },
+      { to: "/siteplan", icon: MapIcon, label: "Siteplan" },
     ],
   },
   {
@@ -47,6 +54,10 @@ const navSections = [
     items: [
       { to: "/prospek", icon: Target, label: "Leads" },
       { to: "/follow-up", icon: MessageSquare, label: "Follow Up Leads" },
+      // Dekat Follow Up Leads, tempat catatannya lahir — bukan di grup
+      // Pengaturan paling bawah, tempat ia tidak pernah ditemukan. Angkanya
+      // jumlah pengajuan yang menunggu (hanya Admin Sistem yang punya).
+      { to: "/persetujuan", icon: FileCheck, label: "Persetujuan Catatan", lencana: "persetujuan" },
       { to: "/konsumen", icon: Users, label: "Konsumen" },
       { to: "/pemberkasan", icon: FolderOpen, label: "Papan Berkas" },
       { to: "/pembayaran", icon: Wallet, label: "Pembayaran" },
@@ -91,7 +102,7 @@ function visibleSections(profile) {
     .filter((section) => section.items.length > 0);
 }
 
-function NavItem({ to, icon: Icon, label, end, onClick }) {
+function NavItem({ to, icon: Icon, label, end, onClick, jumlah = 0 }) {
   return (
     <NavLink
       to={to}
@@ -131,6 +142,25 @@ function NavItem({ to, icon: Icon, label, end, onClick }) {
           />
           <Icon size={17} />
           <span>{label}</span>
+          {jumlah > 0 && (
+            <span
+              aria-label={`${jumlah} menunggu`}
+              style={{
+                marginLeft: "auto",
+                minWidth: 20,
+                padding: "1px 7px",
+                borderRadius: 999,
+                background: ACCENT,
+                color: "#fff",
+                fontSize: 10.5,
+                fontWeight: 700,
+                textAlign: "center",
+                lineHeight: "17px",
+              }}
+            >
+              {jumlah > 99 ? "99+" : jumlah}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -168,6 +198,10 @@ export default function AppLayout() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const firstName = (profile?.full_name || "").split(" ")[0] || "...";
+  const location = useLocation();
+  // Sumber yang sama dengan lonceng — angkanya tidak mungkin berbeda.
+  const { per_kategori } = useNotifications();
+  const lencana = new Map((per_kategori || []).map((k) => [k.kategori, Number(k.jumlah)]));
 
   return (
     <div style={{ minHeight: "100vh", width: "100%", display: "flex", background: PAGE_BG, color: TEXT_DARK }}>
@@ -231,7 +265,12 @@ export default function AppLayout() {
                 </div>
               )}
               {section.items.map((item) => (
-                <NavItem key={item.to} {...item} onClick={() => setSidebarOpen(false)} />
+                <NavItem
+                  key={item.to}
+                  {...item}
+                  jumlah={item.lencana ? lencana.get(item.lencana) || 0 : 0}
+                  onClick={() => setSidebarOpen(false)}
+                />
               ))}
             </div>
           ))}
@@ -334,9 +373,17 @@ export default function AppLayout() {
         )}
 
         <div className="app-content" style={{ padding: "0 26px 26px" }}>
-          <Outlet />
+          {/* Halaman yang gagal hanya menggagalkan dirinya: menu tetap ada, dan
+              pindah halaman membuang galatnya. */}
+          <PenjagaGalat kunci={location.pathname}>
+            <Outlet />
+          </PenjagaGalat>
         </div>
       </div>
+
+      <PenjagaGalat diam>
+        <PopupPengajuan />
+      </PenjagaGalat>
     </div>
   );
 }

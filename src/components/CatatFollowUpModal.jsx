@@ -127,11 +127,6 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
     setTanggalRencana(tanggalPlus(cocok ? cocok[1] : 3));
   }
 
-  function tambahBukti(daftar) {
-    const baru = Array.from(daftar || []);
-    if (baru.length) setBukti((b) => [...b, ...baru]);
-  }
-
   const jenis = JENIS_FOLLOWUP.find((j) => j.nilai === aktivitas) || JENIS_FOLLOWUP[0];
   const suhu = tebakSuhu([hasil, catatan].filter(Boolean).join(" "));
   const w = suhu ? WARNA_SUHU[suhu] : null;
@@ -284,84 +279,13 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
 
         {/* Bukti wajib untuk setiap jenis. Berkasnya baru diunggah saat
             Simpan, supaya membatalkan formulir tidak meninggalkan berkas. */}
-        <div
-          style={{
-            border: `1px ${bukti.length ? "solid" : "dashed"} ${bukti.length ? BORDER : "#C7D3EA"}`,
-            borderRadius: 12,
-            padding: "11px 13px",
-            marginBottom: 14,
-            background: bukti.length ? SURFACE : "#FBFCFE",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Paperclip size={13} color={TEXT_MID} aria-hidden="true" />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: TEXT_MID }}>
-              Bukti Follow Up<span style={{ color: NEGATIVE }} aria-hidden="true"> *</span>
-            </span>
-            <span style={{ fontSize: 11, color: TEXT_MID }}>{bukti.length ? `${bukti.length} berkas` : "belum ada"}</span>
-            <label
-              style={{
-                marginLeft: "auto",
-                border: `1px solid ${BORDER}`,
-                background: "#fff",
-                color: TEXT_DARK,
-                borderRadius: 9,
-                padding: "4px 10px",
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: kirim ? "default" : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Pilih berkas
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                multiple
-                disabled={kirim}
-                onChange={(e) => {
-                  tambahBukti(e.target.files);
-                  // Memilih berkas yang sama dua kali berturut-turut tidak
-                  // memicu onChange kalau nilainya tidak dikosongkan dulu.
-                  e.target.value = "";
-                }}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
-          <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 6, lineHeight: 1.45 }}>
-            {jenis.bukti}.
-            {aktivitas === SURVEI && " Tanggal dan foto survei ini juga mengisi Saringan Awal, lalu ikut ke berkas KPR saat booking."}
-          </div>
-          {bukti.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 9 }}>
-              {bukti.map((f, i) => {
-                const Ikon = jenisBerkas(f.name) === "gambar" ? ImageIcon : FileText;
-                return (
-                  <div key={`${f.name}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span
-                      style={{ width: 22, height: 22, borderRadius: 7, background: PRIMARY_SOFT, color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                    >
-                      <Ikon size={11} aria-hidden="true" />
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: TEXT_DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {f.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setBukti((b) => b.filter((_, j) => j !== i))}
-                      disabled={kirim}
-                      aria-label={`Lepas ${f.name}`}
-                      style={{ border: "none", background: "none", color: TEXT_MID, cursor: "pointer", padding: 2, lineHeight: 0 }}
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <PemilihBukti
+          bukti={bukti}
+          onUbah={setBukti}
+          disabled={kirim}
+          wajib
+          petunjuk={`${jenis.bukti}.${aktivitas === SURVEI ? " Tanggal dan foto survei ini juga mengisi Saringan Awal, lalu ikut ke berkas KPR saat booking." : ""}`}
+        />
 
         {/* Pratinjau keputusan sistem. Otomatisasi yang tidak menjelaskan
             dirinya akan dilawan oleh penggunanya. */}
@@ -447,6 +371,97 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
         </div>
       </>
     </Modal>
+  );
+}
+
+/**
+ * Memilih berkas bukti tanpa langsung mengunggahnya — dipakai Catat Follow Up
+ * dan Ajukan Perubahan Catatan. Berkas baru dikirim saat formulirnya
+ * disimpan, supaya formulir yang dibatalkan tidak meninggalkan berkas.
+ *
+ * @param bukti  daftar File yang sudah dipilih
+ * @param onUbah dipanggil dengan daftar baru
+ */
+export function PemilihBukti({ bukti, onUbah, disabled, wajib = false, judul = "Bukti Follow Up", petunjuk }) {
+  const kosong = bukti.length === 0;
+  return (
+    <div
+      style={{
+        border: `1px ${!kosong || !wajib ? "solid" : "dashed"} ${!kosong || !wajib ? BORDER : "#C7D3EA"}`,
+        borderRadius: 12,
+        padding: "11px 13px",
+        marginBottom: 14,
+        background: !kosong || !wajib ? SURFACE : "#FBFCFE",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Paperclip size={13} color={TEXT_MID} aria-hidden="true" />
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: TEXT_MID }}>
+          {judul}
+          {wajib && <span style={{ color: NEGATIVE }} aria-hidden="true"> *</span>}
+        </span>
+        <span style={{ fontSize: 11, color: TEXT_MID }}>{kosong ? "belum ada" : `${bukti.length} berkas`}</span>
+        <label
+          style={{
+            marginLeft: "auto",
+            border: `1px solid ${BORDER}`,
+            background: "#fff",
+            color: TEXT_DARK,
+            borderRadius: 9,
+            padding: "4px 10px",
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: disabled ? "default" : "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          + Pilih berkas
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            multiple
+            disabled={disabled}
+            onChange={(e) => {
+              const baru = Array.from(e.target.files || []);
+              if (baru.length) onUbah([...bukti, ...baru]);
+              // Memilih berkas yang sama dua kali berturut-turut tidak
+              // memicu onChange kalau nilainya tidak dikosongkan dulu.
+              e.target.value = "";
+            }}
+            style={{ display: "none" }}
+          />
+        </label>
+      </div>
+      {petunjuk && <div style={{ fontSize: 11, color: TEXT_MID, marginTop: 6, lineHeight: 1.45 }}>{petunjuk}</div>}
+      {!kosong && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 9 }}>
+          {bukti.map((f, i) => {
+            const Ikon = jenisBerkas(f.name) === "gambar" ? ImageIcon : FileText;
+            return (
+              <div key={`${f.name}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{ width: 22, height: 22, borderRadius: 7, background: PRIMARY_SOFT, color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  <Ikon size={11} aria-hidden="true" />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: TEXT_DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {f.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onUbah(bukti.filter((_, j) => j !== i))}
+                  disabled={disabled}
+                  aria-label={`Lepas ${f.name}`}
+                  style={{ border: "none", background: "none", color: TEXT_MID, cursor: "pointer", padding: 2, lineHeight: 0 }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

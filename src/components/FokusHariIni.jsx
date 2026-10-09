@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, FilePen } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { roleOf } from "../lib/permissions";
 import { useNotifications, LABEL_KATEGORI } from "../lib/useNotifications";
@@ -24,13 +24,13 @@ import { Card, SectionTitle, BORDER_SOFT, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY,
 
 /** Kategori yang relevan per peran, berurut menurut kepentingannya. */
 const PRIORITAS = {
-  sales: ["hold", "followup", "dingin"],
+  sales: ["hold", "followup", "catatan_ditolak", "dingin"],
   admin_marketing: ["hold", "sp3k", "mandek", "followup"],
   finance: ["verifikasi"],
   tim_lapangan: [],
   supervisor_marketing: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
   pengawas: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
-  admin: ["verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
+  admin: ["persetujuan", "verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
 };
 
 const SARAN = {
@@ -40,6 +40,8 @@ const SARAN = {
   mandek: "Buka konsumen",
   verifikasi: "Buka Pembayaran",
   hold: "Buka Siteplan",
+  persetujuan: "Tinjau pengajuan",
+  catatan_ditolak: "Lihat prospek",
 };
 
 const RUTE_KATEGORI = {
@@ -51,7 +53,60 @@ const RUTE_KATEGORI = {
   mandek: "/konsumen",
   verifikasi: "/pembayaran",
   hold: "/siteplan",
+  persetujuan: "/persetujuan",
+  catatan_ditolak: "/follow-up",
 };
+
+/**
+ * Pengajuan perubahan catatan yang menunggu Admin Sistem (migrasi 025).
+ *
+ * Berdiri sendiri di atas Dashboard, bukan satu kotak di antara yang lain:
+ * pekerjaan lain di sini bisa menunggu sampai siang, sedangkan pengajuan
+ * berarti seseorang sedang tertahan menunggu keputusan. Hanya Admin yang
+ * punya kategori ini, jadi bagi peran lain komponen ini tidak tampil.
+ */
+export function BannerPersetujuan() {
+  const { per_kategori } = useNotifications();
+  const navigate = useNavigate();
+  const n = Number((per_kategori || []).find((k) => k.kategori === "persetujuan")?.jumlah || 0);
+  if (!n) return null;
+
+  return (
+    <button
+      onClick={() => navigate("/persetujuan")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        width: "100%",
+        textAlign: "left",
+        background: ACCENT_SOFT,
+        border: "1px solid #F6CDB8",
+        borderRadius: 18,
+        padding: "15px 18px",
+        cursor: "pointer",
+        fontFamily: "inherit",
+      }}
+    >
+      <span
+        style={{ width: 40, height: 40, borderRadius: 13, background: ACCENT, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+      >
+        <FilePen size={19} aria-hidden="true" />
+      </span>
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: ACCENT_DARK }}>
+          {n} pengajuan perubahan catatan menunggu persetujuan Anda
+        </span>
+        <span style={{ display: "block", fontSize: 12.5, color: TEXT_MID, marginTop: 2 }}>
+          Sales menunggu keputusan ini sebelum catatannya berubah.
+        </span>
+      </span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT_DARK, whiteSpace: "nowrap" }}>
+        Tinjau sekarang <ArrowRight size={14} style={{ verticalAlign: -2 }} aria-hidden="true" />
+      </span>
+    </button>
+  );
+}
 
 export default function FokusHariIni() {
   const { profile } = useAuth();

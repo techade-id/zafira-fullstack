@@ -59,6 +59,8 @@ migration_021_verifikasi_berkas.sql
 migration_022_siteplan.sql
 migration_023_followup_milik_sales.sql
 migration_024_followup_bukti.sql
+migration_025_ubah_catatan.sql
+migration_026_notifikasi_persetujuan.sql
 storage.sql
 ```
 
@@ -71,6 +73,12 @@ PDF) dan policy-nya. Bucket yang kurang membuat unggahan gagal dengan pesan
 
 `storage.sql` wajib dijalankan **setelah** `migration_017`: policy-nya memakai
 helper yang baru ada sejak migrasi itu.
+
+**Menjalankan ulang migrasi lama berarti menjalankan ulang semua migrasi
+sesudahnya.** Beberapa fungsi ditulis ulang utuh oleh lebih dari satu migrasi
+— `my_notifications()` misalnya oleh 013, 015, 017, 022, 025, dan 026.
+Mengulang 022 saja mengembalikan fungsi itu ke versi 022, dan kategori
+notifikasi sesudahnya (persetujuan catatan) hilang tanpa pesan galat apa pun.
 
 Peringatan `WARNING: there is no transaction in progress` pada migrasi 002,
 005, 008, 009 dan 017 normal: itu efek `commit;` yang memang diperlukan
@@ -178,5 +186,8 @@ Settings → Environment Variables.
 | Unggah gagal: "Tempat penyimpanan … belum dibuat" / "Bucket not found" | Bucket belum ada — jalankan ulang `storage.sql`, lalu `check_setup.sql` |
 | Unggah gagal: "lebih dari 10 MB" / "Jenis berkas tidak diterima" | Batas bucket bekerja sebagaimana mestinya — kompres berkas, atau pakai gambar/PDF |
 | Simpan Follow Up gagal "Could not find the function catat_followup" | `migration_024` belum jalan |
+| Halaman Persetujuan Catatan: "Data persetujuan belum bisa dimuat" | `migration_025` belum jalan |
+| Lonceng Admin tidak memuat pengajuan perubahan catatan | `migration_026` belum jalan, atau migrasi lama dijalankan ulang tanpa mengulang 025 dan 026 sesudahnya |
+| Pop-up pengajuan tidak muncul | Cek baris `REALTIME` di `check_setup.sql` (harus `aktif`) dan sakelar Pengaturan Bisnis → Notifikasi. Muat ulang halaman setelah menjalankan migrasi |
 
 Console browser menampilkan seluruh error Supabase lengkap; buka saat menelusuri.

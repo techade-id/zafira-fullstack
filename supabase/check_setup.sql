@@ -41,7 +41,11 @@ where n.nspname = 'public'
     'tandai_proses_bank', 'customer_sync_penghasilan',
     -- migration_022
     'tahan_kavling', 'lepas_hold', 'perpanjang_hold', 'siteplan_peta',
-    'siteplan_minat_hitung', 'siteplan_penjualan_bulanan', 'simpan_kavling', 'siteplan_publik'
+    'siteplan_minat_hitung', 'siteplan_penjualan_bulanan', 'simpan_kavling', 'siteplan_publik',
+    -- migration_024
+    'catat_followup',
+    -- migration_025
+    'ajukan_ubah_catatan', 'putuskan_ubah_catatan'
   )
 
 union all
@@ -56,7 +60,9 @@ from (values ('leads'), ('lead_activities'), ('customers'), ('customer_kpr'), ('
              -- migration_017
              ('berkas_lampiran'),
              -- migration_022
-             ('siteplans'), ('siteplan_fasilitas'), ('unit_holds'), ('unit_minat')) v(name)
+             ('siteplans'), ('siteplan_fasilitas'), ('unit_holds'), ('unit_minat'),
+             -- migration_025
+             ('lead_activity_edits')) v(name)
 left join pg_tables t on t.schemaname = 'public' and t.tablename = v.name
 
 union all
@@ -80,7 +86,11 @@ from (values ('customers', 'locked_at'), ('customers', 'handover_state'),
              ('payments', 'bukti_transfer_url'),
              -- migration_022
              ('units', 'siteplan_id'), ('units', 'bentuk'), ('units', 'luas_tanah'),
-             ('units', 'posisi'), ('units', 'hadap')) v(tbl, col)
+             ('units', 'posisi'), ('units', 'hadap'),
+             -- migration_024
+             ('lead_activities', 'tanggal_followup'), ('berkas_lampiran', 'activity_id'),
+             -- migration_025
+             ('berkas_lampiran', 'edit_id')) v(tbl, col)
 left join information_schema.columns c
   on c.table_schema = 'public' and c.table_name = v.tbl and c.column_name = v.col
 
@@ -110,7 +120,15 @@ from profiles where not is_active
 
 union all
 select 'PENGATURAN', a.key, a.value
-from app_settings a where a.key in ('domain_email_diizinkan', 'hold_jam', 'hold_maks_per_sales')
+from app_settings a where a.key in ('domain_email_diizinkan', 'hold_jam', 'hold_maks_per_sales', 'notif_realtime')
+
+union all
+-- Pop-up pengajuan perubahan catatan (migration_026) butuh tabelnya terdaftar
+-- di publikasi Realtime Supabase.
+select 'REALTIME', 'lead_activity_edits',
+       case when exists (select 1 from pg_publication_tables
+                          where pubname = 'supabase_realtime' and tablename = 'lead_activity_edits')
+            then 'aktif' else 'HILANG — jalankan migration_026' end
 
 union all
 -- Indeks trigram adalah syarat pencarian Notes tetap cepat di puluhan ribu baris.

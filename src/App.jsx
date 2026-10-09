@@ -4,6 +4,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute, { RoleRoute } from "./routes/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
+import PenjagaGalat from "./components/PenjagaGalat";
 import LoginPage from "./pages/LoginPage";
 import DaftarPage from "./pages/DaftarPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -30,12 +31,14 @@ import PengaturanBisnisPage from "./pages/PengaturanBisnisPage";
 import PencarianPage from "./pages/PencarianPage";
 import LogAktivitasPage from "./pages/LogAktivitasPage";
 import LapanganPage from "./pages/LapanganPage";
+import PersetujuanPage from "./pages/PersetujuanPage";
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
       <BrowserRouter>
+        <PenjagaGalat penuh>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/daftar" element={<DaftarPage />} />
@@ -84,12 +87,14 @@ export default function App() {
               ["data-agen", <DataAgenPage />],
               ["pengaturan-bisnis", <PengaturanBisnisPage />],
               ["log-aktivitas", <LogAktivitasPage />],
+              ["persetujuan", <PersetujuanPage />],
               ["cari", <PencarianPage />],
             ].map(([path, element]) => (
               <Route key={path} path={path} element={<RoleRoute>{element}</RoleRoute>} />
             ))}
           </Route>
         </Routes>
+        </PenjagaGalat>
       </BrowserRouter>
       </ToastProvider>
     </AuthProvider>

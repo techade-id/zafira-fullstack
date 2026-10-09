@@ -118,4 +118,7 @@ export const LABEL_KATEGORI = {
   mandek: "Berkas mengendap di bank",
   verifikasi: "Menunggu verifikasi",
   hold: "Hold kavling segera berakhir",
+  persetujuan: "Perubahan catatan menunggu persetujuan",
+  catatan_ditolak: "Perubahan catatan ditolak",
+  catatan_disetujui: "Perubahan catatan disetujui",
 };

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Clock, Snowflake, FileWarning, Landmark, Wallet, Lock } from "lucide-react";
+import { Bell, Clock, Snowflake, FileWarning, Landmark, Wallet, Lock, FilePen, FileCheck, FileX } from "lucide-react";
 import { useNotifications, LABEL_KATEGORI } from "../lib/useNotifications";
+import TinjauPengajuan from "./TinjauPengajuan";
 import { SURFACE, BORDER, TEXT_DARK, TEXT_MID, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_DARK, RADIUS_SM } from "./ui";
 
 const IKON = {
@@ -11,6 +12,9 @@ const IKON = {
   mandek: Landmark,
   verifikasi: Wallet,
   hold: Lock,
+  persetujuan: FilePen,
+  catatan_disetujui: FileCheck,
+  catatan_ditolak: FileX,
 };
 
 /**
@@ -21,8 +25,9 @@ const IKON = {
  * bahwa aplikasi ini tidak sepenuhnya bisa dipercaya.
  */
 export default function NotifBell() {
-  const { total, tinggi, items, error } = useNotifications();
+  const { total, tinggi, items, per_kategori, error } = useNotifications();
   const [buka, setBuka] = useState(false);
+  const [tinjauId, setTinjauId] = useState(null);
   const kotak = useRef(null);
   const navigate = useNavigate();
 
@@ -42,7 +47,10 @@ export default function NotifBell() {
   }, []);
 
   // Dikelompokkan supaya isinya terbaca sebagai jenis pekerjaan, bukan tiga
-  // puluh baris yang harus dipilah sendiri.
+  // puluh baris yang harus dipilah sendiri. Setiap kategori paling banyak
+  // lima baris (migrasi 026); angkanya diambil dari jumlah sebenarnya, supaya
+  // judul kelompok tidak berbohong ketika barisnya dipotong.
+  const jumlahKategori = new Map((per_kategori || []).map((k) => [k.kategori, Number(k.jumlah)]));
   const kelompok = [];
   const indeks = new Map();
   for (const it of items || []) {
@@ -159,13 +167,18 @@ export default function NotifBell() {
                 >
                   <Ikon size={12} aria-hidden="true" />
                   {LABEL_KATEGORI[g.kategori] || g.kategori}
-                  <span style={{ marginLeft: "auto", fontWeight: 600 }}>{g.rows.length}</span>
+                  <span style={{ marginLeft: "auto", fontWeight: 600 }}>{jumlahKategori.get(g.kategori) ?? g.rows.length}</span>
                 </div>
                 {g.rows.map((it, i) => (
                   <button
                     key={`${it.kategori}-${it.record_id}-${i}`}
                     onClick={() => {
                       setBuka(false);
+                      // Pengajuan diputuskan di tempat, tanpa pindah halaman.
+                      if (it.kategori === "persetujuan") {
+                        setTinjauId(it.record_id);
+                        return;
+                      }
                       navigate(it.rute === "/konsumen" ? `/konsumen/${it.record_id}` : `${it.rute}?sorot=${it.record_id}`);
                     }}
                     style={{
@@ -195,17 +208,24 @@ export default function NotifBell() {
                     <div style={{ fontSize: 11.5, color: TEXT_MID, marginTop: 2, lineHeight: 1.45 }}>{it.detail}</div>
                   </button>
                 ))}
+                {(jumlahKategori.get(g.kategori) || 0) > g.rows.length && (
+                  <button
+                    onClick={() => {
+                      setBuka(false);
+                      navigate(g.rows[0].rute);
+                    }}
+                    style={{ border: "none", background: "none", padding: "4px 10px 6px", color: PRIMARY, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    Lihat semua ({jumlahKategori.get(g.kategori)}) →
+                  </button>
+                )}
               </div>
             );
           })}
-
-          {total > (items?.length || 0) && (
-            <div style={{ padding: "8px 10px", fontSize: 11.5, color: TEXT_MID }}>
-              Menampilkan {items.length} dari {total}. Sisanya ada di halaman Reminder.
-            </div>
-          )}
         </div>
       )}
+
+      <TinjauPengajuan editId={tinjauId} open={Boolean(tinjauId)} onClose={() => setTinjauId(null)} />
     </div>
   );
 }

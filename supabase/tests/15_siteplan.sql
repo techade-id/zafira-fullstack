@@ -489,6 +489,13 @@ insert into units (project_id, unit_code, status) values
 
 \ir ../migration_022_siteplan.sql
 \ir ../migration_022_siteplan.sql
+-- Menjalankan ulang 022 juga mengembalikan fungsi yang ditimpa migrasi
+-- sesudahnya (my_notifications) ke versi 022. Sama seperti di produksi:
+-- setelah mengulang sebuah migrasi, migrasi sesudahnya ikut diulang.
+\ir ../migration_023_followup_milik_sales.sql
+\ir ../migration_024_followup_bukti.sql
+\ir ../migration_025_ubah_catatan.sql
+\ir ../migration_026_notifikasi_persetujuan.sql
 
 select test.eq_query(
   'Geometri Kaligangsa pindah dari kode ke database, sekali saja meski migrasi diulang',

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Wallet, FileText, Landmark, KeyRound, Handshake, Image as ImageIcon } from "lucide-react";
+import { Wallet, FileText, Landmark, KeyRound, Handshake, Image as ImageIcon, Pencil, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -8,7 +8,9 @@ import { canWrite } from "../lib/permissions";
 import { rupiah, tanggalWaktu, tanggal, labelJenisBayar } from "../lib/format";
 import { jenisBerkas } from "../lib/berkas";
 import { usePratinjau } from "./PratinjauBerkas";
-import { Card, PrimaryButton, DeleteButton, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, NEGATIVE, inputStyle } from "./ui";
+import AjukanUbahCatatan from "./AjukanUbahCatatan";
+import TinjauPengajuan from "./TinjauPengajuan";
+import { Card, PrimaryButton, DeleteButton, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE, inputStyle } from "./ui";
 
 /**
  * Riwayat kronologis (PRD §4.2), digabung dari catatan manusia dan peristiwa
@@ -34,18 +36,20 @@ export function kabarkanRiwayat({ leadId = null, customerId = null }) {
   window.dispatchEvent(new CustomEvent(EVENT_RIWAYAT, { detail: { leadId, customerId } }));
 }
 
-/**
- * @param bisaCatat false menyembunyikan formulir catatan di atas riwayat —
- *   dipakai panel prospek, yang mencatat lewat tombol Catat Follow Up agar
- *   jadwal berikutnya ikut terisi.
- */
-
 /** "YYYY-MM-DD" menurut jam perangkat — pembanding tanggal_followup. */
 function tanggalLokal(nilai) {
   const d = new Date(nilai);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Catatan yang ditulis sistem, bukan manusia — tidak bisa diajukan perubahannya. */
+const CATATAN_SISTEM = ["Prospek dibatalkan", "Prospek dialihkan", "Follow-up dijadwal ulang"];
+
+/**
+ * @param bisaCatat false menyembunyikan formulir catatan di atas riwayat —
+ *   dipakai panel prospek, yang mencatat lewat tombol Catat Follow Up agar
+ *   jadwal berikutnya ikut terisi.
+ */
 export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat Follow Up", bisaCatat = true }) {
   const { profile } = useAuth();
   const toast = useToast();
@@ -56,6 +60,10 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ activity: "", note: "", hasil: "" });
   const [bukti, setBukti] = useState(new Map());
+  const [pengajuan, setPengajuan] = useState(new Map());
+  const [ubahCatatan, setUbahCatatan] = useState(null);
+  const [lamaTerbuka, setLamaTerbuka] = useState(null);
+  const [tinjauId, setTinjauId] = useState(null);
   const [bukaPratinjau, pratinjau] = usePratinjau();
 
   const hasilOptions = useBusinessSettings("hasil_followup");
@@ -64,6 +72,9 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
   // bertanggal dan berbukti (migrasi 024), jadi satu-satunya pintunya adalah
   // Catat Follow Up.
   const mayWrite = customerId ? canWrite(profile, "followup") : false;
+  // Perubahan catatan follow-up prospek diajukan penulisnya (migrasi 025).
+  const bolehAjukan = canWrite(profile, "followup_lead");
+  const bolehPutus = canWrite(profile, "catatan_putus");
 
   const fetchRows = useCallback(async () => {
     if (!leadId && !customerId) return;
@@ -115,6 +126,22 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
       }
     }
     setBukti(peta);
+
+    // Pengajuan perubahan per catatan, terbaru dulu (migrasi 025). Sebelum
+    // migrasinya jalan tabelnya belum ada — riwayat tetap tampil apa adanya.
+    const petaUbah = new Map();
+    if (ids.length) {
+      const { data: ubahan, error: errUbahan } = await supabase
+        .from("lead_activity_edits")
+        .select("id, activity_id, status, alasan_tolak, lama, diajukan_oleh, diputuskan_at, pemutus:profiles!lead_activity_edits_diputuskan_oleh_fkey(full_name)")
+        .in("activity_id", ids)
+        .order("diajukan_at", { ascending: false });
+      for (const e of errUbahan ? [] : ubahan || []) {
+        if (!petaUbah.has(e.activity_id)) petaUbah.set(e.activity_id, []);
+        petaUbah.get(e.activity_id).push(e);
+      }
+    }
+    setPengajuan(petaUbah);
   }, [leadId, customerId]);
 
   useEffect(() => {
@@ -234,6 +261,19 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
         {gabungan.map((row, i) => {
           const Ikon = row.ikon;
           const terakhir = i === gabungan.length - 1;
+          const ubahan = row.manual ? pengajuan.get(row.asli.id) || [] : [];
+          const menunggu = ubahan.find((e) => e.status === "menunggu");
+          const disetujui = ubahan.find((e) => e.status === "disetujui");
+          const ditolakUntukSaya = ubahan[0]?.status === "ditolak" && ubahan[0].diajukan_oleh === profile?.id;
+          // Hanya penulisnya, hanya follow-up prospek, dan bukan catatan sistem.
+          const bisaUbah =
+            row.manual &&
+            bolehAjukan &&
+            !menunggu &&
+            row.asli.lead_id &&
+            !row.asli.customer_id &&
+            row.asli.actor_id === profile?.id &&
+            !CATATAN_SISTEM.includes(row.asli.activity);
           return (
             <div key={row.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: terakhir ? "none" : `1px solid ${BORDER}` }}>
               {/* Rel waktu: satu titik per entri, terbaru di atas. Peristiwa
@@ -278,6 +318,17 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
                       {row.label}
                     </span>
                   )}
+                  {menunggu && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 600, background: ACCENT_SOFT, color: ACCENT_DARK, padding: "3px 9px", borderRadius: 999 }}>
+                      <Clock size={10} aria-hidden="true" />
+                      Perubahan menunggu persetujuan
+                    </span>
+                  )}
+                  {menunggu && bolehPutus && (
+                    <button onClick={() => setTinjauId(menunggu.id)} style={{ ...gayaTautan, color: ACCENT_DARK }}>
+                      Tinjau
+                    </button>
+                  )}
                 </div>
                 {row.isi && (
                   <div style={{ fontSize: 12.5, color: TEXT_MID, marginTop: 3, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{row.isi}</div>
@@ -291,26 +342,76 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
                     : row.mundur
                     ? `${row.aktor} · follow up ${tanggal(row.asli.tanggal_followup)} · dicatat ${tanggalWaktu(row.asli.created_at)}`
                     : `${row.aktor} · ${tanggalWaktu(row.asli.created_at)}`}
+                  {disetujui && (
+                    <>
+                      {` · diubah, disetujui ${disetujui.pemutus?.full_name || "Admin"} ${tanggal(disetujui.diputuskan_at)} · `}
+                      <button
+                        onClick={() => setLamaTerbuka(lamaTerbuka === row.asli.id ? null : row.asli.id)}
+                        style={gayaTautan}
+                        aria-expanded={lamaTerbuka === row.asli.id}
+                      >
+                        {lamaTerbuka === row.asli.id ? "sembunyikan versi lama" : "lihat versi lama"}
+                      </button>
+                    </>
+                  )}
                 </div>
+                {disetujui && lamaTerbuka === row.asli.id && <VersiLama lama={disetujui.lama} />}
+                {ditolakUntukSaya && (
+                  <div style={{ fontSize: 11.5, color: NEGATIVE, marginTop: 5, lineHeight: 1.45 }}>
+                    Pengajuan perubahan ditolak: {ubahan[0].alasan_tolak}
+                  </div>
+                )}
               </div>
 
               {row.manual && (
-                <DeleteButton
-                  ikon
-                  subject="followup_delete"
-                  itemName={row.judul}
-                  onDelete={() => supabase.from("lead_activities").delete().eq("id", row.asli.id)}
-                  onDone={fetchRows}
-                />
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 2, flexShrink: 0 }}>
+                  {bisaUbah && (
+                    <button
+                      onClick={() => setUbahCatatan(row.asli)}
+                      title={bolehPutus ? "Ubah catatan" : "Ajukan perubahan — berlaku setelah disetujui Admin"}
+                      aria-label="Ubah catatan"
+                      style={{ border: "none", background: "none", color: TEXT_MID, cursor: "pointer", padding: 6, lineHeight: 0, borderRadius: 8 }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  <DeleteButton
+                    ikon
+                    subject="followup_delete"
+                    itemName={row.judul}
+                    onDelete={() => supabase.from("lead_activities").delete().eq("id", row.asli.id)}
+                    onDone={fetchRows}
+                  />
+                </div>
               )}
             </div>
           );
         })}
       </div>
       {pratinjau}
+      <AjukanUbahCatatan catatan={ubahCatatan} open={Boolean(ubahCatatan)} onClose={() => setUbahCatatan(null)} onSelesai={fetchRows} />
+      <TinjauPengajuan editId={tinjauId} open={Boolean(tinjauId)} onClose={() => setTinjauId(null)} />
     </Card>
   );
 }
+
+/** Isi catatan sebelum perubahan terakhir yang disetujui. */
+function VersiLama({ lama }) {
+  const l = lama || {};
+  return (
+    <div style={{ marginTop: 7, background: "#F7F9FC", border: `1px dashed ${BORDER}`, borderRadius: 10, padding: "8px 11px", fontSize: 12, color: TEXT_MID, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", marginBottom: 3 }}>VERSI SEBELUMNYA</div>
+      <div>
+        <b style={{ color: TEXT_DARK }}>{l.activity || "-"}</b>
+        {l.hasil ? ` · ${l.hasil}` : ""}
+        {l.tanggal_followup ? ` · follow up ${tanggal(l.tanggal_followup)}` : ""}
+      </div>
+      {l.note && <div style={{ whiteSpace: "pre-wrap", marginTop: 2 }}>{l.note}</div>}
+    </div>
+  );
+}
+
+const gayaTautan = { border: "none", background: "none", padding: 0, color: PRIMARY, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
 
 /** Bukti sebuah catatan follow-up — klik untuk membuka pratinjaunya. */
 function BuktiCatatan({ daftar, judul, onBuka }) {

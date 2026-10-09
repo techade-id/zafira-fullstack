@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { CalendarClock, PanelRight, History, Ban, MessageSquare, Thermometer, ClipboardCheck, ArrowRightLeft } from "lucide-react";
+import { CalendarClock, PanelRight, History, Ban, MessageSquare, Thermometer, ClipboardCheck, ArrowRightLeft, FilePen } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useAuth } from "../context/AuthContext";
@@ -10,6 +10,7 @@ import KontakAksi from "../components/KontakAksi";
 import FollowUpTimeline from "../components/FollowUpTimeline";
 import CatatFollowUpModal from "../components/CatatFollowUpModal";
 import PilihLeadFollowUp from "../components/PilihLeadFollowUp";
+import { EVENT_PENGAJUAN } from "../components/TinjauPengajuan";
 import SaringanAwalModal from "../components/SaringanAwalModal";
 import KonversiBookingModal from "../components/KonversiBookingModal";
 import PanelProspek, { ModalBatal, ModalAlih } from "../components/PanelProspek";
@@ -28,6 +29,7 @@ import {
   TEXT_DARK,
   PRIMARY,
   ACCENT,
+  ACCENT_SOFT,
   ACCENT_DARK,
   NEGATIVE,
 } from "../components/ui";
@@ -82,6 +84,7 @@ export default function FollowUpPage() {
   const [leads, setLeads] = useState([]);
   const [aktivitas, setAktivitas] = useState(new Map());
   const [terkonversi, setTerkonversi] = useState(new Map());
+  const [pengajuan, setPengajuan] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [saringan, setSaringan] = useState("hari_ini");
 
@@ -94,6 +97,25 @@ export default function FollowUpPage() {
   const [pilihBuka, setPilihBuka] = useState(false);
 
   const mayWrite = canWrite(profile, "followup_lead");
+  const bolehPutus = canWrite(profile, "catatan_putus");
+
+  /**
+   * Prospek yang punya pengajuan perubahan catatan menunggu (migrasi 025),
+   * supaya terlihat langsung dari antrean — bukan baru ketahuan setelah
+   * riwayatnya dibuka satu per satu. Sebelum migrasinya jalan, peta kosong.
+   */
+  async function muatPengajuan() {
+    const { data, error } = await supabase.from("lead_activity_edits").select("lead_id").eq("status", "menunggu");
+    const peta = new Map();
+    for (const e of error ? [] : data || []) peta.set(e.lead_id, (peta.get(e.lead_id) || 0) + 1);
+    setPengajuan(peta);
+  }
+
+  useEffect(() => {
+    muatPengajuan();
+    window.addEventListener(EVENT_PENGAJUAN, muatPengajuan);
+    return () => window.removeEventListener(EVENT_PENGAJUAN, muatPengajuan);
+  }, []);
 
   async function muat() {
     setLoading(true);
@@ -171,14 +193,21 @@ export default function FollowUpPage() {
     [leads, aktivitas]
   );
 
+  // Pengajuan terakhir sudah diputuskan: tombol saringannya hilang, jadi
+  // jangan tinggalkan tabel kosong di saringan yang tidak lagi terlihat.
+  useEffect(() => {
+    if (saringan === "pengajuan" && pengajuan.size === 0) setSaringan("semua");
+  }, [saringan, pengajuan]);
+
   const tersaring = useMemo(() => {
+    if (saringan === "pengajuan") return baris.filter((r) => pengajuan.has(r.id));
     if (saringan === "selesai") return baris.filter((r) => !r.aktif);
     const aktif = baris.filter((r) => r.aktif && r.sudah_fu);
     if (saringan === "semua") return aktif;
     if (saringan === "belum_dijadwalkan") return aktif.filter((r) => !r.tanggal_rencana);
     if (saringan === "terlewat") return aktif.filter((r) => r.sisa_hari !== null && r.sisa_hari < 0);
     return aktif.filter((r) => r.sisa_hari !== null && r.sisa_hari <= 0);
-  }, [baris, saringan]);
+  }, [baris, saringan, pengajuan]);
 
   // Kolam lead yang belum pernah di-follow up — isi daftar "+ Follow Up Lead".
   const belumFu = useMemo(
@@ -253,7 +282,8 @@ export default function FollowUpPage() {
       <Card style={{ padding: 14, marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: TEXT_MID, marginRight: 2 }}>Tampilkan</span>
-          {SARINGAN.map((s) => (
+          {/* Saringan khusus penyetuju, dan hanya bila ada yang perlu diputuskan. */}
+          {[...SARINGAN, ...(bolehPutus && pengajuan.size > 0 ? [{ kunci: "pengajuan", label: `Ada pengajuan · ${pengajuan.size}` }] : [])].map((s) => (
             <button
               key={s.kunci}
               onClick={() => setSaringan(s.kunci)}
@@ -294,7 +324,24 @@ export default function FollowUpPage() {
                 : "Antrean kosong berarti setiap prospek yang sedang di-follow up sudah punya jadwal di masa depan."
           }
           columns={[
-            { key: "name", label: "Nama / Username" },
+            {
+              key: "name",
+              label: "Nama / Username",
+              render: (row) => (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                  {row.name}
+                  {pengajuan.has(row.id) && (
+                    <span
+                      title={`${pengajuan.get(row.id)} perubahan catatan menunggu persetujuan Admin`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, background: ACCENT_SOFT, color: ACCENT_DARK, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}
+                    >
+                      <FilePen size={10} aria-hidden="true" />
+                      Pengajuan
+                    </span>
+                  )}
+                </span>
+              ),
+            },
             {
               key: "phone",
               label: "Kontak",

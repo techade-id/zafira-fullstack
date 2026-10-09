@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import FokusHariIni from "../components/FokusHariIni";
+import FokusHariIni, { BannerPersetujuan } from "../components/FokusHariIni";
 import FilterPeriode, { rangeToDates, labelRange } from "../components/FilterPeriode";
 import { Card, BarChart, TEXT_MID, TEXT_DARK, BORDER_SOFT, POSITIVE, NEGATIVE } from "../components/ui";
 
@@ -177,7 +177,9 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Pekerjaan lebih dulu, angka menyusul. */}
+      {/* Pekerjaan lebih dulu, angka menyusul — dan yang membuat orang lain
+          menunggu lebih dulu lagi. */}
+      <BannerPersetujuan />
       <FokusHariIni />
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 4 }}>

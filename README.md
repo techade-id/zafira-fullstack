@@ -128,6 +128,24 @@ every KPR stage, and a waiting-for-Finance phase on every payment.
      fills the Saringan Awal survey date and files its photos under `survei`.
      Status rules now read the follow-up date. Run it **before** deploying the
      matching frontend — the Catat Follow Up dialog calls the new RPC.
+   - **`migration_025_ubah_catatan.sql`** — editing a follow-up note needs
+     Admin approval. Authors can no longer update `lead_activities` directly
+     (only Admin can); they call `ajukan_ubah_catatan()`, which stores the
+     proposal in `lead_activity_edits` with a snapshot of the old note, and
+     Admin Sistem decides with `putuskan_ubah_catatan()`. Extra proof files wait
+     on `berkas_lampiran.edit_id` until approved. Admin's own edits apply at
+     once but are still logged. `my_notifications()` gains `persetujuan` (for
+     Admin) and `catatan_ditolak` (for the requester). It redefines
+     `my_notifications()` again, so re-running 022 later means re-running 025.
+   - **`migration_026_notifikasi_persetujuan.sql`** — makes pending note-edit
+     requests findable. `my_notifications()` used to cut the bell list at the
+     30 oldest rows across all categories, so Admin (who sees everything)
+     never saw the newest category; it now keeps at most five rows per
+     category, pins `persetujuan` to the top, adds `catatan_disetujui` for the
+     requester and fixes the `catatan_ditolak` route. It also adds
+     `lead_activity_edits` to the `supabase_realtime` publication for the
+     live pop-ups, and the `app_settings.notif_realtime` switch (Pengaturan
+     Bisnis → Notifikasi) that turns them off.
 
    Re-run `supabase/storage.sql` after 008 **and after 017**: it creates the
    `payment-receipts`, `payment-proofs` and `berkas-lampiran` buckets and

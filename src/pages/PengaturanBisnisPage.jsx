@@ -4,6 +4,7 @@ import { useToast } from "../context/ToastContext";
 import { TEMPLATE_BAWAAN, isiPenanda } from "../lib/waTemplates";
 import { labelTahap } from "../lib/format";
 import SyaratBerkasPanel from "../components/SyaratBerkasPanel";
+import { EVENT_PENGATURAN_NOTIF } from "../components/PopupPengajuan";
 import { Card, PageTitle, SectionTitle, PrimaryButton, DataTable, Badge, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, POSITIVE, ReadOnlyBanner } from "../components/ui";
 
 /** Urutan tahap pada panel template WhatsApp — mengikuti alur funnel. */
@@ -279,6 +280,29 @@ export default function PengaturanBisnisPage() {
         <div style={{ fontSize: 11, color: TEXT_MID, lineHeight: 1.55 }}>
           Hold menahan satu kavling untuk satu prospek sampai batas waktu ini, lalu terlepas otomatis. Batas jumlah mencegah satu orang menahan banyak kavling sekaligus (0 = tanpa batas; Admin tidak dibatasi). Hanya Admin dan Admin Marketing yang dapat melepas hold orang lain atau memperpanjangnya.
         </div>
+      </Card>
+
+      {/* Migrasi 026. Baris yang belum ada dibaca sebagai menyala. */}
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle title="Notifikasi" />
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, cursor: "pointer", marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={appSettings.notif_realtime !== "false"}
+            onChange={(e) => {
+              saveAppSetting("notif_realtime", e.target.checked);
+              window.dispatchEvent(new CustomEvent(EVENT_PENGATURAN_NOTIF, { detail: e.target.checked }));
+            }}
+            style={{ marginTop: 2 }}
+          />
+          <span>
+            Pop-up langsung untuk pengajuan perubahan catatan
+            <span style={{ display: "block", fontSize: 11.5, color: TEXT_MID, marginTop: 3, lineHeight: 1.5 }}>
+              Admin Sistem langsung mendapat pop-up saat Sales mengajukan perubahan catatan, dan Sales saat pengajuannya disetujui atau
+              ditolak. Bila dimatikan, kabarnya tetap muncul di lonceng, yang menyegarkan diri setiap menit. Berlaku untuk semua pengguna.
+            </span>
+          </span>
+        </label>
       </Card>
 
       <Card style={{ marginBottom: 18 }}>
