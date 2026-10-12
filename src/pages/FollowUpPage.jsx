@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { CalendarClock, PanelRight, History, Ban, MessageSquare, Thermometer, ClipboardCheck, ArrowRightLeft, FilePen } from "lucide-react";
+import { CalendarClock, PanelRight, Ban, MessageSquare, Thermometer, ClipboardCheck, ArrowRightLeft, FilePen, MapPin, ShieldCheck, UserPlus } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useAuth } from "../context/AuthContext";
 import { canWrite } from "../lib/permissions";
 import { tanggal, tanggalRelatif, labelTahap, selisihHari } from "../lib/format";
 import KontakAksi from "../components/KontakAksi";
-import FollowUpTimeline from "../components/FollowUpTimeline";
 import CatatFollowUpModal from "../components/CatatFollowUpModal";
+import SurveiModal from "../components/SurveiModal";
+import BiCheckingModal from "../components/BiCheckingModal";
 import PilihLeadFollowUp from "../components/PilihLeadFollowUp";
 import { EVENT_PENGAJUAN } from "../components/TinjauPengajuan";
-import SaringanAwalModal from "../components/SaringanAwalModal";
 import KonversiBookingModal from "../components/KonversiBookingModal";
 import PanelProspek, { ModalBatal, ModalAlih } from "../components/PanelProspek";
 import {
@@ -28,40 +28,41 @@ import {
   TEXT_MID,
   TEXT_DARK,
   PRIMARY,
+  PRIMARY_SOFT,
   ACCENT,
   ACCENT_SOFT,
   ACCENT_DARK,
   NEGATIVE,
+  POSITIVE,
 } from "../components/ui";
 
 /**
- * Follow Up Leads — menu tersendiri, terpisah dari input prospek.
+ * Follow Up Leads — tempat proses berlangsung.
  *
- * BRIEF §Leads: "Meminta pemisahan menu input antara 'Leads' murni dari menu
- * 'Follow Up Leads'."
+ * Leads hanya menyimpan data mentah; di sinilah setiap prospek naik level,
+ * mengikuti alur klien:
  *
- * Pemisahannya bukan sekadar kerapian menu. Keduanya adalah dua pekerjaan yang
- * berbeda bentuknya: memasukkan prospek adalah mengetik data baru, satu orang
- * satu kali; menindaklanjuti adalah menyisir antrean — puluhan orang, masing-
- * masing beberapa detik, dan yang dicari selalu sama, yaitu siapa yang harus
- * dihubungi hari ini. Satu halaman yang melayani keduanya akan selalu salah
- * untuk salah satunya.
+ *   Leads masuk → Chat (follow up) → Survei → BI Checking → Booking
  *
- * Karena itu halaman ini tidak punya formulir sama sekali. Ia sebuah antrean.
+ * Kolom Progres membaca level itu langsung dari data — hasil chat terakhir,
+ * lalu "Sudah Survei", lalu hasil BI Checking — sehingga saringan awal tidak
+ * perlu kolom sendiri. Status Warm/Hot/Cold tetap ditentukan sistem dari
+ * riwayat follow-up.
  *
- * Sejak Leads menjadi data mentah saja, seluruh aksi atas prospek tinggal di
- * sini: catat follow-up, survei & BI-Checking, booking, alihkan, batalkan.
- * Semuanya pekerjaan Sales — Admin Marketing melihat antrean ini tetapi tidak
- * menambahkan apa pun (migrasi 023); bagiannya adalah memverifikasi berkas.
+ * Setiap langkah punya jendelanya sendiri (menu titik tiga): Chat Follow Up
+ * (catatan + riwayat chat), Survei (tanggal, foto, catatan), BI Checking (KTP,
+ * hasil, Lolos/Tidak Lolos), dan Konversi ke Booking. Semuanya pekerjaan Sales —
+ * Admin Marketing melihat antrean ini tetapi tidak menambahkan apa pun
+ * (migrasi 023).
  *
- * Antreannya hanya berisi prospek yang sudah pernah di-follow up. Lead yang
- * belum disentuh tetap tinggal di Leads, dan diambil dari sana lewat tombol
- * "+ Follow Up Lead" — follow-up pertamanya yang memindahkannya ke sini.
+ * Lead yang belum pernah disentuh terlihat lewat saringan "Belum di-follow
+ * up"; follow-up pertamanya yang memindahkannya ke antrean aktif.
  */
 
 const SARINGAN = [
   { kunci: "hari_ini", label: "Jatuh tempo hari ini" },
   { kunci: "terlewat", label: "Terlewat" },
+  { kunci: "belum_fu", label: "Belum di-follow up" },
   { kunci: "belum_dijadwalkan", label: "Belum dijadwalkan" },
   { kunci: "semua", label: "Semua aktif" },
   { kunci: "selesai", label: "Selesai (Booking/Batal)" },
@@ -72,9 +73,43 @@ const TAHAP_AKTIF = ["leads", "baru", "cold", "warm", "hot", "dihubungi", "appoi
 /**
  * Catatan yang bukan hasil menghubungi prospek: pengalihan antaragen dan
  * pemindahan jadwal. Lead yang hanya punya catatan seperti ini masih belum
- * di-follow up, dan "Kontak Terakhir"-nya tidak ikut bergeser.
+ * di-follow up.
  */
 const BUKAN_KONTAK = ["Prospek dialihkan", "Follow-up dijadwal ulang"];
+
+/** Catatan yang mewakili langkahnya sendiri, bukan isi chat. */
+const BUKAN_CHAT = [...BUKAN_KONTAK, "Survei Lokasi", "BI Checking"];
+
+/** Baris pertama catatan, tanpa "Rencana: …" yang ditambahkan catat_followup(). */
+function ringkasCatatan(note) {
+  const baris = String(note || "")
+    .split("\n")
+    .map((b) => b.trim())
+    .filter((b) => b && !b.startsWith("Rencana:"));
+  return baris[0] || "";
+}
+
+/**
+ * Level progres satu prospek. Yang lebih tinggi menang: prospek yang sudah
+ * BI Checking tidak lagi ditampilkan sebagai "Sudah Survei", meski benar.
+ */
+function bacaProgres(row) {
+  if (!row.aktif) return { level: -1, label: labelTahap(row.status), nada: "redup" };
+  if (row.bi_checking_status === "lolos") return { level: 4, label: "BI Checking · Lolos", nada: "positif" };
+  if (row.bi_checking_status === "tidak_lolos") return { level: 4, label: "BI Checking · Tidak Lolos", nada: "negatif" };
+  if (row.bi_checking_status === "menunggu") return { level: 3, label: "BI Checking · Menunggu hasil", nada: "aksen" };
+  if (row.tanggal_survei) return { level: 2, label: "Sudah Survei", nada: "primer" };
+  if (row.chat_terakhir) return { level: 1, label: row.chat_terakhir, nada: "netral" };
+  if (row.sudah_fu) return { level: 1, label: "Sudah di-follow up", nada: "netral" };
+  return { level: 0, label: "Belum di-follow up", nada: "aksen" };
+}
+
+const WARNA_NADA = {
+  positif: { bg: "#E4F2E8", fg: POSITIVE },
+  negatif: { bg: "#FBE9E8", fg: NEGATIVE },
+  aksen: { bg: ACCENT_SOFT, fg: ACCENT_DARK },
+  primer: { bg: PRIMARY_SOFT, fg: PRIMARY },
+};
 
 export default function FollowUpPage() {
   const { profile } = useAuth();
@@ -83,17 +118,26 @@ export default function FollowUpPage() {
 
   const [leads, setLeads] = useState([]);
   const [aktivitas, setAktivitas] = useState(new Map());
+  const [chat, setChat] = useState(new Map());
   const [terkonversi, setTerkonversi] = useState(new Map());
   const [pengajuan, setPengajuan] = useState(new Map());
   const [loading, setLoading] = useState(true);
-  const [saringan, setSaringan] = useState("hari_ini");
+  // Lonceng dan pengingat jadwal terlewat membuka halaman ini lewat
+  // ?saringan=terlewat — langsung ke daftar yang dimaksud.
+  const [saringan, setSaringan] = useState(() => (SARINGAN.some((s) => s.kunci === params.get("saringan")) ? params.get("saringan") : "hari_ini"));
+
+  // Sudah di halaman ini lalu datang lagi dari lonceng atau pengingat.
+  const saringanUrl = params.get("saringan");
+  useEffect(() => {
+    if (SARINGAN.some((s) => s.kunci === saringanUrl)) setSaringan(saringanUrl);
+  }, [saringanUrl]);
 
   const [fuLead, setFuLead] = useState(null);
-  const [saringLead, setSaringLead] = useState(null);
+  const [surveiLead, setSurveiLead] = useState(null);
+  const [biLead, setBiLead] = useState(null);
   const [konversiLead, setKonversiLead] = useState(null);
   const [panelLead, setPanelLead] = useState(null);
   const [panelAksi, setPanelAksi] = useState(null);
-  const [riwayatId, setRiwayatId] = useState(null);
   const [pilihBuka, setPilihBuka] = useState(false);
 
   const mayWrite = canWrite(profile, "followup_lead");
@@ -101,8 +145,7 @@ export default function FollowUpPage() {
 
   /**
    * Prospek yang punya pengajuan perubahan catatan menunggu (migrasi 025),
-   * supaya terlihat langsung dari antrean — bukan baru ketahuan setelah
-   * riwayatnya dibuka satu per satu. Sebelum migrasinya jalan, peta kosong.
+   * supaya terlihat langsung dari antrean. Sebelum migrasinya jalan, peta kosong.
    */
   async function muatPengajuan() {
     const { data, error } = await supabase.from("lead_activity_edits").select("lead_id").eq("status", "menunggu");
@@ -125,9 +168,6 @@ export default function FollowUpPage() {
     // dibuka, karena di sinilah hasilnya akan dibaca.
     await supabase.rpc("refresh_lead_temperature");
 
-    // Seluruh prospek dari Leads, bukan hanya yang aktif: yang sudah booking
-    // atau batal tetap harus bisa ditemukan di saringan Selesai, karena di
-    // halaman Leads tahapnya tidak lagi ditampilkan.
     const [{ data, error }, custRes] = await Promise.all([
       fetchAllRows(() => supabase.from("leads").select("*").order("tanggal_rencana", { ascending: true, nullsFirst: false })),
       supabase.from("customers").select("id, lead_id").not("lead_id", "is", null),
@@ -138,34 +178,31 @@ export default function FollowUpPage() {
     setTerkonversi(new Map((custRes.data || []).map((c) => [c.lead_id, c.id])));
     const daftar = semua.filter((l) => TAHAP_AKTIF.includes(l.status));
 
-    // Kontak terakhir per prospek: kolom yang paling sering ditanyakan di
-    // antrean ini, dan satu-satunya yang tidak ada di tabel leads.
-    //
-    // Disaring pada prospek yang benar-benar tampil, bukan diambil seribu baris
-    // terbaru lalu disortir di sini. Seribu baris terbaru bisa habis oleh
-    // segelintir prospek yang sangat aktif, dan sisanya akan tertulis "belum
-    // pernah" padahal riwayatnya ada — kesalahan yang tidak mungkin dikenali
-    // dari layar.
-    const peta = new Map();
+    // Kontak terakhir dan chat terakhir per prospek — disaring pada prospek
+    // yang benar-benar tampil, supaya segelintir prospek yang sangat aktif
+    // tidak menghabiskan seluruh jatah baris.
+    const petaKontak = new Map();
+    const petaChat = new Map();
     if (daftar.length > 0) {
       const ids = daftar.map((l) => l.id);
       const { data: akt } = await fetchAllRows(() =>
         supabase
           .from("lead_activities")
-          .select("lead_id, tanggal_followup, created_at, hasil, activity")
+          .select("lead_id, tanggal_followup, created_at, hasil, activity, note")
           .in("lead_id", ids)
           // Menurut kapan prospek dihubungi, bukan kapan catatannya diketik
-          // (migrasi 024) — follow-up yang dicatat mundur tidak boleh tampil
-          // sebagai kontak terbaru.
+          // (migrasi 024).
           .order("tanggal_followup", { ascending: false })
           .order("created_at", { ascending: false })
       );
       for (const a of akt || []) {
         if (BUKAN_KONTAK.includes(a.activity)) continue;
-        if (!peta.has(a.lead_id)) peta.set(a.lead_id, a);
+        if (!petaKontak.has(a.lead_id)) petaKontak.set(a.lead_id, a);
+        if (!BUKAN_CHAT.includes(a.activity) && !petaChat.has(a.lead_id)) petaChat.set(a.lead_id, a);
       }
     }
-    setAktivitas(peta);
+    setAktivitas(petaKontak);
+    setChat(petaChat);
     setLoading(false);
   }
 
@@ -177,20 +214,23 @@ export default function FollowUpPage() {
     () =>
       leads.map((l) => {
         const terakhir = aktivitas.get(l.id);
+        const c = chat.get(l.id);
         const aktif = TAHAP_AKTIF.includes(l.status);
         // Jadwal prospek yang sudah selesai bukan lagi utang pekerjaan.
         const sisa = aktif && l.tanggal_rencana ? selisihHari(l.tanggal_rencana) : null;
-        return {
+        const r = {
           ...l,
           aktif,
           sudah_fu: Boolean(terakhir),
           kontak_terakhir: terakhir ? terakhir.tanggal_followup || terakhir.created_at : null,
-          hasil_terakhir: terakhir?.hasil || null,
+          chat_terakhir: c ? c.hasil || ringkasCatatan(c.note) || c.activity : null,
+          chat_lengkap: c ? [c.activity, c.hasil, ringkasCatatan(c.note)].filter(Boolean).join(" · ") : null,
           sisa_hari: sisa,
           diam_hari: terakhir ? -selisihHari(terakhir.tanggal_followup || terakhir.created_at) : null,
         };
+        return { ...r, progres: bacaProgres(r) };
       }),
-    [leads, aktivitas]
+    [leads, aktivitas, chat]
   );
 
   // Pengajuan terakhir sudah diputuskan: tombol saringannya hilang, jadi
@@ -202,6 +242,7 @@ export default function FollowUpPage() {
   const tersaring = useMemo(() => {
     if (saringan === "pengajuan") return baris.filter((r) => pengajuan.has(r.id));
     if (saringan === "selesai") return baris.filter((r) => !r.aktif);
+    if (saringan === "belum_fu") return baris.filter((r) => r.aktif && !r.sudah_fu);
     const aktif = baris.filter((r) => r.aktif && r.sudah_fu);
     if (saringan === "semua") return aktif;
     if (saringan === "belum_dijadwalkan") return aktif.filter((r) => !r.tanggal_rencana);
@@ -220,16 +261,16 @@ export default function FollowUpPage() {
     return {
       terlewat: aktif.filter((r) => r.sisa_hari !== null && r.sisa_hari < 0).length,
       hari_ini: aktif.filter((r) => r.sisa_hari === 0).length,
-      belum: aktif.filter((r) => !r.tanggal_rencana).length,
+      belum_dijadwalkan: aktif.filter((r) => !r.tanggal_rencana).length,
       panas: aktif.filter((r) => r.status === "hot").length,
     };
   }, [baris]);
 
+  const angkaSaringan = { terlewat: hitung.terlewat, belum_fu: belumFu.length, belum_dijadwalkan: hitung.belum_dijadwalkan };
+
   // Datang dari Leads ("Tindak lanjuti di Follow Up Leads"). Lead yang belum
-  // pernah di-follow up belum punya baris di antrean, jadi Catat Follow Up
-  // langsung terbuka untuknya. Selebihnya panel prospek terbuka, dengan
-  // saringan yang memang memuat barisnya — jika tidak, sorotan tabel tidak
-  // akan menemukan apa pun.
+  // pernah di-follow up langsung dibukakan Chat Follow Up. Selebihnya panel
+  // prospek terbuka, dengan saringan yang memang memuat barisnya.
   const sorotId = params.get("sorot");
   const sudahSorot = useRef(false);
   useEffect(() => {
@@ -238,6 +279,7 @@ export default function FollowUpPage() {
     const lead = baris.find((l) => l.id === sorotId);
     if (!lead) return;
     if (lead.aktif && !lead.sudah_fu) {
+      setSaringan("belum_fu");
       if (mayWrite) setFuLead(lead);
       else setPanelLead(lead);
       return;
@@ -246,16 +288,22 @@ export default function FollowUpPage() {
     setPanelLead(lead);
   }, [sorotId, loading, baris]);
 
-  const riwayatLead = baris.find((l) => l.id === riwayatId) || null;
-  // Panel membaca baris terbaru: setelah Catat Follow Up, status dan jadwalnya
-  // harus langsung berubah di panel yang masih terbuka.
+  // Panel membaca baris terbaru: setelah sebuah langkah tersimpan, status dan
+  // progresnya harus langsung berubah di panel yang masih terbuka.
   const panelSegar = panelLead ? baris.find((l) => l.id === panelLead.id) || panelLead : null;
+
+  /** Survei dan Cancel dipilih dari dalam Chat Follow Up: jendelanya berganti. */
+  function pindahDariChat(lead, langkah) {
+    setFuLead(null);
+    if (langkah === "survei") setSurveiLead(lead);
+    if (langkah === "batal") setPanelAksi({ lead, aksi: "batal" });
+  }
 
   return (
     <div>
       <PageTitle
         title="Follow Up Leads"
-        subtitle="Prospek yang sedang diproses — lead dari menu Leads masuk ke sini setelah follow-up pertamanya"
+        subtitle="Leads → Chat → Survei → BI Checking → Booking. Status Warm/Hot/Cold dibaca sistem dari riwayat follow-up."
         action={
           mayWrite && (
             <PrimaryButton onClick={() => setPilihBuka(true)} title="Pilih lead yang belum pernah di-follow up">
@@ -275,32 +323,38 @@ export default function FollowUpPage() {
       <div className="rg-4" style={{ marginBottom: 16 }}>
         <StatCard icon={CalendarClock} label="Terlewat" value={hitung.terlewat} sub="perlu dikejar hari ini" />
         <StatCard icon={MessageSquare} label="Jatuh Tempo Hari Ini" value={hitung.hari_ini} />
+        <StatCard icon={UserPlus} label="Belum Di-follow Up" value={belumFu.length} sub="lead baru dari menu Leads" />
         <StatCard icon={Thermometer} label="Hot Lead" value={hitung.panas} sub="dibaca dari progres interaksi" />
-        <StatCard icon={ClipboardCheck} label="Belum Dijadwalkan" value={hitung.belum} sub="tidak akan muncul di lonceng" />
       </div>
 
       <Card style={{ padding: 14, marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: TEXT_MID, marginRight: 2 }}>Tampilkan</span>
           {/* Saringan khusus penyetuju, dan hanya bila ada yang perlu diputuskan. */}
-          {[...SARINGAN, ...(bolehPutus && pengajuan.size > 0 ? [{ kunci: "pengajuan", label: `Ada pengajuan · ${pengajuan.size}` }] : [])].map((s) => (
-            <button
-              key={s.kunci}
-              onClick={() => setSaringan(s.kunci)}
-              style={{
-                padding: "7px 14px",
-                borderRadius: 999,
-                border: `1px solid ${saringan === s.kunci ? PRIMARY : BORDER}`,
-                background: saringan === s.kunci ? PRIMARY : "#fff",
-                color: saringan === s.kunci ? "#fff" : TEXT_MID,
-                fontSize: 12.5,
-                fontWeight: saringan === s.kunci ? 600 : 500,
-                cursor: "pointer",
-              }}
-            >
-              {s.label}
-            </button>
-          ))}
+          {[...SARINGAN, ...(bolehPutus && pengajuan.size > 0 ? [{ kunci: "pengajuan", label: `Ada pengajuan · ${pengajuan.size}` }] : [])].map((s) => {
+            const aktif = saringan === s.kunci;
+            const angka = angkaSaringan[s.kunci];
+            return (
+              <button
+                key={s.kunci}
+                onClick={() => setSaringan(s.kunci)}
+                aria-pressed={aktif}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: 999,
+                  border: `1px solid ${aktif ? PRIMARY : BORDER}`,
+                  background: aktif ? PRIMARY : "#fff",
+                  color: aktif ? "#fff" : TEXT_MID,
+                  fontSize: 12.5,
+                  fontWeight: aktif ? 600 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {s.label}
+                {angka > 0 ? ` · ${angka}` : ""}
+              </button>
+            );
+          })}
         </div>
       </Card>
 
@@ -309,19 +363,27 @@ export default function FollowUpPage() {
           loading={loading}
           sortable
           searchable
-          searchPlaceholder="Cari prospek — nama, telepon, rencana…"
-          searchExtra={(row) => [row.notes, row.rencana_selanjutnya, row.hasil_terakhir].filter(Boolean).join(" ")}
+          searchPlaceholder="Cari prospek — nama, telepon, isi chat…"
+          searchExtra={(row) => [row.notes, row.rencana_selanjutnya, row.chat_lengkap, row.unit_diminati, row.progres.label].filter(Boolean).join(" ")}
           highlightId={params.get("sorot") || undefined}
           onRowClick={(row) => setPanelLead(row)}
           pageSize={25}
           emptyIcon={CalendarClock}
-          emptyLabel={saringan === "selesai" ? "Belum ada prospek yang selesai" : "Tidak ada yang perlu ditindaklanjuti"}
+          emptyLabel={
+            saringan === "selesai"
+              ? "Belum ada prospek yang selesai"
+              : saringan === "belum_fu"
+              ? "Semua lead sudah di-follow up"
+              : "Tidak ada yang perlu ditindaklanjuti"
+          }
           emptyHint={
             saringan === "selesai"
               ? "Prospek yang sudah booking atau dibatalkan akan muncul di sini."
+              : saringan === "belum_fu"
+              ? "Lead baru dari menu Leads akan muncul di sini sampai follow-up pertamanya dicatat."
               : saringan === "semua"
-                ? "Belum ada prospek yang sedang di-follow up. Mulai dengan tombol + Follow Up Lead."
-                : "Antrean kosong berarti setiap prospek yang sedang di-follow up sudah punya jadwal di masa depan."
+              ? "Belum ada prospek yang sedang di-follow up. Mulai dari saringan Belum di-follow up."
+              : "Antrean kosong berarti setiap prospek yang sedang di-follow up sudah punya jadwal di masa depan."
           }
           columns={[
             {
@@ -332,7 +394,7 @@ export default function FollowUpPage() {
                   {row.name}
                   {pengajuan.has(row.id) && (
                     <span
-                      title={`${pengajuan.get(row.id)} perubahan catatan menunggu persetujuan Admin`}
+                      title={`${pengajuan.get(row.id)} pengajuan catatan menunggu persetujuan Admin`}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, background: ACCENT_SOFT, color: ACCENT_DARK, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}
                     >
                       <FilePen size={10} aria-hidden="true" />
@@ -351,8 +413,7 @@ export default function FollowUpPage() {
             {
               key: "status",
               label: "Status",
-              // Dibaca, bukan dipilih. Sebuah dropdown di sini akan
-              // mengembalikan persis kesalahan yang brief minta dihilangkan.
+              // Dibaca, bukan dipilih: suhu ditentukan sistem dari riwayat.
               render: (row) => (
                 <span title="Ditentukan sistem dari riwayat follow-up">
                   <Badge value={row.status} label={labelTahap(row.status)} />
@@ -360,6 +421,14 @@ export default function FollowUpPage() {
               ),
             },
             {
+              key: "progres",
+              label: "Progres",
+              sortValue: (row) => row.progres.level,
+              render: (row) => <SelProgres row={row} />,
+            },
+            {
+              // Paling kanan, tepat di samping aksinya: yang dibaca terakhir
+              // sebelum menekan Chat Follow Up adalah kapan seharusnya.
               key: "tanggal_rencana",
               label: "Jadwal",
               render: (row) =>
@@ -373,43 +442,8 @@ export default function FollowUpPage() {
                     {tanggalRelatif(row.tanggal_rencana)}
                   </span>
                 ) : (
-                  <span style={{ fontSize: 12, color: ACCENT_DARK, fontWeight: 600 }}>belum dijadwalkan</span>
+                  <span style={{ fontSize: 12, color: ACCENT_DARK, fontWeight: 600, whiteSpace: "nowrap" }}>belum dijadwalkan</span>
                 ),
-            },
-            {
-              key: "kontak_terakhir",
-              label: "Kontak Terakhir",
-              render: (row) =>
-                // Kontak terakhir hanya dimuat untuk prospek aktif; yang sudah
-                // selesai tidak boleh tertulis "belum pernah".
-                !row.aktif ? (
-                  <span style={{ fontSize: 12, color: TEXT_MID }}>-</span>
-                ) : row.kontak_terakhir ? (
-                  <span style={{ fontSize: 12, color: row.diam_hari > 14 ? NEGATIVE : TEXT_MID, whiteSpace: "nowrap" }}>
-                    {tanggal(row.kontak_terakhir)}
-                    {row.diam_hari != null && ` · ${row.diam_hari} hr`}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 12, color: TEXT_MID }}>belum pernah</span>
-                ),
-            },
-            { key: "hasil_terakhir", label: "Hasil Terakhir", render: (row) => row.hasil_terakhir || "-" },
-            {
-              key: "saringan",
-              label: "Saringan Awal",
-              sortable: false,
-              // Survei dan BI-Checking sebelum booking (BRIEF §Progres KPR).
-              // Ditampilkan di antrean ini karena di sinilah keputusannya lahir.
-              render: (row) => (
-                <span style={{ display: "inline-flex", gap: 5, whiteSpace: "nowrap" }}>
-                  <Tanda aktif={Boolean(row.tanggal_survei)} label="Survei" />
-                  <Tanda
-                    aktif={row.bi_checking_status === "lolos"}
-                    gagal={row.bi_checking_status === "tidak_lolos"}
-                    label="BI"
-                  />
-                </span>
-              ),
             },
             {
               key: "aksi",
@@ -421,8 +455,8 @@ export default function FollowUpPage() {
                 return (
                   <RowActions>
                     {bisaAksi ? (
-                      <button onClick={() => setFuLead(row)} style={gayaUtama} title="Catat hasil follow-up dan jadwalkan langkah berikutnya">
-                        Catat Follow Up
+                      <button onClick={() => setFuLead(row)} style={gayaUtama} title="Riwayat chat dan catat follow-up berikutnya">
+                        Chat Follow Up
                       </button>
                     ) : konsumenId ? (
                       <button onClick={() => navigate(`/konsumen/${konsumenId}`)} style={gayaKecil}>
@@ -432,11 +466,12 @@ export default function FollowUpPage() {
                     <MenuAksi
                       items={[
                         { label: "Buka panel", ikon: PanelRight, onClick: () => setPanelLead(row) },
-                        { label: "Riwayat komunikasi", ikon: History, onClick: () => setRiwayatId(riwayatId === row.id ? null : row.id) },
-                        bisaAksi && { label: "Survei & BI-Checking", ikon: ClipboardCheck, onClick: () => setSaringLead(row) },
-                        bisaAksi && !konsumenId && { label: "Konversi ke Booking", ikon: ClipboardCheck, onClick: () => setKonversiLead(row) },
-                        bisaAksi && { label: "Alihkan ke agen lain", ikon: ArrowRightLeft, onClick: () => setPanelAksi({ lead: row, aksi: "alih" }) },
-                        bisaAksi && { label: "Batalkan prospek", ikon: Ban, onClick: () => setPanelAksi({ lead: row, aksi: "batal" }), pisah: true, rusak: true },
+                        bisaAksi && { label: "Chat Follow Up", ikon: MessageSquare, onClick: () => setFuLead(row) },
+                        bisaAksi && { label: "Survei", ikon: MapPin, onClick: () => setSurveiLead(row) },
+                        bisaAksi && { label: "BI Checking", ikon: ShieldCheck, onClick: () => setBiLead(row) },
+                        bisaAksi && !konsumenId && { label: "Konversi ke Booking", ikon: ClipboardCheck, onClick: () => setKonversiLead(row), pisah: true },
+                        bisaAksi && { label: "Alihkan ke agen lain", ikon: ArrowRightLeft, onClick: () => setPanelAksi({ lead: row, aksi: "alih" }), pisah: true },
+                        bisaAksi && { label: "Batalkan prospek", ikon: Ban, onClick: () => setPanelAksi({ lead: row, aksi: "batal" }), rusak: true },
                       ]}
                     />
                   </RowActions>
@@ -447,8 +482,6 @@ export default function FollowUpPage() {
           rows={tersaring}
         />
       </Card>
-
-      {riwayatLead && <FollowUpTimeline leadId={riwayatLead.id} title={`Riwayat Komunikasi — ${riwayatLead.name}`} />}
 
       <PilihLeadFollowUp
         open={pilihBuka}
@@ -464,6 +497,7 @@ export default function FollowUpPage() {
         lead={fuLead}
         open={Boolean(fuLead)}
         onClose={() => setFuLead(null)}
+        onPindah={(langkah) => pindahDariChat(fuLead, langkah)}
         onSelesai={() => {
           // Follow-up pertama biasanya dijadwalkan ke hari lain, sehingga lead
           // yang baru masuk antrean tidak tampak di saringan "jatuh tempo" —
@@ -473,7 +507,8 @@ export default function FollowUpPage() {
         }}
       />
 
-      <SaringanAwalModal lead={saringLead} open={Boolean(saringLead)} onClose={() => setSaringLead(null)} onSelesai={muat} />
+      <SurveiModal lead={surveiLead} open={Boolean(surveiLead)} onClose={() => setSurveiLead(null)} onSelesai={muat} />
+      <BiCheckingModal lead={biLead} open={Boolean(biLead)} onClose={() => setBiLead(null)} onSelesai={muat} />
 
       <KonversiBookingModal
         lead={konversiLead}
@@ -491,6 +526,8 @@ export default function FollowUpPage() {
         sumberLabel={panelSegar?.source_type || ""}
         onKonversi={() => setKonversiLead(panelSegar)}
         onUbahTahap={() => setFuLead(panelSegar)}
+        onSurvei={() => setSurveiLead(panelSegar)}
+        onBiChecking={() => setBiLead(panelSegar)}
         // Data awal dikoreksi di Leads — formulirnya langsung terbuka di sana.
         onUbahData={() => navigate(`/prospek?ubah=${panelSegar.id}`)}
       />
@@ -511,20 +548,36 @@ export default function FollowUpPage() {
   );
 }
 
-function Tanda({ aktif, gagal, label }) {
+/**
+ * Progres satu prospek: label levelnya, dan di bawahnya kapan terakhir
+ * dihubungi — yang dulu satu kolom sendiri, "Kontak Terakhir". Diam lebih
+ * dari dua minggu ditulis merah: itulah batas prospek menjadi dingin.
+ */
+function SelProgres({ row }) {
+  const p = row.progres;
+  const w = WARNA_NADA[p.nada];
   return (
-    <span
-      style={{
-        fontSize: 10.5,
-        fontWeight: 700,
-        padding: "2px 8px",
-        borderRadius: 999,
-        background: gagal ? "#FBE9E8" : aktif ? "#E4F2E8" : "#F1F4F9",
-        color: gagal ? NEGATIVE : aktif ? "#166534" : TEXT_MID,
-      }}
-    >
-      {label}
-    </span>
+    <div style={{ minWidth: 0, maxWidth: 260 }}>
+      {w ? (
+        <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, background: w.bg, color: w.fg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>
+          {p.label}
+        </span>
+      ) : (
+        <span
+          title={row.chat_lengkap || ""}
+          style={{ display: "block", fontSize: 12, color: p.nada === "redup" ? TEXT_MID : TEXT_DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {p.level === 1 && <MessageSquare size={11} style={{ marginRight: 5, verticalAlign: -1, color: TEXT_MID }} aria-hidden="true" />}
+          {p.label}
+        </span>
+      )}
+      {row.aktif && row.kontak_terakhir && (
+        <div style={{ fontSize: 11, color: row.diam_hari > 14 ? NEGATIVE : TEXT_MID, marginTop: 3, whiteSpace: "nowrap" }}>
+          kontak {tanggal(row.kontak_terakhir)}
+          {row.diam_hari != null && ` · ${row.diam_hari} hr`}
+        </div>
+      )}
+    </div>
   );
 }
 

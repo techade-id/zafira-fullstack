@@ -146,6 +146,23 @@ every KPR stage, and a waiting-for-Finance phase on every payment.
      `lead_activity_edits` to the `supabase_realtime` publication for the
      live pop-ups, and the `app_settings.notif_realtime` switch (Pengaturan
      Bisnis → Notifikasi) that turns them off.
+   - **`migration_027_alur_followup_booking.sql`** — the Leads → Chat → Survei
+     → BI Checking → Booking flow. Adds `leads.unit_diminati`, the `ktp`
+     attachment slot, `catat_bi_checking()`, and makes a Survei Lokasi note fill
+     `catatan_survei`. Deleting a follow-up note now goes through
+     `ajukan_hapus_catatan()` (`lead_activity_edits.jenis = 'hapus'`; the
+     request survives the note as the audit trail) and `lead_activities`
+     updates/deletes are logged in `activity_logs`. Customer status changes go
+     through `customer_status_edits` (`ajukan_status_konsumen()` /
+     `putuskan_status_konsumen()`); the `customers_guard_status` trigger rejects
+     any other path except `cancel_customer()`. Booking: `projects` gains
+     `tarif_tanah_per_m2` and `biaya_kavling_strategis`, `hitung_biaya_kavling()`
+     derives extra-land and hook fees from the unit (`type` "36/72" → 72 m²
+     standard vs `units.luas_tanah`), and `convert_lead_to_customer()` gains
+     `p_nominal_dp` and writes both fees (the 4-argument version is dropped).
+     `app_settings` gains `booking_fee` (700000), `eskalasi_followup_hari` (3)
+     and `siapkan_berkas_hari` (14), read by the new `eskalasi` and
+     `siapkan_berkas` bell categories. Redefines `my_notifications()` again.
 
    Re-run `supabase/storage.sql` after 008 **and after 017**: it creates the
    `payment-receipts`, `payment-proofs` and `berkas-lampiran` buckets and

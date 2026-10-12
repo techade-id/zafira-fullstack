@@ -1,22 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Users } from "lucide-react";
+import { Users, Lock, FolderClock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { fetchAllRows } from "../lib/fetchAllRows";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { canEditCustomer, isLocked, lockReason } from "../lib/permissions";
-import { durasiHari, telepon } from "../lib/format";
+import { canEditCustomer, isLocked, lockReason, roleOf } from "../lib/permissions";
+import { durasiHari, telepon, selisihHari } from "../lib/format";
 import KontakAksi from "../components/KontakAksi";
 import {
   Card,
   PageTitle,
   PrimaryButton,
   DataTable,
-  Badge,
   BORDER,
   TEXT_MID,
+  TEXT_DARK,
+  PRIMARY,
+  PRIMARY_SOFT,
+  ACCENT_SOFT,
   ACCENT_DARK,
+  NEGATIVE,
+  POSITIVE,
   DeleteButton,
   EditButton,
   RowActions,
@@ -27,7 +32,41 @@ import {
 const CUSTOMER_STATUS_OPTIONS = ["proses", "aktif", "selesai", "batal"];
 
 /**
+ * Progres KPR, dibaca dari tonggak berkasnya — bukan dipilih. Yang lebih jauh
+ * menang: konsumen yang sudah akad tidak lagi ditampilkan sebagai SP3K.
+ */
+const PROGRES = [
+  { kunci: "pemberkasan", label: "Pemberkasan", warna: { bg: ACCENT_SOFT, fg: ACCENT_DARK } },
+  { kunci: "bank", label: "Proses Bank", warna: { bg: PRIMARY_SOFT, fg: PRIMARY } },
+  { kunci: "sp3k", label: "SP3K", warna: { bg: "#E8EEFB", fg: "#2B4C8C" } },
+  { kunci: "akad", label: "Akad", warna: { bg: "#E4F2E8", fg: POSITIVE } },
+  { kunci: "batal", label: "Batal", warna: { bg: "#FBE9E8", fg: NEGATIVE } },
+];
+
+function kprDari(row) {
+  return (Array.isArray(row.customer_kpr) ? row.customer_kpr[0] : row.customer_kpr) || {};
+}
+
+function progresKonsumen(row) {
+  if (row.status === "batal") return "batal";
+  const k = kprDari(row);
+  if (k.tanggal_akad) return "akad";
+  if (k.tanggal_sp3k_terbit) return "sp3k";
+  if (k.tanggal_masuk_bank || k.proses_bank_at) return "bank";
+  return "pemberkasan";
+}
+
+/**
  * Daftar konsumen.
+ *
+ * Urut abjad secara bawaan. Kolomnya yang dibutuhkan untuk memantau proses:
+ * nama, unit, lama proses, progres (Pemberkasan → Proses Bank → SP3K → Akad),
+ * Sales penanggung jawab, dan bank. Kontak hanya untuk Sales — peran lain
+ * menghubungi konsumen dari kartunya.
+ *
+ * Konsumen yang lama prosesnya sudah melewati batas (bawaan 14 hari, di
+ * Pengaturan Bisnis) tetapi berkasnya belum masuk bank ditandai "Siapkan
+ * berkas": itulah tanda Admin Marketing harus mulai membereskannya.
  *
  * Seluruh isi kartu konsumen — progres KPR, dokumen, pembayaran, riwayat — kini
  * tinggal di `/konsumen/:id`. Sebelumnya semuanya mengembang di bawah tabel ini,
@@ -50,6 +89,8 @@ export default function KonsumenPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [batasBerkas, setBatasBerkas] = useState(14);
+  const peranSales = roleOf(profile) === "sales";
 
   function resetForm() {
     setForm(emptyForm);
@@ -59,16 +100,24 @@ export default function KonsumenPage() {
 
   async function fetchAll() {
     setLoading(true);
-    const [{ data: cust }, { data: unt }, { data: ld }] = await Promise.all([
+    const [{ data: cust }, { data: unt }, { data: ld }, { data: batas }] = await Promise.all([
       fetchAllRows(() =>
-        supabase.from("customers").select("*, units(unit_code), leads(status)").order("created_at", { ascending: false })
+        supabase
+          .from("customers")
+          .select(
+            "*, units(unit_code, block), leads(status), profiles:sales_agent_id(full_name), customer_kpr(nama_bank, tanggal_masuk_bank, proses_bank_at, tanggal_sp3k_terbit, tanggal_akad)"
+          )
+          .order("name", { ascending: true })
       ),
       supabase.from("units").select("id, unit_code, status").order("unit_code"),
       supabase.from("leads").select("id, name, phone").order("name"),
+      supabase.from("app_settings").select("value").eq("key", "siapkan_berkas_hari").maybeSingle(),
     ]);
     setCustomers(cust || []);
     setUnits(unt || []);
     setLeads(ld || []);
+    const n = Number(batas?.value);
+    setBatasBerkas(Number.isFinite(n) && n > 0 ? n : 14);
     setLoading(false);
   }
 
@@ -118,30 +167,29 @@ export default function KonsumenPage() {
     fetchAll();
   }
 
-  async function updateStatus(customerId, status) {
-    const current = customers.find((c) => c.id === customerId);
-    const patch = { status };
-    // Stamp the completion date the first time a customer reaches "selesai",
-    // and never clear it afterwards — it's the basis of the duration reports,
-    // so an accidental status toggle must not destroy it.
-    if (status === "selesai" && !current?.process_completed_at) {
-      patch.process_completed_at = new Date().toISOString();
-    }
-    // Hasilnya diperiksa: sebelumnya penolakan RLS lewat tanpa jejak apa pun,
-    // dan pengguna hanya melihat status lama muncul kembali tanpa sebab.
-    const { error: statusError } = await supabase.from("customers").update(patch).eq("id", customerId);
-    if (statusError) {
-      toast.gagal(`Status gagal diubah: ${statusError.message}`);
-      return;
-    }
-    fetchAll();
-  }
+  const baris = useMemo(
+    () =>
+      customers.map((c) => {
+        const progres = progresKonsumen(c);
+        const hari = selisihHari(c.process_completed_at || new Date(), c.process_started_at);
+        return {
+          ...c,
+          progres,
+          hari_proses: hari,
+          bank: kprDari(c).nama_bank || "",
+          sales_nama: c.profiles?.full_name || "",
+          // Tanda untuk Admin Marketing: sudah lama, berkas belum di bank.
+          siapkan_berkas: progres === "pemberkasan" && ["proses", "aktif"].includes(c.status) && hari != null && hari >= batasBerkas,
+        };
+      }),
+    [customers, batasBerkas]
+  );
 
   return (
     <div>
       <PageTitle
         title="Konsumen"
-        subtitle={`${customers.length} konsumen tercatat`}
+        subtitle={`${customers.length} konsumen tercatat · urut abjad`}
         action={
           <PrimaryButton subject="customer" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
             {showForm ? "Tutup" : "+ Konsumen Baru"}
@@ -220,31 +268,35 @@ export default function KonsumenPage() {
           sortable
           searchable
           searchPlaceholder="Cari nama, telepon, unit…"
-          searchExtra={(row) => `${row.units?.unit_code || ""} ${row.ktp_number || ""} ${row.email || ""}`}
+          searchExtra={(row) => `${row.units?.unit_code || ""} ${row.ktp_number || ""} ${row.email || ""} ${row.sales_nama} ${row.bank}`}
           pageSize={25}
+          defaultSort={{ key: "name", arah: "asc" }}
           onRowClick={(row) => navigate(`/konsumen/${row.id}`)}
           emptyIcon={Users}
           emptyLabel="Belum ada konsumen"
           emptyHint="Konsumen lahir dari prospek yang dikonversi ke Booking, atau bisa ditambahkan langsung di sini."
           filters={[
             {
+              key: "progres",
+              label: "Semua progres",
+              options: PROGRES.map((p) => ({ value: p.kunci, label: p.label })),
+            },
+            {
+              key: "siapkan",
+              label: "Semua lama proses",
+              get: (row) => (row.siapkan_berkas ? "ya" : "tidak"),
+              options: [{ value: "ya", label: `Siapkan berkas (≥ ${batasBerkas} hari)` }],
+            },
+            {
               key: "status",
               label: "Semua status",
               options: CUSTOMER_STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
             },
-            {
-              key: "handover",
-              label: "Semua tanggung jawab",
-              get: (row) => (isLocked(row) ? "terkunci" : "sales"),
-              options: [
-                { value: "sales", label: "Dipegang Sales" },
-                { value: "terkunci", label: "Admin Marketing" },
-              ],
-            },
           ]}
           columns={[
             { key: "name", label: "Nama" },
-            {
+            // Kontak hanya untuk Sales; peran lain menghubungi dari kartu konsumen.
+            peranSales && {
               key: "phone",
               label: "Kontak",
               sortable: false,
@@ -263,43 +315,52 @@ export default function KonsumenPage() {
             {
               key: "duration",
               label: "Lama Proses",
-              sortValue: (row) => row.process_started_at,
-              render: (row) => durasiHari(row.process_started_at, row.process_completed_at),
+              sortValue: (row) => row.hari_proses ?? -1,
+              render: (row) => (
+                <div style={{ whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12.5, color: TEXT_DARK }}>{durasiHari(row.process_started_at, row.process_completed_at)}</div>
+                  {row.siapkan_berkas && (
+                    <span
+                      title={`Sudah ${row.hari_proses} hari dan berkas belum masuk bank — Admin Marketing perlu menyiapkan berkasnya.`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 3, fontSize: 10.5, fontWeight: 700, background: ACCENT_SOFT, color: ACCENT_DARK, padding: "2px 8px", borderRadius: 999 }}
+                    >
+                      <FolderClock size={10} aria-hidden="true" />
+                      Siapkan berkas
+                    </span>
+                  )}
+                </div>
+              ),
             },
             {
-              key: "status",
-              label: "Status",
-              render: (row) =>
-                canEditCustomer(profile, row) ? (
-                  <select
-                    value={row.status}
-                    onChange={(e) => updateStatus(row.id, e.target.value)}
-                    aria-label={`Status ${row.name}`}
-                    style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "5px 9px", fontSize: 12 }}
-                  >
-                    {CUSTOMER_STATUS_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <Badge value={row.status} />
-                ),
-            },
-            {
-              key: "handover",
-              label: "Tanggung Jawab",
-              sortValue: (row) => (isLocked(row) ? 1 : 0),
-              render: (row) =>
-                isLocked(row) ? (
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: ACCENT_DARK, whiteSpace: "nowrap" }} title={lockReason(row)}>
-                    🔒 Admin Marketing
+              key: "progres",
+              label: "Progres",
+              sortValue: (row) => PROGRES.findIndex((p) => p.kunci === row.progres),
+              render: (row) => {
+                const p = PROGRES.find((x) => x.kunci === row.progres);
+                return (
+                  <span style={{ fontSize: 11, fontWeight: 700, background: p.warna.bg, color: p.warna.fg, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                    {p.label}
                   </span>
-                ) : (
-                  <span style={{ fontSize: 11.5, color: TEXT_MID }}>Sales</span>
-                ),
+                );
+              },
             },
+            {
+              key: "sales_nama",
+              label: "Tanggung Jawab",
+              render: (row) => (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: TEXT_DARK, whiteSpace: "nowrap" }}>
+                  {row.sales_nama || "-"}
+                  {/* Setelah kuitansi Booking Fee terverifikasi, berkasnya
+                      dipegang Admin Marketing (Handover Hard-Lock). */}
+                  {isLocked(row) && (
+                    <span title={lockReason(row)} aria-label="Berkas dipegang Admin Marketing" style={{ lineHeight: 0 }}>
+                      <Lock size={11} color={ACCENT_DARK} aria-hidden="true" />
+                    </span>
+                  )}
+                </span>
+              ),
+            },
+            { key: "bank", label: "Bank", render: (row) => row.bank || "-" },
             {
               key: "aksi",
               label: "",
@@ -320,8 +381,8 @@ export default function KonsumenPage() {
                 </RowActions>
               ),
             },
-          ]}
-          rows={customers}
+          ].filter(Boolean)}
+          rows={baris}
         />
       </Card>
     </div>

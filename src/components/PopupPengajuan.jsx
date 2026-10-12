@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { canWrite } from "../lib/permissions";
 import TinjauPengajuan, { kabarkanPengajuan } from "./TinjauPengajuan";
+import { kabarkanStatusKonsumen } from "./PengajuanStatus";
 import { SURFACE, BORDER, TEXT_DARK, TEXT_MID, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_DARK, ACCENT_SOFT, NEGATIVE } from "./ui";
 
 /**
@@ -89,12 +90,13 @@ export default function PopupPengajuan() {
             supabase.from("leads").select("name").eq("id", e.lead_id).maybeSingle(),
             supabase.from("profiles").select("full_name").eq("id", e.diajukan_oleh).maybeSingle(),
           ]);
+          const hapus = e.jenis === "hapus";
           tambah({
             key: `baru-${e.id}`,
             jenis: "baru",
             editId: e.id,
-            judul: "Pengajuan perubahan catatan",
-            teks: `${pengaju?.full_name || "Sales"} mengajukan perubahan catatan ${e.aktivitas_baru} — ${lead?.name || "prospek"}.`,
+            judul: hapus ? "Pengajuan hapus catatan" : "Pengajuan perubahan catatan",
+            teks: `${pengaju?.full_name || "Sales"} mengajukan ${hapus ? "penghapusan" : "perubahan"} catatan ${e.aktivitas_baru} — ${lead?.name || "prospek"}.`,
           });
         })
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "lead_activity_edits" }, async ({ new: e }) => {
@@ -102,15 +104,50 @@ export default function PopupPengajuan() {
           // Hanya pengajunya, dan hanya bila yang memutuskan orang lain.
           if (e.diajukan_oleh !== meId || e.status === "menunggu" || e.diputuskan_oleh === meId) return;
           const { data: lead } = await supabase.from("leads").select("name").eq("id", e.lead_id).maybeSingle();
+          const hapus = e.jenis === "hapus";
+          // Penghapusan yang disetujui memicu dua UPDATE (status, lalu
+          // activity_id dikosongkan); kuncinya sama, jadi tampil sekali.
           tambah({
             key: `putus-${e.id}`,
             jenis: e.status,
             leadId: e.lead_id,
-            judul: e.status === "disetujui" ? "Perubahan catatan disetujui" : "Perubahan catatan ditolak",
+            judul: `${hapus ? "Penghapusan" : "Perubahan"} catatan ${e.status === "disetujui" ? "disetujui" : "ditolak"}`,
             teks:
               e.status === "disetujui"
-                ? `Catatan ${lead?.name || "prospek"} sudah berubah.`
+                ? `Catatan ${lead?.name || "prospek"} sudah ${hapus ? "dihapus" : "berubah"}.`
                 : `${lead?.name || "Prospek"}: ${e.alasan_tolak || "tanpa alasan"}`,
+          });
+        })
+        // Pengajuan status konsumen (migrasi 027): pola yang sama, tujuannya
+        // halaman Persetujuan tab Status dan kartu konsumen.
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "customer_status_edits" }, async ({ new: e }) => {
+          kabarkanStatusKonsumen(e.customer_id);
+          if (!bolehPutus || e.diajukan_oleh === meId || e.status !== "menunggu") return;
+          const [{ data: c }, { data: pengaju }] = await Promise.all([
+            supabase.from("customers").select("name").eq("id", e.customer_id).maybeSingle(),
+            supabase.from("profiles").select("full_name").eq("id", e.diajukan_oleh).maybeSingle(),
+          ]);
+          tambah({
+            key: `status-baru-${e.id}`,
+            jenis: "baru",
+            statusId: e.id,
+            judul: "Pengajuan status konsumen",
+            teks: `${pengaju?.full_name || "Pengaju"} mengajukan status ${c?.name || "konsumen"}: ${e.status_lama} → ${e.status_baru}.`,
+          });
+        })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "customer_status_edits" }, async ({ new: e }) => {
+          kabarkanStatusKonsumen(e.customer_id);
+          if (e.diajukan_oleh !== meId || e.status === "menunggu" || e.diputuskan_oleh === meId) return;
+          const { data: c } = await supabase.from("customers").select("name").eq("id", e.customer_id).maybeSingle();
+          tambah({
+            key: `status-putus-${e.id}`,
+            jenis: e.status,
+            customerId: e.customer_id,
+            judul: e.status === "disetujui" ? "Perubahan status disetujui" : "Perubahan status ditolak",
+            teks:
+              e.status === "disetujui"
+                ? `${c?.name || "Konsumen"} kini berstatus ${e.status_baru}.`
+                : `${c?.name || "Konsumen"}: ${e.alasan_tolak || "tanpa alasan"}`,
           });
         })
         .subscribe();
@@ -173,12 +210,14 @@ export default function PopupPengajuan() {
                   <button
                     onClick={() => {
                       tutup(p.key);
-                      if (p.jenis === "baru") setTinjauId(p.editId);
+                      if (p.statusId) navigate(`/persetujuan?tab=status&sorot=${p.statusId}`);
+                      else if (p.customerId) navigate(`/konsumen/${p.customerId}`);
+                      else if (p.jenis === "baru") setTinjauId(p.editId);
                       else navigate(`/follow-up?sorot=${p.leadId}`);
                     }}
                     style={{ marginTop: 8, border: "none", background: "none", padding: 0, color: PRIMARY, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
                   >
-                    {p.jenis === "baru" ? "Tinjau sekarang →" : "Lihat prospek →"}
+                    {p.jenis === "baru" ? "Tinjau sekarang →" : p.customerId ? "Lihat konsumen →" : "Lihat prospek →"}
                   </button>
                 </div>
                 <button

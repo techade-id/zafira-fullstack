@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Target, PanelRight, Pencil, Trash2, MessageSquare, X, ArrowRight } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
@@ -6,7 +6,7 @@ import { fetchAllRows } from "../lib/fetchAllRows";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { canWrite } from "../lib/permissions";
-import { tanggal, telepon } from "../lib/format";
+import { telepon } from "../lib/format";
 import ModalProspek, { SOURCE_TYPES, EVENT_TERSIMPAN } from "../components/ModalProspek";
 import { Rincian } from "../components/PanelProspek";
 import {
@@ -126,6 +126,15 @@ export default function ProspekPage() {
     return row.source || "-";
   }
 
+  // Nomor urut tetap menurut kapan prospek dicatat — prospek pertama selalu
+  // No. 1, apa pun saringan atau urutan tabelnya — supaya nomor yang disebut
+  // di rapat menunjuk baris yang sama bagi semua orang.
+  const bernomor = useMemo(() => {
+    const urut = [...leads].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    const nomor = new Map(urut.map((l, i) => [l.id, i + 1]));
+    return leads.map((l) => ({ ...l, nomor: nomor.get(l.id) }));
+  }, [leads]);
+
   const keFollowUp = (id) => navigate(`/follow-up?sorot=${id}`);
   // Panel membaca baris terbaru dari daftar, bukan salinan saat baris diklik:
   // setelah data dikoreksi, panel yang masih terbuka harus ikut berubah.
@@ -151,14 +160,14 @@ export default function ProspekPage() {
           sortable
           searchable
           searchPlaceholder="Saring daftar — nama, telepon, catatan…"
-          searchExtra={(row) => [row.notes, row.username_sosmed, row.domisili, row.kecamatan].filter(Boolean).join(" ")}
+          searchExtra={(row) => [row.unit_diminati, row.notes, row.username_sosmed, row.domisili, row.kecamatan].filter(Boolean).join(" ")}
           // Datang dari hasil pencarian global: kata kuncinya diteruskan ke
           // saringan daftar, supaya baris yang dicari langsung terlihat.
           initialSearch={params.get("cari") || ""}
           highlightId={params.get("sorot") || undefined}
           onRowClick={(row) => setPanelLead(row)}
           pageSize={25}
-          defaultSort={{ key: "created_at", arah: "desc" }}
+          defaultSort={{ key: "nomor", arah: "desc" }}
           emptyIcon={Target}
           emptyLabel="Belum ada prospek"
           emptyHint="Cukup tiga hal untuk memulai: nama, nomor telepon, dan dari mana prospek ini datang."
@@ -169,7 +178,15 @@ export default function ProspekPage() {
               options: SOURCE_TYPES.map((x) => ({ value: x.value, label: x.label })),
             },
           ]}
+          // Data mentah saja: tahap, jadwal, dan progres sengaja tidak tampil
+          // di sini — semuanya dibaca di Follow Up Leads.
           columns={[
+            {
+              key: "nomor",
+              label: "No.",
+              render: (row) => <span style={{ fontSize: 12, color: TEXT_MID, fontVariantNumeric: "tabular-nums" }}>{row.nomor}</span>,
+            },
+            { key: "unit_diminati", label: "Unit/Blok", render: (row) => row.unit_diminati || "-" },
             { key: "name", label: "Nama / Username" },
             {
               key: "phone",
@@ -178,9 +195,8 @@ export default function ProspekPage() {
               // follow-up, dan follow-up dicatat di Follow Up Leads.
               render: (row) => <span style={{ whiteSpace: "nowrap" }}>{telepon(row.phone)}</span>,
             },
-            { key: "source", label: "Sumber", sortValue: sourceLabel, render: sourceLabel },
             { key: "domisili", label: "Domisili", sortValue: (row) => row.kecamatan || row.domisili, render: (row) => row.kecamatan || row.domisili || "-" },
-            { key: "created_at", label: "Dibuat", render: (row) => tanggal(row.created_at) },
+            { key: "source", label: "Sumber", sortValue: sourceLabel, render: sourceLabel },
             {
               key: "aksi",
               label: "",
@@ -207,7 +223,7 @@ export default function ProspekPage() {
               ),
             },
           ]}
-          rows={leads}
+          rows={bernomor}
         />
       </Card>
 

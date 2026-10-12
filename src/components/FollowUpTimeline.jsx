@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Wallet, FileText, Landmark, KeyRound, Handshake, Image as ImageIcon, Pencil, Clock } from "lucide-react";
+import { Wallet, FileText, Landmark, KeyRound, Handshake, Image as ImageIcon, Pencil, Clock, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { canWrite } from "../lib/permissions";
+import { canWrite, roleOf } from "../lib/permissions";
 import { rupiah, tanggalWaktu, tanggal, labelJenisBayar } from "../lib/format";
 import { jenisBerkas } from "../lib/berkas";
 import { usePratinjau } from "./PratinjauBerkas";
-import AjukanUbahCatatan from "./AjukanUbahCatatan";
+import AjukanUbahCatatan, { AjukanHapusCatatan } from "./AjukanUbahCatatan";
 import TinjauPengajuan from "./TinjauPengajuan";
 import { Card, PrimaryButton, DeleteButton, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE, inputStyle } from "./ui";
 
@@ -43,7 +43,7 @@ function tanggalLokal(nilai) {
 }
 
 /** Catatan yang ditulis sistem, bukan manusia — tidak bisa diajukan perubahannya. */
-const CATATAN_SISTEM = ["Prospek dibatalkan", "Prospek dialihkan", "Follow-up dijadwal ulang"];
+const CATATAN_SISTEM = ["Prospek dibatalkan", "Prospek dialihkan", "Follow-up dijadwal ulang", "Konversi ke Booking"];
 
 /**
  * @param bisaCatat false menyembunyikan formulir catatan di atas riwayat —
@@ -62,6 +62,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
   const [bukti, setBukti] = useState(new Map());
   const [pengajuan, setPengajuan] = useState(new Map());
   const [ubahCatatan, setUbahCatatan] = useState(null);
+  const [hapusCatatan, setHapusCatatan] = useState(null);
   const [lamaTerbuka, setLamaTerbuka] = useState(null);
   const [tinjauId, setTinjauId] = useState(null);
   const [bukaPratinjau, pratinjau] = usePratinjau();
@@ -75,6 +76,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
   // Perubahan catatan follow-up prospek diajukan penulisnya (migrasi 025).
   const bolehAjukan = canWrite(profile, "followup_lead");
   const bolehPutus = canWrite(profile, "catatan_putus");
+  const adminSistem = roleOf(profile) === "admin";
 
   const fetchRows = useCallback(async () => {
     if (!leadId && !customerId) return;
@@ -133,7 +135,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
     if (ids.length) {
       const { data: ubahan, error: errUbahan } = await supabase
         .from("lead_activity_edits")
-        .select("id, activity_id, status, alasan_tolak, lama, diajukan_oleh, diputuskan_at, pemutus:profiles!lead_activity_edits_diputuskan_oleh_fkey(full_name)")
+        .select("id, activity_id, jenis, status, alasan_tolak, lama, diajukan_oleh, diputuskan_at, pemutus:profiles!lead_activity_edits_diputuskan_oleh_fkey(full_name)")
         .in("activity_id", ids)
         .order("diajukan_at", { ascending: false });
       for (const e of errUbahan ? [] : ubahan || []) {
@@ -263,7 +265,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
           const terakhir = i === gabungan.length - 1;
           const ubahan = row.manual ? pengajuan.get(row.asli.id) || [] : [];
           const menunggu = ubahan.find((e) => e.status === "menunggu");
-          const disetujui = ubahan.find((e) => e.status === "disetujui");
+          const disetujui = ubahan.find((e) => e.status === "disetujui" && e.jenis !== "hapus");
           const ditolakUntukSaya = ubahan[0]?.status === "ditolak" && ubahan[0].diajukan_oleh === profile?.id;
           // Hanya penulisnya, hanya follow-up prospek, dan bukan catatan sistem.
           const bisaUbah =
@@ -273,6 +275,16 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
             row.asli.lead_id &&
             !row.asli.customer_id &&
             row.asli.actor_id === profile?.id &&
+            !CATATAN_SISTEM.includes(row.asli.activity);
+          // Menghapus catatan follow-up prospek lewat pengajuan (migrasi 027):
+          // penulisnya, atau Admin Sistem untuk catatan siapa pun.
+          const bisaHapus =
+            row.manual &&
+            bolehAjukan &&
+            !menunggu &&
+            row.asli.lead_id &&
+            !row.asli.customer_id &&
+            (row.asli.actor_id === profile?.id || adminSistem) &&
             !CATATAN_SISTEM.includes(row.asli.activity);
           return (
             <div key={row.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: terakhir ? "none" : `1px solid ${BORDER}` }}>
@@ -321,7 +333,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
                   {menunggu && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 600, background: ACCENT_SOFT, color: ACCENT_DARK, padding: "3px 9px", borderRadius: 999 }}>
                       <Clock size={10} aria-hidden="true" />
-                      Perubahan menunggu persetujuan
+                      {menunggu.jenis === "hapus" ? "Penghapusan menunggu persetujuan" : "Perubahan menunggu persetujuan"}
                     </span>
                   )}
                   {menunggu && bolehPutus && (
@@ -358,7 +370,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
                 {disetujui && lamaTerbuka === row.asli.id && <VersiLama lama={disetujui.lama} />}
                 {ditolakUntukSaya && (
                   <div style={{ fontSize: 11.5, color: NEGATIVE, marginTop: 5, lineHeight: 1.45 }}>
-                    Pengajuan perubahan ditolak: {ubahan[0].alasan_tolak}
+                    {ubahan[0].jenis === "hapus" ? "Pengajuan penghapusan ditolak" : "Pengajuan perubahan ditolak"}: {ubahan[0].alasan_tolak}
                   </div>
                 )}
               </div>
@@ -375,13 +387,28 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
                       <Pencil size={14} />
                     </button>
                   )}
-                  <DeleteButton
-                    ikon
-                    subject="followup_delete"
-                    itemName={row.judul}
-                    onDelete={() => supabase.from("lead_activities").delete().eq("id", row.asli.id)}
-                    onDone={fetchRows}
-                  />
+                  {bisaHapus ? (
+                    <button
+                      onClick={() => setHapusCatatan(row.asli)}
+                      title={adminSistem ? "Hapus catatan — tetap tercatat beserta alasannya" : "Ajukan penghapusan — berlaku setelah disetujui Admin"}
+                      aria-label="Hapus catatan"
+                      style={{ border: "none", background: "none", color: TEXT_MID, cursor: "pointer", padding: 6, lineHeight: 0, borderRadius: 8 }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  ) : (
+                    // Catatan konsumen (sesudah booking) tetap punya jalur
+                    // lamanya: hanya Admin, dan tercatat di Log Aktivitas.
+                    row.asli.customer_id && (
+                      <DeleteButton
+                        ikon
+                        subject="followup_delete"
+                        itemName={row.judul}
+                        onDelete={() => supabase.from("lead_activities").delete().eq("id", row.asli.id)}
+                        onDone={fetchRows}
+                      />
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -390,6 +417,7 @@ export default function FollowUpTimeline({ leadId, customerId, title = "Riwayat 
       </div>
       {pratinjau}
       <AjukanUbahCatatan catatan={ubahCatatan} open={Boolean(ubahCatatan)} onClose={() => setUbahCatatan(null)} onSelesai={fetchRows} />
+      <AjukanHapusCatatan catatan={hapusCatatan} open={Boolean(hapusCatatan)} onClose={() => setHapusCatatan(null)} onSelesai={fetchRows} />
       <TinjauPengajuan editId={tinjauId} open={Boolean(tinjauId)} onClose={() => setTinjauId(null)} />
     </Card>
   );

@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
 import { roleOf } from "../lib/permissions";
-import { hariIni } from "../lib/format";
+import { hariIni, tanggal as fmtTanggal } from "../lib/format";
 import { uploadFile } from "../lib/storage";
 import { kabarkanPengajuan } from "./TinjauPengajuan";
 import { JENIS_FOLLOWUP, PemilihBukti } from "./CatatFollowUpModal";
@@ -256,3 +256,105 @@ const gayaSekunder = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
+/**
+ * Mengajukan penghapusan catatan follow-up (migrasi 027).
+ *
+ * Menghapus riwayat adalah perubahan yang paling sulit dilacak, jadi ia
+ * mengikuti jalur yang sama dengan perubahan: penulisnya mengajukan dengan
+ * alasan, Admin Sistem memutuskan. Admin sendiri boleh menghapus catatan siapa
+ * pun — langsung berlaku, tetapi tetap tercatat sebagai pengajuan yang
+ * disetujui, lengkap dengan isi catatan yang dihapus.
+ */
+export function AjukanHapusCatatan({ catatan, open, onClose, onSelesai }) {
+  const { profile } = useAuth();
+  const toast = useToast();
+  const langsung = roleOf(profile) === "admin";
+  const [alasan, setAlasan] = useState("");
+  const [kirim, setKirim] = useState(false);
+  const [galat, setGalat] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setAlasan("");
+    setGalat("");
+    setKirim(false);
+  }, [open, catatan]);
+
+  if (!catatan) return null;
+
+  async function simpan() {
+    if (!alasan.trim()) {
+      setGalat("Tuliskan alasan penghapusannya — itulah yang dibaca Admin saat memutuskan.");
+      return;
+    }
+    setKirim(true);
+    setGalat("");
+    const { data, error } = await supabase.rpc("ajukan_hapus_catatan", { p_activity_id: catatan.id, p_alasan: alasan.trim() });
+    setKirim(false);
+    if (error) {
+      setGalat(error.message);
+      return;
+    }
+    toast.sukses(data?.status === "disetujui" ? "Catatan dihapus — jejaknya tersimpan di Persetujuan." : "Penghapusan diajukan — menunggu persetujuan Admin.");
+    kabarkanPengajuan(catatan.lead_id);
+    onSelesai?.();
+    onClose?.();
+  }
+
+  return (
+    <Modal open={open} labelledBy="hapus-catatan-judul" onClose={() => !kirim && onClose?.()} width={480}>
+      <>
+        <div id="hapus-catatan-judul" style={{ fontSize: 17, fontWeight: 700, marginBottom: 5 }}>
+          {langsung ? "Hapus Catatan" : "Ajukan Penghapusan Catatan"}
+        </div>
+        <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 16, lineHeight: 1.5 }}>
+          {langsung
+            ? "Catatan langsung terhapus. Isinya, alasan Anda, dan waktu penghapusan tetap tercatat."
+            : "Catatan tetap ada sampai Admin Sistem menyetujui. Isi catatan dan alasan Anda tercatat sebagai jejak."}
+        </div>
+
+        <div style={{ background: "#F7F9FC", border: `1px dashed ${BORDER}`, borderRadius: 11, padding: "9px 12px", fontSize: 12.5, color: TEXT_MID, lineHeight: 1.5, marginBottom: 14 }}>
+          <div>
+            <b style={{ color: TEXT_DARK }}>{catatan.activity}</b>
+            {catatan.hasil ? ` · ${catatan.hasil}` : ""}
+            {catatan.tanggal_followup ? ` · ${fmtTanggal(catatan.tanggal_followup)}` : ""}
+          </div>
+          {catatan.note && <div style={{ whiteSpace: "pre-wrap", marginTop: 2 }}>{catatan.note}</div>}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="hc-alasan" style={labelGaya}>
+            Alasan Penghapusan<span style={{ color: NEGATIVE }} aria-hidden="true"> *</span>
+          </label>
+          <input
+            id="hc-alasan"
+            value={alasan}
+            onChange={(e) => setAlasan(e.target.value)}
+            placeholder="mis. Salah prospek — catatan ini milik Budi, bukan Budiman"
+            style={inputStyle}
+          />
+        </div>
+
+        {galat && (
+          <div role="alert" style={{ fontSize: 12.5, color: NEGATIVE, marginBottom: 14, lineHeight: 1.5 }}>
+            {galat}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 9, justifyContent: "flex-end" }}>
+          <button onClick={onClose} disabled={kirim} style={gayaSekunder}>
+            Batal
+          </button>
+          <button
+            onClick={simpan}
+            disabled={kirim}
+            style={{ border: "none", background: NEGATIVE, color: "#fff", borderRadius: 999, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: kirim ? "default" : "pointer" }}
+          >
+            {kirim ? "Menyimpan…" : langsung ? "Hapus Catatan" : "Ajukan Penghapusan"}
+          </button>
+        </div>
+      </>
+    </Modal>
+  );
+}

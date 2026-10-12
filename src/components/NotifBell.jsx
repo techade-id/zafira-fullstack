@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Clock, Snowflake, FileWarning, Landmark, Wallet, Lock, FilePen, FileCheck, FileX } from "lucide-react";
+import { Bell, Clock, Snowflake, FileWarning, Landmark, Wallet, Lock, FilePen, FileCheck, FileX, Siren, FolderClock, UserCheck } from "lucide-react";
 import { useNotifications, LABEL_KATEGORI } from "../lib/useNotifications";
 import TinjauPengajuan from "./TinjauPengajuan";
 import { SURFACE, BORDER, TEXT_DARK, TEXT_MID, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_DARK, RADIUS_SM } from "./ui";
 
 const IKON = {
   followup: Clock,
+  eskalasi: Siren,
+  siapkan_berkas: FolderClock,
+  persetujuan_status: UserCheck,
+  status_diputuskan: UserCheck,
   dingin: Snowflake,
   sp3k: FileWarning,
   mandek: Landmark,
@@ -179,6 +183,10 @@ export default function NotifBell() {
                         setTinjauId(it.record_id);
                         return;
                       }
+                      if (it.kategori === "persetujuan_status") {
+                        navigate(`/persetujuan?tab=status&sorot=${it.record_id}`);
+                        return;
+                      }
                       navigate(it.rute === "/konsumen" ? `/konsumen/${it.record_id}` : `${it.rute}?sorot=${it.record_id}`);
                     }}
                     style={{
@@ -212,7 +220,15 @@ export default function NotifBell() {
                   <button
                     onClick={() => {
                       setBuka(false);
-                      navigate(g.rows[0].rute);
+                      // Jadwal terlewat langsung ke saringan Terlewat; status
+                      // konsumen ke tab-nya di halaman Persetujuan.
+                      const ke =
+                        g.kategori === "eskalasi" || g.kategori === "followup"
+                          ? "/follow-up?saringan=terlewat"
+                          : g.kategori === "persetujuan_status"
+                          ? "/persetujuan?tab=status"
+                          : g.rows[0].rute;
+                      navigate(ke);
                     }}
                     style={{ border: "none", background: "none", padding: "4px 10px 6px", color: PRIMARY, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >

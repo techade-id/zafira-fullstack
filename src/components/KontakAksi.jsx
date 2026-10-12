@@ -114,7 +114,7 @@ export default function KontakAksi({
           React — tanpa penahan ini, klik di latar modal ikut membuka panel
           baris tabel tempat tombol ini berada. */}
       <span onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
-        <CatatFollowUpModal lead={leadFu} open={Boolean(leadFu)} onClose={() => setLeadFu(null)} onSelesai={onCatat} aktivitasAwal="WhatsApp" />
+        <CatatFollowUpModal lead={leadFu} open={Boolean(leadFu)} onClose={() => setLeadFu(null)} onSelesai={onCatat} aktivitasAwal="Chat" />
       </span>
 
       <Modal open={tanya} labelledBy="wa-catat-judul" onClose={() => !simpan && setTanya(false)} width={420}>

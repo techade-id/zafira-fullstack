@@ -1,38 +1,37 @@
 import React, { useEffect, useState } from "react";
-import { Thermometer, Paperclip, FileText, Image as ImageIcon, X } from "lucide-react";
+import { Thermometer, Paperclip, FileText, Image as ImageIcon, X, MapPin, Ban } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useToast } from "../context/ToastContext";
 import { useBusinessSettings, withCurrentValue } from "../lib/useBusinessSettings";
-import { labelTahap, hariIni } from "../lib/format";
+import { labelTahap, hariIni, tanggal } from "../lib/format";
 import { uploadFile } from "../lib/storage";
 import { jenisBerkas } from "../lib/berkas";
 import { kabarkanRiwayat } from "./FollowUpTimeline";
 import { Modal, PrimaryButton, BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE, inputStyle } from "./ui";
 
 /**
- * Mencatat follow-up — dan dengan itu, menggerakkan suhu prospek.
+ * Chat Follow Up — mencatat follow-up, dan dengan itu menggerakkan suhu
+ * prospek.
  *
- * Modal ini menggantikan "Ubah Tahap". Bedanya bukan tata letak, melainkan
- * siapa yang memutuskan.
+ * Satu jendela untuk dua hal yang dulu terpisah: riwayat komunikasi (di atas,
+ * seperti utas percakapan) dan catatan baru (di bawahnya). Klien meminta
+ * "Riwayat Komunikasi" diganti "Chat Follow Up" justru karena keduanya memang
+ * satu pekerjaan — orang membaca percakapan terakhir sebelum menulis yang
+ * berikutnya.
  *
- * Sebelumnya Sales memilih sendiri Cold/Warm/Hot dari sederet tombol. BRIEF
- * §Leads memintanya berhenti: "Sistem harus bisa membaca progres interaksi
- * untuk menentukan apakah Leads tersebut masuk kategori (Hot, Cold, atau tetap
- * Warm) — agar mengurangi human error dalam kategorisasi", dan "riwayat
- * komunikasi/log chat harus terintegrasi dengan perubahan status (mis. tertulis
- * 'kurang minat' sistem otomatis mengubah status menjadi 'Cold')".
+ * Jenisnya empat, sesuai alur klien: Chat dan Telepon dicatat di sini;
+ * Survei dan Cancel adalah langkah tersendiri — survei punya tanggal, foto,
+ * dan isian Saringan Awal, pembatalan wajib beralasan — sehingga memilihnya
+ * membuka jendelanya masing-masing (onPindah).
  *
- * Jadi yang diisi di sini hanya apa yang benar-benar terjadi: hasil percakapan,
- * catatannya, dan kapan orang ini disentuh lagi. Suhunya menyusul sendiri —
- * trigger `lead_activities_apply_temperature` membacanya dari baris yang baru
- * saja ditulis. Pratinjau di bawah menunjukkan arah yang akan diambil sistem,
- * supaya keputusannya tidak terasa seperti kotak hitam.
+ * Yang diisi hanya apa yang benar-benar terjadi: hasil (opsional), catatan,
+ * dan kapan orang ini disentuh lagi. Suhunya menyusul sendiri — trigger
+ * `lead_activities_apply_temperature` membacanya dari baris yang baru saja
+ * ditulis. Pratinjau di bawah menunjukkan arah yang akan diambil sistem.
  *
- * Setiap follow-up kini bertanggal dan berbukti (migrasi 024). Tanggalnya
- * adalah kapan prospek dihubungi — boleh mundur, tidak boleh maju — dan
- * buktinya wajib untuk semua jenis: screenshot chat atau log panggilan, foto
- * survei, foto pertemuan. Catatan, bukti, dan jadwal berikutnya disimpan
- * catat_followup() dalam satu transaksi.
+ * Setiap follow-up bertanggal dan berbukti (migrasi 024). Tanggalnya adalah
+ * kapan prospek dihubungi — boleh mundur bila lupa dicatat di hari H, tidak
+ * boleh maju — dan buktinya screenshot chat atau log panggilan.
  */
 
 /** Usulan jarak follow-up per hasil — makin panas, makin rapat. */
@@ -67,20 +66,20 @@ const WARNA_SUHU = {
 };
 
 /**
- * Jenis follow-up dan bukti yang diminta masing-masing.
- *
- * "Survei Lokasi" dieja persis seperti yang dicocokkan catat_followup(): dari
- * situlah ia tahu fotonya masuk lampiran survei Saringan Awal.
+ * Jenis follow-up yang dicatat lewat jendela ini, dan bukti yang diminta
+ * masing-masing. Catatan lama berjenis "WhatsApp", "Kunjungan Kantor", dan
+ * sebagainya tetap tampil apa adanya di riwayat.
  */
 export const JENIS_FOLLOWUP = [
-  { nilai: "WhatsApp", bukti: "Screenshot percakapan WhatsApp" },
+  { nilai: "Chat", bukti: "Screenshot percakapan chat (WhatsApp/DM)" },
   { nilai: "Telepon", bukti: "Screenshot log panggilan" },
-  { nilai: "Survei Lokasi", bukti: "Foto di lokasi bersama calon pembeli" },
-  { nilai: "Kunjungan Kantor / Show Unit", bukti: "Foto pertemuan di kantor pemasaran atau unit contoh" },
-  { nilai: "Meeting / Kunjungan Rumah", bukti: "Foto pertemuan" },
 ];
 
-const SURVEI = "Survei Lokasi";
+/** Langkah yang punya jendelanya sendiri — dibuka lewat onPindah. */
+const LANGKAH_LAIN = [
+  { kunci: "survei", label: "Survei", ikon: MapPin },
+  { kunci: "batal", label: "Cancel", ikon: Ban },
+];
 
 /** Tanggal lokal perangkat, bukan UTC — lihat hariIni(). */
 function tanggalPlus(hari) {
@@ -89,7 +88,11 @@ function tanggalPlus(hari) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, aktivitasAwal = "WhatsApp" }) {
+/**
+ * @param onPindah(langkah) dipanggil saat Survei atau Cancel dipilih —
+ *   'survei' | 'batal'. Tanpanya kedua pilihan itu tidak ditawarkan.
+ */
+export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, aktivitasAwal = "Chat", onPindah }) {
   const toast = useToast();
   const hasilOptions = useBusinessSettings("hasil_followup");
   const kategoriOptions = useBusinessSettings("followup_category");
@@ -107,7 +110,7 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
 
   useEffect(() => {
     if (!open || !lead) return;
-    setAktivitas(aktivitasAwal);
+    setAktivitas(JENIS_FOLLOWUP.some((j) => j.nilai === aktivitasAwal) ? aktivitasAwal : JENIS_FOLLOWUP[0].nilai);
     setTanggalFu(hariIni());
     setHasil("");
     setCatatan("");
@@ -158,8 +161,7 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
 
     // Berkas lebih dulu, karena catat_followup() hanya menerima path yang
     // sudah ada. Yang gagal di sini belum menulis apa pun ke database.
-    const slot = aktivitas === SURVEI ? "survei" : "followup";
-    const unggahan = await Promise.all(bukti.map((f) => uploadFile("berkas-lampiran", `${lead.id}/${slot}`, f)));
+    const unggahan = await Promise.all(bukti.map((f) => uploadFile("berkas-lampiran", `${lead.id}/followup`, f)));
     const gagal = unggahan.findIndex((u) => u.error || !u.path);
     if (gagal >= 0) {
       setKirim(false);
@@ -199,12 +201,14 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
     <Modal open={open} labelledBy="fu-judul" onClose={() => !kirim && onClose?.()} width={520}>
       <>
         <div id="fu-judul" style={{ fontSize: 17, fontWeight: 700, marginBottom: 5 }}>
-          Catat Follow Up — {lead.name}
+          Chat Follow Up — {lead.name}
         </div>
-        <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 18, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: TEXT_MID, marginBottom: 14, lineHeight: 1.5 }}>
           Status sekarang <b style={{ color: TEXT_DARK }}>{labelTahap(lead.status)}</b>. Status prospek ditentukan sistem
           dari catatan ini — tidak ada yang perlu dipilih sendiri.
         </div>
+
+        <RiwayatChat leadId={lead.id} open={open} />
 
         <div style={{ marginBottom: 14 }}>
           <span style={labelGaya}>Jenis Follow Up</span>
@@ -232,6 +236,32 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
                 </button>
               );
             })}
+            {onPindah &&
+              LANGKAH_LAIN.map((l) => (
+                <button
+                  key={l.kunci}
+                  type="button"
+                  onClick={() => onPindah(l.kunci)}
+                  disabled={kirim}
+                  title={l.kunci === "survei" ? "Buka formulir Survei — tanggal, foto, dan catatan survei" : "Batalkan prospek beserta alasannya"}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "7px 13px",
+                    borderRadius: 999,
+                    border: `1px dashed ${l.kunci === "batal" ? "#F2D3D1" : BORDER}`,
+                    background: SURFACE,
+                    color: l.kunci === "batal" ? NEGATIVE : TEXT_MID,
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  <l.ikon size={12} aria-hidden="true" />
+                  {l.label}
+                </button>
+              ))}
           </div>
         </div>
 
@@ -251,7 +281,7 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
           </div>
           <div>
             <label htmlFor="fu-hasil" style={labelGaya}>
-              Hasil Follow Up
+              Hasil Follow Up <span style={{ fontWeight: 400 }}>(opsional)</span>
             </label>
             <select id="fu-hasil" value={hasil} onChange={(e) => pilihHasil(e.target.value)} style={inputStyle}>
               <option value="">— pilih —</option>
@@ -266,13 +296,13 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
 
         <div style={{ marginBottom: 14 }}>
           <label htmlFor="fu-catatan" style={labelGaya}>
-            Catatan Komunikasi
+            Isi Chat / Catatan Komunikasi
           </label>
           <textarea
             id="fu-catatan"
             value={catatan}
             onChange={(e) => setCatatan(e.target.value)}
-            placeholder="mis. Sudah survei, minta simulasi angsuran BTN 15 tahun"
+            placeholder="mis. Minta simulasi angsuran BTN 15 tahun, mau survei Sabtu"
             style={{ ...inputStyle, minHeight: 70, resize: "vertical", fontFamily: "inherit" }}
           />
         </div>
@@ -284,7 +314,7 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
           onUbah={setBukti}
           disabled={kirim}
           wajib
-          petunjuk={`${jenis.bukti}.${aktivitas === SURVEI ? " Tanggal dan foto survei ini juga mengisi Saringan Awal, lalu ikut ke berkas KPR saat booking." : ""}`}
+          petunjuk={`${jenis.bukti}.`}
         />
 
         {/* Pratinjau keputusan sistem. Otomatisasi yang tidak menjelaskan
@@ -366,11 +396,80 @@ export default function CatatFollowUpModal({ lead, open, onClose, onSelesai, akt
             Batal
           </button>
           <PrimaryButton onClick={simpan} disabled={kirim}>
-            {kirim ? "Menyimpan…" : "Simpan Follow Up"}
+            {kirim ? "Menyimpan…" : "Simpan Chat Follow Up"}
           </PrimaryButton>
         </div>
       </>
     </Modal>
+  );
+}
+
+/** Catatan sistem yang tidak perlu tampil di utas percakapan. */
+const BUKAN_PERCAKAPAN = ["Prospek dialihkan", "Follow-up dijadwal ulang"];
+
+/**
+ * Riwayat follow-up prospek sebagai utas: terlama di atas, terbaru di bawah,
+ * tepat di atas tempat menulis catatan berikutnya. Hanya baca — mengubah atau
+ * menghapus catatan diajukan dari kartu Riwayat di panel prospek.
+ */
+export function RiwayatChat({ leadId, open, tinggi = 190 }) {
+  const [baris, setBaris] = useState(null);
+  const kotak = React.useRef(null);
+
+  useEffect(() => {
+    if (!open || !leadId) return undefined;
+    let hidup = true;
+    setBaris(null);
+    supabase
+      .from("lead_activities")
+      .select("id, activity, hasil, note, tanggal_followup, created_at, profiles(full_name)")
+      .eq("lead_id", leadId)
+      .order("tanggal_followup", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => hidup && setBaris((data || []).filter((r) => !BUKAN_PERCAKAPAN.includes(r.activity)).reverse()));
+    return () => {
+      hidup = false;
+    };
+  }, [leadId, open]);
+
+  // Seperti aplikasi chat: yang terbaru langsung terlihat.
+  useEffect(() => {
+    if (kotak.current) kotak.current.scrollTop = kotak.current.scrollHeight;
+  }, [baris]);
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: TEXT_MID, letterSpacing: "0.03em", marginBottom: 7 }}>
+        RIWAYAT CHAT{baris && baris.length > 0 ? ` · ${baris.length}` : ""}
+      </div>
+      <div
+        ref={kotak}
+        style={{ maxHeight: tinggi, overflowY: "auto", background: "#F7F9FC", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "8px 10px" }}
+      >
+        {baris === null ? (
+          <div style={{ fontSize: 12, color: TEXT_MID, padding: "6px 2px" }}>Memuat riwayat…</div>
+        ) : baris.length === 0 ? (
+          <div style={{ fontSize: 12, color: TEXT_MID, padding: "6px 2px" }}>Belum ada percakapan — ini follow-up pertama.</div>
+        ) : (
+          baris.map((r) => (
+            <div key={r.id} style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "7px 10px", margin: "4px 0" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT_DARK }}>{r.activity}</span>
+                {r.hasil && (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, background: PRIMARY_SOFT, color: PRIMARY, padding: "1px 8px", borderRadius: 999 }}>{r.hasil}</span>
+                )}
+                <span style={{ marginLeft: "auto", fontSize: 10.5, color: TEXT_MID, whiteSpace: "nowrap" }}>
+                  {tanggal(r.tanggal_followup || r.created_at)}
+                  {r.profiles?.full_name ? ` · ${r.profiles.full_name}` : ""}
+                </span>
+              </div>
+              {r.note && <div style={{ fontSize: 12, color: TEXT_MID, marginTop: 2, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{r.note}</div>}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 

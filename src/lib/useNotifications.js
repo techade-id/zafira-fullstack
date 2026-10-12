@@ -15,7 +15,7 @@ import { supabase } from "./supabaseClient";
  * isi daftarnya adalah cara cepat kehilangan kepercayaan pada fitur ini.
  */
 
-const KOSONG = { total: 0, tinggi: 0, per_kategori: [], items: [] };
+const KOSONG = { total: 0, tinggi: 0, terlewat: 0, per_kategori: [], items: [] };
 
 let cache = null;
 let cacheWaktu = 0;
@@ -113,12 +113,16 @@ export function bersihkanNotifikasi() {
 
 export const LABEL_KATEGORI = {
   followup: "Follow-up jatuh tempo",
+  eskalasi: "Eskalasi: jadwal follow-up terlewat",
+  siapkan_berkas: "Siapkan berkas ke bank",
   dingin: "Prospek mulai dingin",
   sp3k: "SP3K mendekati kedaluwarsa",
   mandek: "Berkas mengendap di bank",
   verifikasi: "Menunggu verifikasi",
   hold: "Hold kavling segera berakhir",
-  persetujuan: "Perubahan catatan menunggu persetujuan",
-  catatan_ditolak: "Perubahan catatan ditolak",
-  catatan_disetujui: "Perubahan catatan disetujui",
+  persetujuan: "Pengajuan catatan menunggu persetujuan",
+  persetujuan_status: "Pengajuan status konsumen menunggu persetujuan",
+  catatan_ditolak: "Pengajuan catatan ditolak",
+  catatan_disetujui: "Pengajuan catatan disetujui",
+  status_diputuskan: "Pengajuan status konsumen diputuskan",
 };

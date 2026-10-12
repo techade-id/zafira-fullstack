@@ -13,6 +13,7 @@ import { dengarBerkas } from "../lib/berkas";
 import KontakAksi from "../components/KontakAksi";
 import DataDiriKonsumen from "../components/DataDiriKonsumen";
 import PembayaranKonsumen from "../components/PembayaranKonsumen";
+import { AjukanStatusKonsumen, PenandaStatusMenunggu, usePengajuanStatus, LABEL_STATUS_KONSUMEN, EVENT_STATUS } from "../components/PengajuanStatus";
 import {
   Card,
   Badge,
@@ -69,6 +70,8 @@ export default function KonsumenDetailPage() {
   // Tombol Ubah di daftar Konsumen membuka halaman ini dengan ?ubah=1.
   const [mintaUbah, setMintaUbah] = useState(params.get("ubah") === "1");
   const [kprDraf, setKprDraf] = useState(false);
+  const [ubahStatus, setUbahStatus] = useState(false);
+  const statusMenunggu = usePengajuanStatus(id);
 
   const muat = useCallback(async () => {
     setMemuat(true);
@@ -115,6 +118,16 @@ export default function KonsumenDetailPage() {
   // Lencana jumlah dokumen dan angka "Berkas Wajib" ikut segar setiap kali
   // berkas berubah — dari tahap KPR maupun dari Dokumen Konsumen.
   useEffect(() => dengarBerkas(id, muat), [id, muat]);
+
+  // Pengajuan status yang diputuskan (dari halaman Persetujuan, pop-up, atau
+  // Admin di tab lain) mengubah badge status di kepala kartu ini.
+  useEffect(() => {
+    const dengar = (e) => {
+      if (!e.detail?.customerId || e.detail.customerId === id) muat();
+    };
+    window.addEventListener(EVENT_STATUS, dengar);
+    return () => window.removeEventListener(EVENT_STATUS, dengar);
+  }, [id, muat]);
 
   // Layar memuat hanya untuk konsumen yang belum tampil. Memuat ulang konsumen
   // yang sama — setelah unggah berkas atau mencatat kontak — tidak boleh
@@ -165,7 +178,22 @@ export default function KonsumenDetailPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <h2 style={{ fontSize: 21, margin: 0, letterSpacing: "-0.02em" }}>{konsumen.name}</h2>
               {tahap && <Badge value={tahap} label={labelTahap(tahap)} />}
-              <Badge value={konsumen.status} />
+              <Badge value={konsumen.status} label={LABEL_STATUS_KONSUMEN[konsumen.status]} />
+              {/* Status konsumen berubah lewat pengajuan yang disetujui Admin
+                  Sistem (migrasi 027) — bukan lagi dropdown di daftar. */}
+              {statusMenunggu ? (
+                <PenandaStatusMenunggu edit={statusMenunggu} />
+              ) : (
+                canEditCustomer(profile, konsumen) &&
+                konsumen.status !== "batal" && (
+                  <button
+                    onClick={() => setUbahStatus(true)}
+                    style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: TEXT_MID, borderRadius: 999, padding: "4px 11px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    {roleOf(profile) === "admin" ? "Ubah status" : "Ajukan ubah status"}
+                  </button>
+                )
+              )}
             </div>
 
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12.5, color: TEXT_MID, alignItems: "center" }}>
@@ -276,6 +304,8 @@ export default function KonsumenDetailPage() {
       {tab === "pembayaran" && <PembayaranKonsumen konsumen={konsumen} pembayaran={pembayaran} editable={bolehBerkas} />}
 
       {tab === "riwayat" && <FollowUpTimeline customerId={konsumen.id} leadId={konsumen.lead_id} title="Riwayat Konsumen" />}
+
+      <AjukanStatusKonsumen konsumen={konsumen} open={ubahStatus} onClose={() => setUbahStatus(false)} onSelesai={muat} />
     </div>
   );
 }

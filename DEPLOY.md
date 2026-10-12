@@ -61,6 +61,7 @@ migration_023_followup_milik_sales.sql
 migration_024_followup_bukti.sql
 migration_025_ubah_catatan.sql
 migration_026_notifikasi_persetujuan.sql
+migration_027_alur_followup_booking.sql
 storage.sql
 ```
 
@@ -186,8 +187,10 @@ Settings → Environment Variables.
 | Unggah gagal: "Tempat penyimpanan … belum dibuat" / "Bucket not found" | Bucket belum ada — jalankan ulang `storage.sql`, lalu `check_setup.sql` |
 | Unggah gagal: "lebih dari 10 MB" / "Jenis berkas tidak diterima" | Batas bucket bekerja sebagaimana mestinya — kompres berkas, atau pakai gambar/PDF |
 | Simpan Follow Up gagal "Could not find the function catat_followup" | `migration_024` belum jalan |
-| Halaman Persetujuan Catatan: "Data persetujuan belum bisa dimuat" | `migration_025` belum jalan |
+| Halaman Persetujuan: "Data persetujuan belum bisa dimuat" | `migration_025` belum jalan |
 | Lonceng Admin tidak memuat pengajuan perubahan catatan | `migration_026` belum jalan, atau migrasi lama dijalankan ulang tanpa mengulang 025 dan 026 sesudahnya |
+| Konversi ke Booking gagal "function convert_lead_to_customer … is not unique" atau tombol Survei/BI Checking gagal | `migration_027` belum jalan, atau `022` dijalankan ulang tanpa mengulang 023–027 sesudahnya |
+| Status konsumen gagal diubah: "hanya bisa diubah lewat pengajuan" | Perilaku yang benar sejak `migration_027` — ajukan dari kartu konsumen, Admin Sistem memutuskan di menu Persetujuan |
 | Pop-up pengajuan tidak muncul | Cek baris `REALTIME` di `check_setup.sql` (harus `aktif`) dan sakelar Pengaturan Bisnis → Notifikasi. Muat ulang halaman setelah menjalankan migrasi |
 
 Console browser menampilkan seluruh error Supabase lengkap; buka saat menelusuri.

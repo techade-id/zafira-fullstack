@@ -102,7 +102,10 @@ const TAHAP = [
       { key: "bi_checking_tanggal", label: "Tanggal Pemeriksaan", tipe: "date" },
       { key: "bi_checking_catatan", label: "Catatan", tipe: "text", strip: true },
     ],
-    lampiran: [{ slot: "bi_checking", label: "Hasil BI-Checking", hint: "Lampirkan hasil pemeriksaan SLIK dari bank." }],
+    lampiran: [
+      { slot: "ktp", label: "KTP", hint: "KTP calon pembeli yang dipakai untuk BI-Checking." },
+      { slot: "bi_checking", label: "Hasil BI-Checking", hint: "Lampirkan hasil pemeriksaan SLIK dari bank." },
+    ],
     // Penghasilan terverifikasi sengaja tidak ada di sini lagi: BRIEF
     // memindahkannya ke data diri konsumen, tempat ia memang dipakai berulang.
     catatan: "Penghasilan terverifikasi kini ada di Ringkasan → Data Diri konsumen.",
@@ -127,10 +130,13 @@ const TAHAP = [
       { key: "tanggal_dp", label: "Tanggal Pembayaran DP", tipe: "date" },
       { key: "nominal_dp", label: "Nominal DP (Promo)", tipe: "rupiah" },
       { key: "biaya_tambahan_tanah", label: "Biaya Tambahan Tanah", tipe: "rupiah" },
+      // Terisi otomatis saat Konversi ke Booking bila kavlingnya hook
+      // (migrasi 027), dari tarif perumahannya.
+      { key: "biaya_kavling_strategis", label: "Biaya Kavling Strategis", tipe: "rupiah" },
       // BRIEF §DP: "Tambahkan akumulasi otomatis dari Nominal DP + Biaya Tanah
       // untuk di Total DP". Dihitung, jadi dibaca saja — mengetiknya sendiri
       // hanya menciptakan kemungkinan angkanya tidak cocok.
-      { key: "nominal_total_dp", label: "Total DP (Promo + Tanah)", tipe: "hitung" },
+      { key: "nominal_total_dp", label: "Total DP (Promo + Tanah + Strategis)", tipe: "hitung" },
       { key: "dp_terbayar", label: "DP Terbayar", tipe: "rupiah" },
     ],
     pembayaran: "dp",
@@ -394,9 +400,10 @@ export default function KprStepper({ kpr, customerId, editable, onChange, onBerk
     const isi = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
     const a = isi(nilai.nominal_dp) ? Number(nilai.nominal_dp) : null;
     const b = isi(nilai.biaya_tambahan_tanah) ? Number(nilai.biaya_tambahan_tanah) : null;
-    if (a === null && b === null) return nilai.nominal_total_dp ?? "";
-    return (a ?? 0) + (b ?? 0);
-  }, [nilai.nominal_dp, nilai.biaya_tambahan_tanah, nilai.nominal_total_dp]);
+    const c = isi(nilai.biaya_kavling_strategis) ? Number(nilai.biaya_kavling_strategis) : null;
+    if (a === null && b === null && c === null) return nilai.nominal_total_dp ?? "";
+    return (a ?? 0) + (b ?? 0) + (c ?? 0);
+  }, [nilai.nominal_dp, nilai.biaya_tambahan_tanah, nilai.biaya_kavling_strategis, nilai.nominal_total_dp]);
 
   /**
    * Simpan satu tahap lewat tombolnya — hanya kolom yang berubah yang dikirim.

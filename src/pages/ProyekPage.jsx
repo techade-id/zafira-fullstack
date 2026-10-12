@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { POSISI, labelPosisi } from "../lib/siteplan";
+import { rupiah } from "../lib/format";
+import InputRupiah from "../components/InputRupiah";
 import { Card, PageTitle, PrimaryButton, DataTable, BORDER, TEXT_MID, ORANGE_LIGHT, DeleteButton, EditButton, RowActions } from "../components/ui";
 
 const UNIT_STATUS_OPTIONS = ["tersedia", "booking", "terjual", "batal"];
@@ -11,37 +14,52 @@ export default function ProyekPage() {
   const [activeProjectId, setActiveProjectId] = useState(null);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
-  const [projectForm, setProjectForm] = useState({ name: "", location: "", description: "" });
+  const formProyekKosong = { name: "", location: "", description: "", tarif_tanah_per_m2: "1000000", biaya_kavling_strategis: "0" };
+  const [projectForm, setProjectForm] = useState(formProyekKosong);
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [savingProject, setSavingProject] = useState(false);
 
   const [showUnitForm, setShowUnitForm] = useState(false);
-  const [unitForm, setUnitForm] = useState({ unit_code: "", block: "", type: "", price: "" });
+  const formUnitKosong = { unit_code: "", block: "", type: "", price: "", luas_tanah: "", posisi: "standar" };
+  const [unitForm, setUnitForm] = useState(formUnitKosong);
   const [editingUnitId, setEditingUnitId] = useState(null);
 
   function resetProjectForm() {
-    setProjectForm({ name: "", location: "", description: "" });
+    setProjectForm(formProyekKosong);
     setEditingProjectId(null);
     setShowProjectForm(false);
     setError("");
   }
 
   function startEditProject(proj) {
-    setProjectForm({ name: proj.name || "", location: proj.location || "", description: proj.description || "" });
+    setProjectForm({
+      name: proj.name || "",
+      location: proj.location || "",
+      description: proj.description || "",
+      tarif_tanah_per_m2: proj.tarif_tanah_per_m2 ?? "1000000",
+      biaya_kavling_strategis: proj.biaya_kavling_strategis ?? "0",
+    });
     setEditingProjectId(proj.id);
     setShowProjectForm(true);
     setError("");
   }
 
   function resetUnitForm() {
-    setUnitForm({ unit_code: "", block: "", type: "", price: "" });
+    setUnitForm(formUnitKosong);
     setEditingUnitId(null);
     setShowUnitForm(false);
     setError("");
   }
 
   function startEditUnit(u) {
-    setUnitForm({ unit_code: u.unit_code || "", block: u.block || "", type: u.type || "", price: u.price ?? "" });
+    setUnitForm({
+      unit_code: u.unit_code || "",
+      block: u.block || "",
+      type: u.type || "",
+      price: u.price ?? "",
+      luas_tanah: u.luas_tanah ?? "",
+      posisi: u.posisi || "standar",
+    });
     setEditingUnitId(u.id);
     setShowUnitForm(true);
     setError("");
@@ -77,6 +95,9 @@ export default function ProyekPage() {
       name: projectForm.name.trim(),
       location: projectForm.location.trim() || null,
       description: projectForm.description.trim() || null,
+      // Kolom migrasi 027 — dasar hitungan tambahan tanah dan kavling hook.
+      tarif_tanah_per_m2: Number(projectForm.tarif_tanah_per_m2) || 0,
+      biaya_kavling_strategis: Number(projectForm.biaya_kavling_strategis) || 0,
     };
     const { error } = editingProjectId
       ? await supabase.from("projects").update(payload).eq("id", editingProjectId)
@@ -102,6 +123,8 @@ export default function ProyekPage() {
       block: unitForm.block.trim() || null,
       type: unitForm.type.trim() || null,
       price: unitForm.price ? Number(unitForm.price) : null,
+      luas_tanah: unitForm.luas_tanah ? Number(unitForm.luas_tanah) : null,
+      posisi: unitForm.posisi || null,
     };
     const { error } = editingUnitId
       ? await supabase.from("units").update(payload).eq("id", editingUnitId)
@@ -137,6 +160,19 @@ export default function ProyekPage() {
             <input placeholder="Nama proyek" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} style={inputStyle} />
             <input placeholder="Lokasi" value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} style={inputStyle} />
             <input placeholder="Deskripsi singkat" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} style={inputStyle} />
+          </div>
+          {/* Dibaca otomatis saat Konversi ke Booking: kavling yang lebih
+              luas dari tipenya membayar kelebihannya, kavling hook membayar
+              biaya strategis. */}
+          <div className="rg-2" style={{ marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Tarif kelebihan tanah per m²</div>
+              <InputRupiah value={projectForm.tarif_tanah_per_m2} onChange={(v) => setProjectForm({ ...projectForm, tarif_tanah_per_m2: v })} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Biaya kavling strategis (hook)</div>
+              <InputRupiah value={projectForm.biaya_kavling_strategis} onChange={(v) => setProjectForm({ ...projectForm, biaya_kavling_strategis: v })} />
+            </div>
           </div>
           {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 10 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -182,7 +218,13 @@ export default function ProyekPage() {
         <Card>
           <PageTitle
             title={`Unit — ${activeProject.name}`}
-            subtitle={activeProject.location}
+            subtitle={[
+              activeProject.location,
+              `Kelebihan tanah ${rupiah(activeProject.tarif_tanah_per_m2, { kosong: "Rp0" })}/m²`,
+              `Kavling hook ${rupiah(activeProject.biaya_kavling_strategis, { kosong: "Rp0" })}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             action={
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <EditButton label="Ubah Proyek" onClick={() => startEditProject(activeProject)} />
@@ -208,6 +250,22 @@ export default function ProyekPage() {
               <input placeholder="Blok" value={unitForm.block} onChange={(e) => setUnitForm({ ...unitForm, block: e.target.value })} style={inputStyle} />
               <input placeholder="Tipe (mis. 36/72)" value={unitForm.type} onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })} style={inputStyle} />
               <input placeholder="Harga (Rp)" type="number" value={unitForm.price} onChange={(e) => setUnitForm({ ...unitForm, price: e.target.value })} style={inputStyle} />
+              <input
+                placeholder="Luas tanah kavling (m²)"
+                type="number"
+                min="0"
+                value={unitForm.luas_tanah}
+                onChange={(e) => setUnitForm({ ...unitForm, luas_tanah: e.target.value })}
+                title="Luas tanah sebenarnya. Kelebihan dari angka tanah pada tipe (mis. 36/72 → 72 m²) dihitung sebagai tambahan tanah."
+                style={inputStyle}
+              />
+              <select value={unitForm.posisi} onChange={(e) => setUnitForm({ ...unitForm, posisi: e.target.value })} aria-label="Posisi kavling" style={inputStyle}>
+                {POSISI.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
               <div style={{ gridColumn: "1 / -1" }}>
                 {error && <div style={{ color: "#C2413B", fontSize: 12, marginBottom: 8 }}>{error}</div>}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -232,6 +290,8 @@ export default function ProyekPage() {
               { key: "block", label: "Blok", render: (row) => row.block || "-" },
               { key: "type", label: "Tipe", render: (row) => row.type || "-" },
               { key: "price", label: "Harga", render: (row) => (row.price ? `Rp${Number(row.price).toLocaleString("id-ID")}` : "-") },
+              { key: "luas_tanah", label: "Luas Tanah", render: (row) => (row.luas_tanah ? `${Number(row.luas_tanah)} m²` : "-") },
+              { key: "posisi", label: "Posisi", render: (row) => labelPosisi(row.posisi) || "-" },
               {
                 key: "status",
                 label: "Status",

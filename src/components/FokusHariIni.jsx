@@ -24,13 +24,13 @@ import { Card, SectionTitle, BORDER_SOFT, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY,
 
 /** Kategori yang relevan per peran, berurut menurut kepentingannya. */
 const PRIORITAS = {
-  sales: ["hold", "followup", "catatan_ditolak", "dingin"],
-  admin_marketing: ["hold", "sp3k", "mandek", "followup"],
+  sales: ["hold", "followup", "catatan_ditolak", "status_diputuskan", "dingin"],
+  admin_marketing: ["siapkan_berkas", "hold", "sp3k", "mandek", "followup", "status_diputuskan"],
   finance: ["verifikasi"],
   tim_lapangan: [],
-  supervisor_marketing: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
-  pengawas: ["verifikasi", "sp3k", "mandek", "followup", "dingin"],
-  admin: ["persetujuan", "verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
+  supervisor_marketing: ["eskalasi", "verifikasi", "sp3k", "mandek", "followup", "dingin"],
+  pengawas: ["eskalasi", "verifikasi", "sp3k", "mandek", "followup", "dingin"],
+  admin: ["persetujuan", "persetujuan_status", "eskalasi", "siapkan_berkas", "verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
 };
 
 const SARAN = {
@@ -42,6 +42,10 @@ const SARAN = {
   hold: "Buka Siteplan",
   persetujuan: "Tinjau pengajuan",
   catatan_ditolak: "Lihat prospek",
+  eskalasi: "Lihat jadwal terlewat",
+  siapkan_berkas: "Buka Konsumen",
+  persetujuan_status: "Tinjau pengajuan status",
+  status_diputuskan: "Buka konsumen",
 };
 
 const RUTE_KATEGORI = {
@@ -55,6 +59,10 @@ const RUTE_KATEGORI = {
   hold: "/siteplan",
   persetujuan: "/persetujuan",
   catatan_ditolak: "/follow-up",
+  eskalasi: "/follow-up?saringan=terlewat",
+  siapkan_berkas: "/konsumen",
+  persetujuan_status: "/persetujuan?tab=status",
+  status_diputuskan: "/konsumen",
 };
 
 /**
@@ -184,7 +192,15 @@ export default function FokusHariIni() {
               .map((it, i) => (
                 <button
                   key={`${it.kategori}-${it.record_id}-${i}`}
-                  onClick={() => navigate(it.rute === "/konsumen" ? `/konsumen/${it.record_id}` : `${it.rute}?sorot=${it.record_id}`)}
+                  onClick={() =>
+                    navigate(
+                      it.kategori === "persetujuan_status"
+                        ? `/persetujuan?tab=status&sorot=${it.record_id}`
+                        : it.rute === "/konsumen"
+                        ? `/konsumen/${it.record_id}`
+                        : `${it.rute}?sorot=${it.record_id}`
+                    )
+                  }
                   style={{
                     display: "flex",
                     alignItems: "center",

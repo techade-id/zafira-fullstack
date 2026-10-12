@@ -46,6 +46,30 @@ export async function putuskanPengajuan(edit, setujui, alasan = null) {
 /** Alasan, sebelum/sesudah berdampingan, dan bukti tambahan. */
 export function PerbandinganCatatan({ edit, bukti = [], onBukaBukti }) {
   const lama = edit.lama || {};
+
+  // Usulan hapus tidak punya "sesudah": yang ditinjau adalah catatan yang
+  // akan hilang — dan setelah disetujui, potret inilah satu-satunya isinya.
+  if (edit.jenis === "hapus") {
+    return (
+      <>
+        <div style={{ background: PRIMARY_SOFT, borderRadius: 11, padding: "9px 12px", fontSize: 12.5, color: TEXT_DARK, marginBottom: 12, lineHeight: 1.5 }}>
+          <b>Alasan penghapusan:</b> {edit.alasan}
+        </div>
+        <div style={{ border: `1px solid #F2D3D1`, background: "#FDF6F5", borderRadius: 12, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.55 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", color: NEGATIVE, marginBottom: 4 }}>
+            {edit.status === "disetujui" ? "CATATAN YANG DIHAPUS" : "CATATAN YANG DIUSULKAN UNTUK DIHAPUS"}
+          </div>
+          <div style={{ color: TEXT_DARK }}>
+            <b>{lama.activity || "-"}</b>
+            {lama.hasil ? ` · ${lama.hasil}` : ""}
+            {lama.tanggal_followup ? ` · follow up ${tanggal(lama.tanggal_followup)}` : ""}
+          </div>
+          {lama.note && <div style={{ color: TEXT_MID, whiteSpace: "pre-wrap", marginTop: 2 }}>{lama.note}</div>}
+        </div>
+      </>
+    );
+  }
+
   const bidang = [
     { label: "Jenis", sebelum: lama.activity, sesudah: edit.aktivitas_baru },
     { label: "Tanggal follow-up", sebelum: lama.tanggal_followup ? tanggal(lama.tanggal_followup) : null, sesudah: tanggal(edit.tanggal_baru) },
@@ -145,7 +169,13 @@ export function TombolKeputusan({ edit, onSelesai }) {
       setGalat(pesan);
       return;
     }
-    toast.sukses(setujui ? `Perubahan catatan ${edit.leads?.name || ""} disetujui.` : "Pengajuan ditolak — pengaju akan melihat alasannya.");
+    toast.sukses(
+      !setujui
+        ? "Pengajuan ditolak — pengaju akan melihat alasannya."
+        : edit.jenis === "hapus"
+        ? `Catatan ${edit.leads?.name || ""} dihapus — jejaknya tetap tersimpan.`
+        : `Perubahan catatan ${edit.leads?.name || ""} disetujui.`
+    );
     onSelesai?.();
   }
 
@@ -238,7 +268,7 @@ export default function TinjauPengajuan({ editId, open, onClose }) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div id="tinjau-judul" style={{ fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-                Tinjau Perubahan Catatan
+                {edit?.jenis === "hapus" ? "Tinjau Penghapusan Catatan" : "Tinjau Perubahan Catatan"}
                 {edit && <Badge value={edit.status === "disetujui" ? "terverifikasi" : edit.status} label={LABEL_STATUS[edit.status]} />}
               </div>
               {edit && (
