@@ -37,6 +37,7 @@ import { allowedRoutes, roleLabel } from "../lib/permissions";
 import GlobalSearch from "./GlobalSearch";
 import NotifBell from "./NotifBell";
 import PopupPengajuan from "./PopupPengajuan";
+import PengingatTerlewat from "./PengingatTerlewat";
 import PenjagaGalat from "./PenjagaGalat";
 import { useNotifications } from "../lib/useNotifications";
 import { PRIMARY, PRIMARY_DARK, ACCENT, PAGE_BG, SURFACE, BORDER, TEXT_DARK, TEXT_MID, ON_PRIMARY, ON_PRIMARY_FAINT } from "./ui";
@@ -57,7 +58,7 @@ const navSections = [
       // Dekat Follow Up Leads, tempat catatannya lahir — bukan di grup
       // Pengaturan paling bawah, tempat ia tidak pernah ditemukan. Angkanya
       // jumlah pengajuan yang menunggu (hanya Admin Sistem yang punya).
-      { to: "/persetujuan", icon: FileCheck, label: "Persetujuan Catatan", lencana: "persetujuan" },
+      { to: "/persetujuan", icon: FileCheck, label: "Persetujuan", lencana: ["persetujuan", "persetujuan_status"] },
       { to: "/konsumen", icon: Users, label: "Konsumen" },
       { to: "/pemberkasan", icon: FolderOpen, label: "Papan Berkas" },
       { to: "/pembayaran", icon: Wallet, label: "Pembayaran" },
@@ -268,7 +269,7 @@ export default function AppLayout() {
                 <NavItem
                   key={item.to}
                   {...item}
-                  jumlah={item.lencana ? lencana.get(item.lencana) || 0 : 0}
+                  jumlah={[].concat(item.lencana || []).reduce((n, k) => n + (lencana.get(k) || 0), 0)}
                   onClick={() => setSidebarOpen(false)}
                 />
               ))}
@@ -383,6 +384,9 @@ export default function AppLayout() {
 
       <PenjagaGalat diam>
         <PopupPengajuan />
+      </PenjagaGalat>
+      <PenjagaGalat diam>
+        <PengingatTerlewat />
       </PenjagaGalat>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock, MessageSquare, Lock, Star, Map as MapIcon } from "lucide-react";
+import { X, ArrowRightLeft, Ban, Pencil, ArrowRight, CalendarClock, MessageSquare, Lock, Star, Map as MapIcon, MapPin, ShieldCheck } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -49,6 +49,8 @@ export default function PanelProspek({
   konsumenId,
   onKonversi,
   onUbahTahap,
+  onSurvei,
+  onBiChecking,
   onUbahData,
   sumberLabel,
 }) {
@@ -172,10 +174,22 @@ export default function PanelProspek({
                   {/* Bukan lagi "Ubah Tahap": suhu prospek ditentukan sistem
                       dari riwayat follow-up (BRIEF §Leads), jadi yang bisa
                       dilakukan di sini adalah menuliskan apa yang terjadi. */}
-                  <button onClick={onUbahTahap} style={sekunder} title="Catat hasil follow-up dan jadwalkan langkah berikutnya">
+                  <button onClick={onUbahTahap} style={sekunder} title="Riwayat chat dan catat follow-up berikutnya">
                     <MessageSquare size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
-                    Catat Follow Up
+                    Chat Follow Up
                   </button>
+                  {onSurvei && (
+                    <button onClick={onSurvei} style={sekunder} title="Tanggal, foto, dan catatan survei">
+                      <MapPin size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
+                      Survei
+                    </button>
+                  )}
+                  {onBiChecking && (
+                    <button onClick={onBiChecking} style={sekunder} title="KTP, hasil SLIK, Lolos/Tidak Lolos">
+                      <ShieldCheck size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
+                      BI Checking
+                    </button>
+                  )}
                   <button onClick={onUbahData} style={sekunder}>
                     <Pencil size={12} style={{ marginRight: 5, verticalAlign: -2 }} />
                     Ubah Data
@@ -189,7 +203,7 @@ export default function PanelProspek({
             <Rincian lead={lead} sumberLabel={sumberLabel} />
 
             {/* Tanpa formulir catatan: mencatat follow-up lewat satu pintu,
-                tombol Catat Follow Up, supaya jadwal berikutnya ikut terisi. */}
+                tombol Chat Follow Up, supaya jadwal berikutnya ikut terisi. */}
             <FollowUpTimeline leadId={lead.id} title="Riwayat" bisaCatat={false} />
           </div>
         </>
@@ -297,6 +311,7 @@ function KavlingProspek({ leadId }) {
 /** Data awal prospek — dipakai juga oleh panel rincian di halaman Leads. */
 export function Rincian({ lead, sumberLabel }) {
   const baris = [
+    ["Unit/Blok Diminati", lead.unit_diminati],
     ["Sumber", sumberLabel],
     ["Domisili", lead.kecamatan || lead.domisili],
     ["Usia", lead.usia],

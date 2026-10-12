@@ -282,6 +282,51 @@ export default function PengaturanBisnisPage() {
         </div>
       </Card>
 
+      {/* Migrasi 027. Booking Fee terisi otomatis di Konversi ke Booking;
+          dua batas hari dipakai lonceng dan pengingat saat masuk. */}
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle title="Booking & Pengingat" />
+        <div className="rg-3" style={{ marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Booking Fee otomatis (Rp)</div>
+            <input
+              key={`booking_fee-${appSettings.booking_fee ?? ""}`}
+              type="number"
+              min="0"
+              step="50000"
+              defaultValue={appSettings.booking_fee || "700000"}
+              onBlur={(e) => Number(e.target.value) > 0 && saveAppSetting("booking_fee", Math.round(Number(e.target.value)))}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Eskalasi jadwal terlewat setelah (hari)</div>
+            <input
+              key={`eskalasi-${appSettings.eskalasi_followup_hari ?? ""}`}
+              type="number"
+              min="0"
+              defaultValue={appSettings.eskalasi_followup_hari ?? "3"}
+              onBlur={(e) => e.target.value !== "" && Number(e.target.value) >= 0 && saveAppSetting("eskalasi_followup_hari", Math.round(Number(e.target.value)))}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: TEXT_MID, marginBottom: 4 }}>Siapkan berkas setelah proses (hari)</div>
+            <input
+              key={`siapkan-${appSettings.siapkan_berkas_hari ?? ""}`}
+              type="number"
+              min="1"
+              defaultValue={appSettings.siapkan_berkas_hari ?? "14"}
+              onBlur={(e) => Number(e.target.value) >= 1 && saveAppSetting("siapkan_berkas_hari", Math.round(Number(e.target.value)))}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: TEXT_MID, lineHeight: 1.55 }}>
+          Booking Fee terisi otomatis saat Konversi ke Booking dan tidak bisa diubah Sales. Jadwal follow-up yang terlewat lebih dari batas eskalasi dikabarkan ke Supervisor, Pengawas, dan Admin. Konsumen yang lama prosesnya melewati batas siapkan berkas — dan berkasnya belum masuk bank — diingatkan ke Admin Marketing. Tarif tambahan tanah dan biaya kavling strategis diatur per perumahan di menu Proyek.
+        </div>
+      </Card>
+
       {/* Migrasi 026. Baris yang belum ada dibaca sebagai menyala. */}
       <Card style={{ marginBottom: 18 }}>
         <SectionTitle title="Notifikasi" />

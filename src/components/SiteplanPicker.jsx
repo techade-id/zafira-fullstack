@@ -22,8 +22,16 @@ import { BORDER, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY, PRIMARY_SOFT } from "./u
  * Siteplannya sama dengan halaman Siteplan (migrasi 022): satu sumber geometri
  * untuk semua proyek, bukan lagi satu gambar Kaligangsa yang ditulis di kode.
  */
-export default function SiteplanPicker({ unitTerpilihId, onPilih, leadId }) {
-  const { proyek, siteplans, memuat, galat } = useDaftarSiteplan();
+/**
+ * @param proyekId bila diisi, hanya siteplan perumahan ini yang ditawarkan —
+ *   formulir booking memilih perumahan lebih dulu, baru unitnya.
+ */
+export default function SiteplanPicker({ unitTerpilihId, onPilih, leadId, proyekId }) {
+  const { proyek, siteplans: semuaSiteplan, memuat, galat } = useDaftarSiteplan();
+  const siteplans = useMemo(
+    () => (proyekId ? semuaSiteplan.filter((s) => s.project_id === proyekId) : semuaSiteplan),
+    [semuaSiteplan, proyekId]
+  );
   const sekarang = useSekarang();
   const [stok, setStok] = useState(null);
   const [aktifId, setAktifId] = useState(null);
@@ -44,6 +52,11 @@ export default function SiteplanPicker({ unitTerpilihId, onPilih, leadId }) {
       hidup = false;
     };
   }, []);
+
+  // Perumahan berganti: siteplan aktif dipilih ulang dari perumahan yang baru.
+  useEffect(() => {
+    setAktifId(null);
+  }, [proyekId]);
 
   const tersediaPer = useMemo(() => {
     const m = new Map();
@@ -102,7 +115,11 @@ export default function SiteplanPicker({ unitTerpilihId, onPilih, leadId }) {
   if (memuat) return <div style={{ padding: 20, fontSize: 13, color: TEXT_MID }}>Memuat siteplan…</div>;
   if (galat) return <div style={{ padding: 16, fontSize: 12.5, color: TEXT_MID, lineHeight: 1.5 }}>{galat} Sementara itu, pilih unit lewat mode Daftar.</div>;
   if (!siteplans.length) {
-    return <div style={{ padding: 16, fontSize: 12.5, color: TEXT_MID }}>Belum ada siteplan. Pilih unit lewat mode Daftar, atau minta Admin Marketing menggambar siteplannya.</div>;
+    return (
+      <div style={{ padding: 16, fontSize: 12.5, color: TEXT_MID }}>
+        {proyekId ? "Perumahan ini belum punya siteplan." : "Belum ada siteplan."} Pilih unit lewat mode Daftar, atau minta Admin Marketing menggambar siteplannya.
+      </div>
+    );
   }
 
   return (

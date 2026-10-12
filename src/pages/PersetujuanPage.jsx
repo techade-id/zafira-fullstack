@@ -14,11 +14,14 @@ import {
   HasilKeputusan,
   TombolKeputusan,
 } from "../components/TinjauPengajuan";
-import { Card, PageTitle, Badge, EmptyState, ReadOnlyBanner, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, ACCENT, NEGATIVE } from "../components/ui";
+import { EVENT_STATUS, SELECT_STATUS, KartuPengajuanStatus } from "../components/PengajuanStatus";
+import { Card, PageTitle, Badge, EmptyState, ReadOnlyBanner, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE } from "../components/ui";
 
 /**
- * Persetujuan Catatan — tempat Admin Sistem memutuskan pengajuan perubahan
- * catatan follow-up (migrasi 025).
+ * Persetujuan — tempat Admin Sistem memutuskan pengajuan atas data penting:
+ * perubahan dan penghapusan catatan follow-up (migrasi 025, 027), serta
+ * perubahan status konsumen (migrasi 027). Yang sudah diputuskan tetap di
+ * sini sebagai jejak audit: siapa mengajukan, kapan, apa, dan siapa memutuskan.
  *
  * Satu halaman berisi semua yang menunggu, setiap pengajuan dengan
  * sebelum/sesudahnya berdampingan — persetujuan yang diberikan tanpa melihat
@@ -46,6 +49,9 @@ export default function PersetujuanPage() {
   const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState("");
   const [saringan, setSaringan] = useState("menunggu");
+  const [tab, setTab] = useState(params.get("tab") === "status" ? "status" : "catatan");
+  const [barisStatus, setBarisStatus] = useState([]);
+  const [galatStatus, setGalatStatus] = useState("");
   const [bukaPratinjau, pratinjau] = usePratinjau();
 
   const sorotId = params.get("sorot");
@@ -76,41 +82,91 @@ export default function PersetujuanPage() {
     setMemuat(false);
   }
 
+  async function muatStatus() {
+    const { data, error } = await supabase.from("customer_status_edits").select(SELECT_STATUS).order("diajukan_at", { ascending: false }).limit(300);
+    // Sebelum migrasi 027 tabelnya belum ada.
+    setGalatStatus(error ? error.message : "");
+    setBarisStatus(error ? [] : data || []);
+  }
+
   useEffect(() => {
     muat();
+    muatStatus();
     // Diputuskan dari lonceng atau pop-up, atau pengajuan baru masuk lewat
     // Realtime: daftar di halaman ini ikut segar.
     const segarkan = () => muat();
     window.addEventListener(EVENT_PENGAJUAN, segarkan);
-    return () => window.removeEventListener(EVENT_PENGAJUAN, segarkan);
+    window.addEventListener(EVENT_STATUS, muatStatus);
+    return () => {
+      window.removeEventListener(EVENT_PENGAJUAN, segarkan);
+      window.removeEventListener(EVENT_STATUS, muatStatus);
+    };
   }, []);
 
   // Datang dari lonceng atau "Semua pengajuan →": kartu yang dimaksud
   // disorot dan digulir ke tengah, di saringan yang memang memuatnya.
   useEffect(() => {
     if (!sorotId || memuat || sudahSorot.current) return;
-    sudahSorot.current = true;
-    const target = baris.find((e) => e.id === sorotId);
+    const target = tab === "status" ? barisStatus.find((e) => e.id === sorotId) : baris.find((e) => e.id === sorotId);
     if (!target) return;
+    sudahSorot.current = true;
     if (target.status !== "menunggu") setSaringan("semua");
-    setTimeout(() => document.getElementById(`pengajuan-${sorotId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
-  }, [sorotId, memuat, baris]);
+    const elemen = tab === "status" ? `pengajuan-status-${sorotId}` : `pengajuan-${sorotId}`;
+    setTimeout(() => document.getElementById(elemen)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+  }, [sorotId, memuat, baris, barisStatus, tab]);
 
   const tampil = useMemo(() => (saringan === "semua" ? baris : baris.filter((e) => e.status === saringan)), [baris, saringan]);
-  const jumlahMenunggu = baris.filter((e) => e.status === "menunggu").length;
+  const tampilStatus = useMemo(() => (saringan === "semua" ? barisStatus : barisStatus.filter((e) => e.status === saringan)), [barisStatus, saringan]);
+  const menungguCatatan = baris.filter((e) => e.status === "menunggu").length;
+  const menungguStatus = barisStatus.filter((e) => e.status === "menunggu").length;
+  const jumlahMenunggu = tab === "status" ? menungguStatus : menungguCatatan;
 
   return (
     <div>
       <PageTitle
-        title="Persetujuan Catatan"
+        title="Persetujuan"
         subtitle={
-          jumlahMenunggu > 0
-            ? `${jumlahMenunggu} pengajuan perubahan catatan follow-up menunggu keputusan`
-            : "Pengajuan perubahan catatan follow-up dari Sales"
+          menungguCatatan + menungguStatus > 0
+            ? `${menungguCatatan + menungguStatus} pengajuan menunggu keputusan`
+            : "Perubahan dan penghapusan catatan follow-up, serta perubahan status konsumen"
         }
       />
 
       <ReadOnlyBanner />
+
+      <div role="tablist" aria-label="Jenis pengajuan" style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+        {[
+          { k: "catatan", label: "Catatan Follow Up", n: menungguCatatan },
+          { k: "status", label: "Status Konsumen", n: menungguStatus },
+        ].map((t) => {
+          const aktif = tab === t.k;
+          return (
+            <button
+              key={t.k}
+              role="tab"
+              aria-selected={aktif}
+              onClick={() => setTab(t.k)}
+              style={{
+                border: "none",
+                borderBottom: `2px solid ${aktif ? ACCENT : "transparent"}`,
+                background: "none",
+                padding: "9px 14px",
+                marginBottom: -1,
+                fontSize: 13.5,
+                fontWeight: aktif ? 700 : 500,
+                color: aktif ? TEXT_DARK : TEXT_MID,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {t.label}
+              {t.n > 0 && (
+                <span style={{ marginLeft: 7, fontSize: 11, fontWeight: 700, background: ACCENT_SOFT, color: ACCENT_DARK, borderRadius: 999, padding: "1px 7px" }}>{t.n}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       <Card style={{ padding: 14, marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -140,25 +196,47 @@ export default function PersetujuanPage() {
         </div>
       </Card>
 
-      {galat && (
+      {tab === "status" && (
+        <>
+          {galatStatus && (
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: NEGATIVE }}>Pengajuan status belum bisa dimuat: {galatStatus}. Pastikan migration_027 sudah dijalankan.</div>
+            </Card>
+          )}
+          {!galatStatus && tampilStatus.length === 0 && (
+            <Card>
+              <EmptyState
+                icon={FileCheck}
+                label={saringan === "menunggu" ? "Tidak ada pengajuan status yang menunggu" : "Belum ada pengajuan status di sini"}
+                hint="Pemegang konsumen mengajukan perubahan status dari kartu konsumen."
+              />
+            </Card>
+          )}
+          {tampilStatus.map((e) => (
+            <KartuPengajuanStatus key={e.id} edit={e} disorot={e.id === sorotId} />
+          ))}
+        </>
+      )}
+
+      {tab === "catatan" && galat && (
         <Card style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, color: NEGATIVE }}>Data persetujuan belum bisa dimuat: {galat}. Pastikan migration_025 sudah dijalankan.</div>
         </Card>
       )}
 
-      {memuat && <div style={{ fontSize: 13, color: TEXT_MID, padding: "8px 2px" }}>Memuat pengajuan…</div>}
+      {tab === "catatan" && memuat && <div style={{ fontSize: 13, color: TEXT_MID, padding: "8px 2px" }}>Memuat pengajuan…</div>}
 
-      {!memuat && !galat && tampil.length === 0 && (
+      {tab === "catatan" && !memuat && !galat && tampil.length === 0 && (
         <Card>
           <EmptyState
             icon={FileCheck}
             label={saringan === "menunggu" ? "Tidak ada pengajuan yang menunggu" : "Belum ada pengajuan di sini"}
-            hint="Sales mengajukan perubahan lewat ikon pensil pada catatan di kartu Riwayat prospek."
+            hint="Sales mengajukan perubahan (ikon pensil) atau penghapusan (ikon tempat sampah) pada catatan di kartu Riwayat prospek."
           />
         </Card>
       )}
 
-      {tampil.map((e) => {
+      {tab === "catatan" && tampil.map((e) => {
         const disorot = e.id === sorotId;
         return (
           <div key={e.id} id={`pengajuan-${e.id}`} style={{ marginBottom: 14 }}>
@@ -174,6 +252,9 @@ export default function PersetujuanPage() {
                       {e.leads?.name || "Prospek"} <ArrowRight size={13} style={{ verticalAlign: -2, color: TEXT_MID }} aria-hidden="true" />
                     </button>
                     <Badge value={e.status === "disetujui" ? "terverifikasi" : e.status} label={LABEL_STATUS[e.status]} />
+                    {e.jenis === "hapus" && (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: NEGATIVE, background: "#FBE9E8", borderRadius: 999, padding: "3px 9px" }}>Hapus catatan</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 12, color: TEXT_MID, marginTop: 4 }}>
                     Diajukan {e.pengaju?.full_name || "-"} · {tanggalWaktu(e.diajukan_at)}

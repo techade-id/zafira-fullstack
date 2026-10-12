@@ -48,6 +48,9 @@ const emptyForm = {
   // PRD §4.1 minimal intake
   name: "",
   phone: "",
+  // Unit/Blok yang disebut prospek sejak awal — teks bebas, disarankan dari
+  // daftar unit tersedia. Kavling pastinya baru ditentukan saat booking.
+  unit_diminati: "",
   source_type: "",
   campaign_id: "",
   partner_id: "",
@@ -94,6 +97,7 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
   const [campaigns, setCampaigns] = useState(null);
   const [partners, setPartners] = useState([]);
   const [ganda, setGanda] = useState([]);
+  const [saranUnit, setSaranUnit] = useState(null);
   const namaRef = useRef(null);
 
   const ubah = Boolean(lead);
@@ -126,6 +130,17 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
       setPartners(p.data || []);
     });
   }, [open, campaigns]);
+
+  // Saran Unit/Blok: hanya unit yang masih tersedia, dimuat sekali.
+  useEffect(() => {
+    if (!open || saranUnit) return;
+    supabase
+      .from("units")
+      .select("id, unit_code, block, type, projects(name)")
+      .eq("status", "tersedia")
+      .order("unit_code")
+      .then(({ data }) => setSaranUnit(data || []));
+  }, [open, saranUnit]);
 
   // Nomor ganda, dicek di server (migration_018) karena RLS menyembunyikan
   // prospek agen lain dari Sales. Hanya peringatan — tidak menghalangi simpan.
@@ -171,6 +186,7 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
+      unit_diminati: form.unit_diminati.trim() || null,
       username_sosmed: form.username_sosmed.trim() || null,
       source_type: form.source_type || null,
       campaign_id: form.source_type === "ads" ? form.campaign_id || null : null,
@@ -270,6 +286,24 @@ export default function ModalProspek({ open, lead, onClose, onSaved }) {
             placeholder="08…"
           />
         </Field>
+        <Field label="Unit/Blok Diminati" hint="Boleh dikosongkan atau diketik bebas, mis. Blok C. Kavling pastinya ditentukan saat booking.">
+          <input
+            list="prospek-saran-unit"
+            value={form.unit_diminati}
+            onChange={(e) => set("unit_diminati", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && simpan(false)}
+            placeholder="mis. C-12"
+          />
+        </Field>
+        {/* Di luar Field: Field hanya merapikan satu kontrol. Datalist tidak
+            punya kotak, jadi tidak memakan sel grid. */}
+        <datalist id="prospek-saran-unit">
+          {(saranUnit || []).map((u) => (
+            <option key={u.id} value={u.unit_code}>
+              {[u.block && `Blok ${u.block}`, u.type, u.projects?.name].filter(Boolean).join(" · ")}
+            </option>
+          ))}
+        </datalist>
       </div>
 
       {ganda.length > 0 && <PeringatanGanda baris={ganda} onBuka={bukaGanda} />}
