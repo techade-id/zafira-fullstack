@@ -68,8 +68,8 @@ export default function SurveiModal({ lead, open, onClose, onSelesai }) {
       setGalat("Tanggal survei tidak boleh melewati hari ini — catat survei setelah terjadi.");
       return;
     }
-    if (!catatan.trim() && !hasil) {
-      setGalat("Isi catatan survei — mis. blok yang disukai, keberatan, siapa yang ikut.");
+    if (!catatan.trim()) {
+      setGalat("Isi catatan hasil survei — mis. blok yang disukai, keberatan, siapa yang ikut.");
       return;
     }
     if (foto.length === 0) {
@@ -166,7 +166,7 @@ export default function SurveiModal({ lead, open, onClose, onSelesai }) {
 
         <div style={{ marginBottom: 14 }}>
           <label htmlFor="sv-catatan" style={labelGaya}>
-            Catatan Survei
+            Catatan Hasil Survei<span style={{ color: NEGATIVE }} aria-hidden="true"> *</span>
           </label>
           <textarea
             id="sv-catatan"
@@ -182,7 +182,7 @@ export default function SurveiModal({ lead, open, onClose, onSelesai }) {
           onUbah={setFoto}
           disabled={kirim}
           wajib
-          judul="Foto Dokumentasi Survei"
+          judul="Foto Lokasi Survei"
           petunjuk="Foto di lokasi bersama calon pembeli. Boleh lebih dari satu."
         />
 

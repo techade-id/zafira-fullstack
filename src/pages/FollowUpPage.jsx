@@ -10,6 +10,7 @@ import KontakAksi from "../components/KontakAksi";
 import CatatFollowUpModal from "../components/CatatFollowUpModal";
 import SurveiModal from "../components/SurveiModal";
 import BiCheckingModal from "../components/BiCheckingModal";
+import { EVENT_BI } from "../components/PenggantiBi";
 import PilihLeadFollowUp from "../components/PilihLeadFollowUp";
 import { EVENT_PENGAJUAN } from "../components/TinjauPengajuan";
 import KonversiBookingModal from "../components/KonversiBookingModal";
@@ -95,9 +96,16 @@ function ringkasCatatan(note) {
  */
 function bacaProgres(row) {
   if (!row.aktif) return { level: -1, label: labelTahap(row.status), nada: "redup" };
-  if (row.bi_checking_status === "lolos") return { level: 4, label: "BI Checking · Lolos", nada: "positif" };
-  if (row.bi_checking_status === "tidak_lolos") return { level: 4, label: "BI Checking · Tidak Lolos", nada: "negatif" };
-  if (row.bi_checking_status === "menunggu") return { level: 3, label: "BI Checking · Menunggu hasil", nada: "aksen" };
+  // Pemohon pengganti BI Checking (migrasi 028): urutan > 1 berarti data asli
+  // tidak lolos dan pemeriksaannya sedang memakai pemohon lain.
+  const bi = row.bi || {};
+  if (bi.menunggu) return { level: 3, label: "BI Checking · Pengganti menunggu persetujuan", nada: "aksen" };
+  const pengganti = bi.urutan > 1 ? ` · pengganti ${bi.urutan - 1}/3` : "";
+  if (row.bi_checking_status === "lolos") return { level: 4, label: `BI Checking · Lolos${pengganti}`, nada: "positif" };
+  if (row.bi_checking_status === "tidak_lolos") {
+    return { level: 4, label: `BI Checking · Tidak Lolos · sisa ${Math.max(0, 4 - (bi.urutan || 1))} pengganti`, nada: "negatif" };
+  }
+  if (row.bi_checking_status === "menunggu") return { level: 3, label: `BI Checking · Menunggu hasil${pengganti}`, nada: "aksen" };
   if (row.tanggal_survei) return { level: 2, label: "Sudah Survei", nada: "primer" };
   if (row.chat_terakhir) return { level: 1, label: row.chat_terakhir, nada: "netral" };
   if (row.sudah_fu) return { level: 1, label: "Sudah di-follow up", nada: "netral" };
@@ -119,6 +127,7 @@ export default function FollowUpPage() {
   const [leads, setLeads] = useState([]);
   const [aktivitas, setAktivitas] = useState(new Map());
   const [chat, setChat] = useState(new Map());
+  const [biInfo, setBiInfo] = useState(new Map());
   const [terkonversi, setTerkonversi] = useState(new Map());
   const [pengajuan, setPengajuan] = useState(new Map());
   const [loading, setLoading] = useState(true);
@@ -183,8 +192,21 @@ export default function FollowUpPage() {
     // tidak menghabiskan seluruh jatah baris.
     const petaKontak = new Map();
     const petaChat = new Map();
+    const petaBi = new Map();
     if (daftar.length > 0) {
       const ids = daftar.map((l) => l.id);
+      // Percobaan BI Checking per prospek: pemohon ke berapa, dan apakah ada
+      // pengganti yang menunggu persetujuan. Sebelum migrasi 028 tabelnya
+      // belum ada — progres cukup membaca ringkasan di tabel leads.
+      const { data: bi, error: errBi } = await fetchAllRows(() =>
+        supabase.from("bi_checking_percobaan").select("lead_id, urutan, persetujuan").in("lead_id", ids)
+      );
+      for (const b of errBi ? [] : bi || []) {
+        const x = petaBi.get(b.lead_id) || { urutan: 0, menunggu: false };
+        if (b.persetujuan === "disetujui") x.urutan = Math.max(x.urutan, b.urutan);
+        if (b.persetujuan === "menunggu") x.menunggu = true;
+        petaBi.set(b.lead_id, x);
+      }
       const { data: akt } = await fetchAllRows(() =>
         supabase
           .from("lead_activities")
@@ -203,11 +225,15 @@ export default function FollowUpPage() {
     }
     setAktivitas(petaKontak);
     setChat(petaChat);
+    setBiInfo(petaBi);
     setLoading(false);
   }
 
   useEffect(() => {
     muat();
+    // Pengganti BI disetujui/ditolak dari halaman Persetujuan atau pop-up.
+    window.addEventListener(EVENT_BI, muat);
+    return () => window.removeEventListener(EVENT_BI, muat);
   }, []);
 
   const baris = useMemo(
@@ -227,10 +253,11 @@ export default function FollowUpPage() {
           chat_lengkap: c ? [c.activity, c.hasil, ringkasCatatan(c.note)].filter(Boolean).join(" · ") : null,
           sisa_hari: sisa,
           diam_hari: terakhir ? -selisihHari(terakhir.tanggal_followup || terakhir.created_at) : null,
+          bi: biInfo.get(l.id) || null,
         };
         return { ...r, progres: bacaProgres(r) };
       }),
-    [leads, aktivitas, chat]
+    [leads, aktivitas, chat, biInfo]
   );
 
   // Pengajuan terakhir sudah diputuskan: tombol saringannya hilang, jadi
@@ -508,7 +535,9 @@ export default function FollowUpPage() {
       />
 
       <SurveiModal lead={surveiLead} open={Boolean(surveiLead)} onClose={() => setSurveiLead(null)} onSelesai={muat} />
-      <BiCheckingModal lead={biLead} open={Boolean(biLead)} onClose={() => setBiLead(null)} onSelesai={muat} />
+      {/* Tanpa onSelesai: setiap simpanan BI Checking mengirim EVENT_BI, yang
+          sudah memuat ulang antrean ini — memanggil keduanya memuat dua kali. */}
+      <BiCheckingModal lead={biLead} open={Boolean(biLead)} onClose={() => setBiLead(null)} />
 
       <KonversiBookingModal
         lead={konversiLead}

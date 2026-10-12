@@ -103,7 +103,8 @@ const TAHAP = [
       { key: "bi_checking_catatan", label: "Catatan", tipe: "text", strip: true },
     ],
     lampiran: [
-      { slot: "ktp", label: "KTP", hint: "KTP calon pembeli yang dipakai untuk BI-Checking." },
+      { slot: "ktp", label: "KTP", hint: "KTP pemohon yang dipakai untuk BI-Checking — termasuk pemohon pengganti." },
+      { slot: "kk", label: "Kartu Keluarga", hint: "Bukti hubungan keluarga bila pemohonnya pengganti." },
       { slot: "bi_checking", label: "Hasil BI-Checking", hint: "Lampirkan hasil pemeriksaan SLIK dari bank." },
     ],
     // Penghasilan terverifikasi sengaja tidak ada di sini lagi: BRIEF

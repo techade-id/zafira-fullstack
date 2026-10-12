@@ -497,6 +497,7 @@ insert into units (project_id, unit_code, status) values
 \ir ../migration_025_ubah_catatan.sql
 \ir ../migration_026_notifikasi_persetujuan.sql
 \ir ../migration_027_alur_followup_booking.sql
+\ir ../migration_028_bi_checking_pengganti.sql
 
 select test.eq_query(
   'Geometri Kaligangsa pindah dari kode ke database, sekali saja meski migrasi diulang',

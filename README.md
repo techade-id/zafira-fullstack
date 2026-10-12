@@ -163,6 +163,21 @@ every KPR stage, and a waiting-for-Finance phase on every payment.
      `app_settings` gains `booking_fee` (700000), `eskalasi_followup_hari` (3)
      and `siapkan_berkas_hari` (14), read by the new `eskalasi` and
      `siapkan_berkas` bell categories. Redefines `my_notifications()` again.
+   - **`migration_028_bi_checking_pengganti.sql`** — BI Checking with
+     substitute applicants. Every SLIK check is a row in
+     `bi_checking_percobaan` (1 = the lead's own data, 2–4 = up to three
+     substitutes such as a spouse or sibling, each with NIK, relation, reason,
+     KTP/KK on `berkas_lampiran.percobaan_id`). `catat_bi_checking()` now
+     records against the running attempt, never overwrites a final result for
+     Sales, and cancels the lead ("Tidak lolos BI-Checking") when the fourth
+     attempt fails. Substitutes are requested with `ajukan_pengganti_bi()` and
+     decided by Admin Sistem with `putuskan_pengganti_bi()`; rejected requests
+     don't use up a slot. `convert_lead_to_customer()` refuses while a
+     substitute is pending or not yet lolos, and books in the substitute's
+     name (`customers.pemohon_hubungan`). Survei notes become mandatory in
+     `catat_followup()`. Redefines `my_notifications()`, `catat_followup()`
+     and `convert_lead_to_customer()` again — re-running 027 means re-running
+     028.
 
    Re-run `supabase/storage.sql` after 008 **and after 017**: it creates the
    `payment-receipts`, `payment-proofs` and `berkas-lampiran` buckets and

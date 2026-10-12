@@ -62,6 +62,7 @@ migration_024_followup_bukti.sql
 migration_025_ubah_catatan.sql
 migration_026_notifikasi_persetujuan.sql
 migration_027_alur_followup_booking.sql
+migration_028_bi_checking_pengganti.sql
 storage.sql
 ```
 
@@ -190,6 +191,7 @@ Settings → Environment Variables.
 | Halaman Persetujuan: "Data persetujuan belum bisa dimuat" | `migration_025` belum jalan |
 | Lonceng Admin tidak memuat pengajuan perubahan catatan | `migration_026` belum jalan, atau migrasi lama dijalankan ulang tanpa mengulang 025 dan 026 sesudahnya |
 | Konversi ke Booking gagal "function convert_lead_to_customer … is not unique" atau tombol Survei/BI Checking gagal | `migration_027` belum jalan, atau `022` dijalankan ulang tanpa mengulang 023–027 sesudahnya |
+| BI Checking gagal "Could not find the function catat_bi_checking" atau tab Pemohon BI Checking tidak termuat | `migration_028` belum jalan, atau `027` dijalankan ulang tanpa mengulang `028` |
 | Status konsumen gagal diubah: "hanya bisa diubah lewat pengajuan" | Perilaku yang benar sejak `migration_027` — ajukan dari kartu konsumen, Admin Sistem memutuskan di menu Persetujuan |
 | Pop-up pengajuan tidak muncul | Cek baris `REALTIME` di `check_setup.sql` (harus `aktif`) dan sakelar Pengaturan Bisnis → Notifikasi. Muat ulang halaman setelah menjalankan migrasi |
 

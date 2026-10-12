@@ -122,6 +122,8 @@ export const LABEL_KATEGORI = {
   hold: "Hold kavling segera berakhir",
   persetujuan: "Pengajuan catatan menunggu persetujuan",
   persetujuan_status: "Pengajuan status konsumen menunggu persetujuan",
+  persetujuan_bi: "Pemohon pengganti BI Checking menunggu persetujuan",
+  bi_diputuskan: "Pemohon pengganti BI Checking diputuskan",
   catatan_ditolak: "Pengajuan catatan ditolak",
   catatan_disetujui: "Pengajuan catatan disetujui",
   status_diputuskan: "Pengajuan status konsumen diputuskan",

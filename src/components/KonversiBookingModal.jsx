@@ -7,6 +7,7 @@ import { rupiah, telepon, hariIni } from "../lib/format";
 import { unggahBuktiTransfer } from "../lib/berkas";
 import InputRupiah from "./InputRupiah";
 import SiteplanPicker from "./SiteplanPicker";
+import { labelHubungan } from "./PenggantiBi";
 import {
   Modal,
   PrimaryButton,
@@ -55,6 +56,9 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
   const [dp, setDp] = useState("");
   const [bukti, setBukti] = useState(null);
   const [biaya, setBiaya] = useState(null);
+  // Pemohon BI Checking yang berjalan (migrasi 028): menentukan atas nama
+  // siapa konsumen dibuat, dan apakah booking sudah boleh dicatat.
+  const [pemohon, setPemohon] = useState(null);
   const [memuat, setMemuat] = useState(true);
   const [mode, setMode] = useState("peta");
   const [kirim, setKirim] = useState(false);
@@ -69,7 +73,20 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
     setDp("");
     setBukti(null);
     setBiaya(null);
+    setPemohon(null);
     setTanggalBooking(hariIni());
+    if (lead?.id) {
+      supabase
+        .from("bi_checking_percobaan")
+        .select("urutan, nama_pemohon, hubungan, persetujuan, hasil")
+        .eq("lead_id", lead.id)
+        .neq("persetujuan", "ditolak")
+        .order("urutan", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        // Sebelum migrasi 028 tabelnya belum ada — atas nama prospek.
+        .then(({ data, error }) => setPemohon(error ? null : data || null));
+    }
     // Hanya unit tersedia yang ditawarkan, dan bukan yang sedang ditahan untuk
     // prospek lain (migrasi 022).
     Promise.all([
@@ -147,6 +164,18 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
     if (unitTerpilih && unitTerpilih.project_id !== id) setUnitId("");
   }
 
+  const pengganti = pemohon && pemohon.urutan > 1 && pemohon.persetujuan === "disetujui" && pemohon.hasil === "lolos";
+  // Pesan yang sama dengan penolakan server, ditampilkan sebelum tombol ditekan.
+  const terhalang =
+    pemohon?.persetujuan === "menunggu"
+      ? `Pemohon pengganti ${pemohon.nama_pemohon} masih menunggu persetujuan Admin Sistem.`
+      : pemohon && pemohon.urutan > 1 && pemohon.hasil !== "lolos"
+      ? `BI Checking pemohon pengganti ${pemohon.nama_pemohon} belum lolos.`
+      : lead?.bi_checking_status === "tidak_lolos"
+      ? "BI Checking prospek ini tidak lolos. Ajukan pemohon pengganti dari menu BI Checking, atau batalkan prospek."
+      : "";
+  const namaKonsumen = pengganti ? pemohon.nama_pemohon : lead?.name;
+
   async function jalankan() {
     if (!unitId) {
       setGalat("Pilih unit yang dibooking.");
@@ -194,9 +223,9 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
 
     setKirim(false);
     if (hasilBukti.error) {
-      toast.gagal(`${lead.name} terbooking, tetapi bukti transfer belum tersimpan (${hasilBukti.error}). Unggah ulang dari menu Pembayaran.`);
+      toast.gagal(`${namaKonsumen} terbooking, tetapi bukti transfer belum tersimpan (${hasilBukti.error}). Unggah ulang dari menu Pembayaran.`);
     } else {
-      toast.sukses(`${lead.name} terbooking — Booking Fee masuk antrean verifikasi Finance.`);
+      toast.sukses(`${namaKonsumen} terbooking — Booking Fee masuk antrean verifikasi Finance.`);
     }
     onSelesai?.();
     onClose?.();
@@ -218,12 +247,25 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
         {/* 1. Nama konsumen — dibaca saja, ini konfirmasi atas data yang ada. */}
         <div style={{ background: PRIMARY_SOFT, borderRadius: 13, padding: "13px 15px", marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: PRIMARY, letterSpacing: "0.04em", marginBottom: 3 }}>NAMA KONSUMEN</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: TEXT_DARK, marginBottom: 2 }}>{lead.name}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: TEXT_DARK, marginBottom: 2 }}>{namaKonsumen}</div>
           <div style={{ fontSize: 12, color: TEXT_MID }}>
+            {pengganti ? `${labelHubungan(pemohon.hubungan)} dari ${lead.name} · ` : ""}
             {telepon(lead.phone)}
             {lead.unit_diminati ? ` · minat ${lead.unit_diminati}` : ""}
           </div>
+          {pengganti && (
+            <div style={{ fontSize: 11.5, color: PRIMARY, marginTop: 6, lineHeight: 1.45 }}>
+              Atas nama pemohon pengganti yang lolos BI Checking — SPR, akad kredit, dan SHM nanti atas nama ini. Kontak dan riwayat
+              tetap dari prospek {lead.name}.
+            </div>
+          )}
         </div>
+
+        {terhalang && (
+          <div role="alert" style={{ fontSize: 12.5, color: NEGATIVE, background: "#FBE9E8", border: "1px solid #F2D3D1", borderRadius: 12, padding: "10px 13px", marginBottom: 16, lineHeight: 1.5 }}>
+            {terhalang} Booking belum bisa dicatat.
+          </div>
+        )}
 
         {/* 2. Perumahan */}
         <div style={{ marginBottom: 14 }}>
@@ -408,7 +450,7 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
           <div style={{ fontSize: 11.5, fontWeight: 700, color: ACCENT_DARK, marginBottom: 8, letterSpacing: "0.03em" }}>YANG AKAN TERJADI</div>
           <ul style={{ margin: 0, paddingLeft: 17, fontSize: 12.5, color: ACCENT_DARK, lineHeight: 1.75 }}>
             <li>
-              Konsumen <b>{lead.name}</b> dibuat dari prospek ini
+              Konsumen <b>{namaKonsumen}</b> dibuat dari prospek ini
             </li>
             <li>
               {unitTerpilih ? (
@@ -441,7 +483,7 @@ export default function KonversiBookingModal({ lead, open, onClose, onSelesai, u
           <button onClick={onClose} disabled={kirim} style={gayaSekunder}>
             Batal
           </button>
-          <PrimaryButton onClick={jalankan} disabled={kirim || memuat}>
+          <PrimaryButton onClick={jalankan} disabled={kirim || memuat || Boolean(terhalang)}>
             {kirim ? "Memproses…" : "Konversi ke Booking"}
           </PrimaryButton>
         </div>

@@ -24,13 +24,13 @@ import { Card, SectionTitle, BORDER_SOFT, SURFACE, TEXT_MID, TEXT_DARK, PRIMARY,
 
 /** Kategori yang relevan per peran, berurut menurut kepentingannya. */
 const PRIORITAS = {
-  sales: ["hold", "followup", "catatan_ditolak", "status_diputuskan", "dingin"],
+  sales: ["hold", "followup", "bi_diputuskan", "catatan_ditolak", "status_diputuskan", "dingin"],
   admin_marketing: ["siapkan_berkas", "hold", "sp3k", "mandek", "followup", "status_diputuskan"],
   finance: ["verifikasi"],
   tim_lapangan: [],
   supervisor_marketing: ["eskalasi", "verifikasi", "sp3k", "mandek", "followup", "dingin"],
   pengawas: ["eskalasi", "verifikasi", "sp3k", "mandek", "followup", "dingin"],
-  admin: ["persetujuan", "persetujuan_status", "eskalasi", "siapkan_berkas", "verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
+  admin: ["persetujuan", "persetujuan_bi", "persetujuan_status", "eskalasi", "siapkan_berkas", "verifikasi", "hold", "sp3k", "mandek", "followup", "dingin"],
 };
 
 const SARAN = {
@@ -45,6 +45,8 @@ const SARAN = {
   eskalasi: "Lihat jadwal terlewat",
   siapkan_berkas: "Buka Konsumen",
   persetujuan_status: "Tinjau pengajuan status",
+  persetujuan_bi: "Tinjau pemohon pengganti",
+  bi_diputuskan: "Lihat prospek",
   status_diputuskan: "Buka konsumen",
 };
 
@@ -62,6 +64,8 @@ const RUTE_KATEGORI = {
   eskalasi: "/follow-up?saringan=terlewat",
   siapkan_berkas: "/konsumen",
   persetujuan_status: "/persetujuan?tab=status",
+  persetujuan_bi: "/persetujuan?tab=bi",
+  bi_diputuskan: "/follow-up",
   status_diputuskan: "/konsumen",
 };
 
@@ -194,8 +198,8 @@ export default function FokusHariIni() {
                   key={`${it.kategori}-${it.record_id}-${i}`}
                   onClick={() =>
                     navigate(
-                      it.kategori === "persetujuan_status"
-                        ? `/persetujuan?tab=status&sorot=${it.record_id}`
+                      it.kategori === "persetujuan_status" || it.kategori === "persetujuan_bi"
+                        ? `/persetujuan?tab=${it.kategori === "persetujuan_bi" ? "bi" : "status"}&sorot=${it.record_id}`
                         : it.rute === "/konsumen"
                         ? `/konsumen/${it.record_id}`
                         : `${it.rute}?sorot=${it.record_id}`

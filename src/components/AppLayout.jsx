@@ -58,7 +58,7 @@ const navSections = [
       // Dekat Follow Up Leads, tempat catatannya lahir — bukan di grup
       // Pengaturan paling bawah, tempat ia tidak pernah ditemukan. Angkanya
       // jumlah pengajuan yang menunggu (hanya Admin Sistem yang punya).
-      { to: "/persetujuan", icon: FileCheck, label: "Persetujuan", lencana: ["persetujuan", "persetujuan_status"] },
+      { to: "/persetujuan", icon: FileCheck, label: "Persetujuan", lencana: ["persetujuan", "persetujuan_bi", "persetujuan_status"] },
       { to: "/konsumen", icon: Users, label: "Konsumen" },
       { to: "/pemberkasan", icon: FolderOpen, label: "Papan Berkas" },
       { to: "/pembayaran", icon: Wallet, label: "Pembayaran" },

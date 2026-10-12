@@ -14,6 +14,7 @@ import KontakAksi from "../components/KontakAksi";
 import DataDiriKonsumen from "../components/DataDiriKonsumen";
 import PembayaranKonsumen from "../components/PembayaranKonsumen";
 import { AjukanStatusKonsumen, PenandaStatusMenunggu, usePengajuanStatus, LABEL_STATUS_KONSUMEN, EVENT_STATUS } from "../components/PengajuanStatus";
+import { labelHubungan } from "../components/PenggantiBi";
 import {
   Card,
   Badge,
@@ -195,6 +196,14 @@ export default function KonsumenDetailPage() {
                 )
               )}
             </div>
+
+            {/* Pemohon pengganti BI Checking (migrasi 028): konsumen atas nama
+                pemohon yang lolos, prospek asalnya tetap kontak dan riwayatnya. */}
+            {konsumen.pemohon_hubungan && (
+              <div style={{ fontSize: 12, color: ACCENT_DARK, marginBottom: 8 }}>
+                Pemohon pengganti — {labelHubungan(konsumen.pemohon_hubungan).toLowerCase()} dari {konsumen.leads?.name || "prospek asal"}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12.5, color: TEXT_MID, alignItems: "center" }}>
               <KontakAksi

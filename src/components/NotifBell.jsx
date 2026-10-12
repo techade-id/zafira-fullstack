@@ -10,6 +10,8 @@ const IKON = {
   eskalasi: Siren,
   siapkan_berkas: FolderClock,
   persetujuan_status: UserCheck,
+  persetujuan_bi: UserCheck,
+  bi_diputuskan: UserCheck,
   status_diputuskan: UserCheck,
   dingin: Snowflake,
   sp3k: FileWarning,
@@ -183,8 +185,8 @@ export default function NotifBell() {
                         setTinjauId(it.record_id);
                         return;
                       }
-                      if (it.kategori === "persetujuan_status") {
-                        navigate(`/persetujuan?tab=status&sorot=${it.record_id}`);
+                      if (it.kategori === "persetujuan_status" || it.kategori === "persetujuan_bi") {
+                        navigate(`/persetujuan?tab=${it.kategori === "persetujuan_bi" ? "bi" : "status"}&sorot=${it.record_id}`);
                         return;
                       }
                       navigate(it.rute === "/konsumen" ? `/konsumen/${it.record_id}` : `${it.rute}?sorot=${it.record_id}`);
@@ -227,6 +229,8 @@ export default function NotifBell() {
                           ? "/follow-up?saringan=terlewat"
                           : g.kategori === "persetujuan_status"
                           ? "/persetujuan?tab=status"
+                          : g.kategori === "persetujuan_bi"
+                          ? "/persetujuan?tab=bi"
                           : g.rows[0].rute;
                       navigate(ke);
                     }}

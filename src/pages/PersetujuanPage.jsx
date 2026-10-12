@@ -15,6 +15,7 @@ import {
   TombolKeputusan,
 } from "../components/TinjauPengajuan";
 import { EVENT_STATUS, SELECT_STATUS, KartuPengajuanStatus } from "../components/PengajuanStatus";
+import { EVENT_BI, SELECT_PERCOBAAN, KartuPengganti } from "../components/PenggantiBi";
 import { Card, PageTitle, Badge, EmptyState, ReadOnlyBanner, BORDER, TEXT_MID, TEXT_DARK, PRIMARY, ACCENT, ACCENT_SOFT, ACCENT_DARK, NEGATIVE } from "../components/ui";
 
 /**
@@ -49,7 +50,9 @@ export default function PersetujuanPage() {
   const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState("");
   const [saringan, setSaringan] = useState("menunggu");
-  const [tab, setTab] = useState(params.get("tab") === "status" ? "status" : "catatan");
+  const [tab, setTab] = useState(["status", "bi"].includes(params.get("tab")) ? params.get("tab") : "catatan");
+  const [barisBi, setBarisBi] = useState([]);
+  const [galatBi, setGalatBi] = useState("");
   const [barisStatus, setBarisStatus] = useState([]);
   const [galatStatus, setGalatStatus] = useState("");
   const [bukaPratinjau, pratinjau] = usePratinjau();
@@ -89,6 +92,25 @@ export default function PersetujuanPage() {
     setBarisStatus(error ? [] : data || []);
   }
 
+  // Pengajuan pemohon pengganti BI Checking (migrasi 028): percobaan ke-2
+  // sampai ke-4. Percobaan pertama adalah data asli dan tidak diajukan.
+  async function muatBi() {
+    const { data, error } = await supabase
+      .from("bi_checking_percobaan")
+      .select(SELECT_PERCOBAAN)
+      .gt("urutan", 1)
+      .order("diajukan_at", { ascending: false })
+      .limit(300);
+    setGalatBi(error ? error.message : "");
+    setBarisBi(error ? [] : data || []);
+  }
+
+  useEffect(() => {
+    muatBi();
+    window.addEventListener(EVENT_BI, muatBi);
+    return () => window.removeEventListener(EVENT_BI, muatBi);
+  }, []);
+
   useEffect(() => {
     muat();
     muatStatus();
@@ -107,28 +129,31 @@ export default function PersetujuanPage() {
   // disorot dan digulir ke tengah, di saringan yang memang memuatnya.
   useEffect(() => {
     if (!sorotId || memuat || sudahSorot.current) return;
-    const target = tab === "status" ? barisStatus.find((e) => e.id === sorotId) : baris.find((e) => e.id === sorotId);
+    const sumber = { status: barisStatus, bi: barisBi, catatan: baris }[tab];
+    const target = sumber.find((e) => e.id === sorotId);
     if (!target) return;
     sudahSorot.current = true;
-    if (target.status !== "menunggu") setSaringan("semua");
-    const elemen = tab === "status" ? `pengajuan-status-${sorotId}` : `pengajuan-${sorotId}`;
+    if ((target.status || target.persetujuan) !== "menunggu") setSaringan("semua");
+    const elemen = { status: `pengajuan-status-${sorotId}`, bi: `pengajuan-bi-${sorotId}`, catatan: `pengajuan-${sorotId}` }[tab];
     setTimeout(() => document.getElementById(elemen)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
-  }, [sorotId, memuat, baris, barisStatus, tab]);
+  }, [sorotId, memuat, baris, barisStatus, barisBi, tab]);
 
   const tampil = useMemo(() => (saringan === "semua" ? baris : baris.filter((e) => e.status === saringan)), [baris, saringan]);
   const tampilStatus = useMemo(() => (saringan === "semua" ? barisStatus : barisStatus.filter((e) => e.status === saringan)), [barisStatus, saringan]);
   const menungguCatatan = baris.filter((e) => e.status === "menunggu").length;
   const menungguStatus = barisStatus.filter((e) => e.status === "menunggu").length;
-  const jumlahMenunggu = tab === "status" ? menungguStatus : menungguCatatan;
+  const tampilBi = useMemo(() => (saringan === "semua" ? barisBi : barisBi.filter((e) => e.persetujuan === saringan)), [barisBi, saringan]);
+  const menungguBi = barisBi.filter((e) => e.persetujuan === "menunggu").length;
+  const jumlahMenunggu = { status: menungguStatus, bi: menungguBi, catatan: menungguCatatan }[tab];
 
   return (
     <div>
       <PageTitle
         title="Persetujuan"
         subtitle={
-          menungguCatatan + menungguStatus > 0
-            ? `${menungguCatatan + menungguStatus} pengajuan menunggu keputusan`
-            : "Perubahan dan penghapusan catatan follow-up, serta perubahan status konsumen"
+          menungguCatatan + menungguStatus + menungguBi > 0
+            ? `${menungguCatatan + menungguStatus + menungguBi} pengajuan menunggu keputusan`
+            : "Catatan follow-up, pemohon pengganti BI Checking, dan status konsumen"
         }
       />
 
@@ -137,6 +162,7 @@ export default function PersetujuanPage() {
       <div role="tablist" aria-label="Jenis pengajuan" style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
         {[
           { k: "catatan", label: "Catatan Follow Up", n: menungguCatatan },
+          { k: "bi", label: "Pemohon BI Checking", n: menungguBi },
           { k: "status", label: "Status Konsumen", n: menungguStatus },
         ].map((t) => {
           const aktif = tab === t.k;
@@ -195,6 +221,28 @@ export default function PersetujuanPage() {
           })}
         </div>
       </Card>
+
+      {tab === "bi" && (
+        <>
+          {galatBi && (
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: NEGATIVE }}>Pengajuan pemohon pengganti belum bisa dimuat: {galatBi}. Pastikan migration_028 sudah dijalankan.</div>
+            </Card>
+          )}
+          {!galatBi && tampilBi.length === 0 && (
+            <Card>
+              <EmptyState
+                icon={FileCheck}
+                label={saringan === "menunggu" ? "Tidak ada pemohon pengganti yang menunggu" : "Belum ada pengajuan pemohon pengganti di sini"}
+                hint="Sales mengajukan pemohon pengganti dari jendela BI Checking setelah hasilnya Tidak Lolos — paling banyak 3 kali per prospek."
+              />
+            </Card>
+          )}
+          {tampilBi.map((e) => (
+            <KartuPengganti key={e.id} edit={e} disorot={e.id === sorotId} />
+          ))}
+        </>
+      )}
 
       {tab === "status" && (
         <>

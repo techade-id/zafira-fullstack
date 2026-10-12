@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { canWrite } from "../lib/permissions";
 import TinjauPengajuan, { kabarkanPengajuan } from "./TinjauPengajuan";
 import { kabarkanStatusKonsumen } from "./PengajuanStatus";
+import { kabarkanBi } from "./PenggantiBi";
 import { SURFACE, BORDER, TEXT_DARK, TEXT_MID, PRIMARY, PRIMARY_SOFT, ACCENT, ACCENT_DARK, ACCENT_SOFT, NEGATIVE } from "./ui";
 
 /**
@@ -135,6 +136,40 @@ export default function PopupPengajuan() {
             teks: `${pengaju?.full_name || "Pengaju"} mengajukan status ${c?.name || "konsumen"}: ${e.status_lama} → ${e.status_baru}.`,
           });
         })
+        // Pemohon pengganti BI Checking (migrasi 028).
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "bi_checking_percobaan" }, async ({ new: b }) => {
+          kabarkanBi(b.lead_id);
+          if (!bolehPutus || b.urutan < 2 || b.diajukan_oleh === meId || b.persetujuan !== "menunggu") return;
+          const [{ data: lead }, { data: pengaju }] = await Promise.all([
+            supabase.from("leads").select("name").eq("id", b.lead_id).maybeSingle(),
+            supabase.from("profiles").select("full_name").eq("id", b.diajukan_oleh).maybeSingle(),
+          ]);
+          tambah({
+            key: `bi-baru-${b.id}`,
+            jenis: "baru",
+            biId: b.id,
+            judul: "Pengajuan pemohon pengganti",
+            teks: `${pengaju?.full_name || "Sales"} mengajukan ${b.nama_pemohon} sebagai pemohon BI Checking pengganti ke-${b.urutan - 1} untuk ${lead?.name || "prospek"}.`,
+          });
+        })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "bi_checking_percobaan" }, async ({ new: b }) => {
+          kabarkanBi(b.lead_id);
+          // Hanya keputusan Admin. Mencatat hasil BI sesudahnya juga sebuah
+          // UPDATE — dan Realtime tidak mengirim nilai lama — jadi baris yang
+          // sudah punya hasil dilewati.
+          if (b.urutan < 2 || b.diajukan_oleh !== meId || b.persetujuan === "menunggu" || b.diputuskan_oleh === meId || b.hasil_at) return;
+          const { data: lead } = await supabase.from("leads").select("name").eq("id", b.lead_id).maybeSingle();
+          tambah({
+            key: `bi-putus-${b.id}`,
+            jenis: b.persetujuan,
+            leadId: b.lead_id,
+            judul: b.persetujuan === "disetujui" ? "Pemohon pengganti disetujui" : "Pemohon pengganti ditolak",
+            teks:
+              b.persetujuan === "disetujui"
+                ? `${b.nama_pemohon} untuk ${lead?.name || "prospek"} — lanjutkan BI Checking.`
+                : `${lead?.name || "Prospek"}: ${b.alasan_tolak || "tanpa alasan"}`,
+          });
+        })
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "customer_status_edits" }, async ({ new: e }) => {
           kabarkanStatusKonsumen(e.customer_id);
           if (e.diajukan_oleh !== meId || e.status === "menunggu" || e.diputuskan_oleh === meId) return;
@@ -211,6 +246,7 @@ export default function PopupPengajuan() {
                     onClick={() => {
                       tutup(p.key);
                       if (p.statusId) navigate(`/persetujuan?tab=status&sorot=${p.statusId}`);
+                      else if (p.biId) navigate(`/persetujuan?tab=bi&sorot=${p.biId}`);
                       else if (p.customerId) navigate(`/konsumen/${p.customerId}`);
                       else if (p.jenis === "baru") setTinjauId(p.editId);
                       else navigate(`/follow-up?sorot=${p.leadId}`);
